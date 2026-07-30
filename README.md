@@ -1,36 +1,218 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Chatlas
+
+Chatlas is a mobile-first tourism Progressive Web Application for discovering attractions in Melaka.
+
+The system allows users to browse, search, filter, and view attraction details. Future modules will include map exploration, Google authentication, reviews, social profiles, and community features.
+
+## Technology Stack
+
+- Next.js
+- React
+- Tailwind CSS
+- MongoDB Atlas
+- Mongoose
+- Google Identity Services
+- Google Maps Platform
+- Cloudinary
+
+## System Architecture
+
+Chatlas uses a layered architecture within one Next.js application:
+
+- **Presentation Layer:** React components and pages
+- **Business Logic Layer:** Services and Next.js Route Handlers
+- **Data Access Layer:** Repositories and Mongoose models
+- **Database:** MongoDB Atlas
+
+The project is maintained as:
+
+- One application
+- One GitHub repository
+- One deployment unit
+
+## Current Features
+
+- Display Melaka attractions from MongoDB Atlas
+- Search attractions by name, address, or category
+- Filter attractions by category
+- Filter attractions by minimum rating
+- Display attraction result count
+- Reset search and filter criteria
+- Display attraction details
+- Open attraction location in Google Maps
+- Responsive header and navigation bar
+
+<!-- TODO: Update this list whenever a new module or feature is completed. -->
+
+## Project Structure
+
+```text
+src/
+├── app/
+│   ├── api/
+│   │   └── attractions/
+│   ├── attractions/
+│   ├── globals.css
+│   ├── layout.js
+│   └── page.js
+├── components/
+├── lib/
+├── models/
+├── repositories/
+└── services/
+```
+
+## Environment Variables
+
+Copy `.env.example` and create a new file named `.env.local`.
+
+For Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env.local
+```
+
+For macOS or Linux:
+
+```bash
+cp .env.example .env.local
+```
+
+Fill in the required values inside `.env.local`:
+
+```env
+MONGODB_URI=
+AUTH_SECRET=
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=
+```
+
+Do not commit `.env.local` or expose passwords, secrets, or API keys.
 
 ## Getting Started
 
-First, run the development server:
+Install the project dependencies:
+
+```bash
+npm install
+```
+
+Start the development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open the following address in your browser:
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+```text
+http://localhost:3000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## MongoDB Atlas Setup
 
-## Learn More
+Before running the attraction module:
 
-To learn more about Next.js, take a look at the following resources:
+1. Create or access the Chatlas MongoDB Atlas project.
+2. Ensure the database contains the `attractions` collection.
+3. Add your current IP address to the MongoDB Atlas IP Access List.
+4. Place your MongoDB connection string in `.env.local`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Example:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```env
+MONGODB_URI=mongodb://username:password@host1:27017,host2:27017,host3:27017/chatlas?ssl=true&replicaSet=...
+```
 
-## Deploy on Vercel
+Never place the real database password inside `.env.example` or `README.md`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Available Routes
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### `/`
+
+Displays the attraction explorer.
+
+### `/api/attractions`
+
+Returns active Melaka attractions.
+
+Supported query parameters:
+
+- `search`
+- `category`
+- `minRating`
+
+Example:
+
+```text
+/api/attractions?category=Museum&minRating=4
+```
+
+### `/api/attractions/[id]`
+
+Returns one attraction by MongoDB ObjectId.
+
+### `/attractions/[id]`
+
+Displays the attraction details page.
+
+## Git Workflow
+
+Create or switch to your assigned feature branch before making changes:
+
+```bash
+git switch -c feature/your-feature-name
+```
+
+Check your changes:
+
+```bash
+git status
+```
+
+Stage and commit:
+
+```bash
+git add .
+git commit -m "Describe the completed change"
+```
+
+Push the branch:
+
+```bash
+git push -u origin feature/your-feature-name
+```
+
+Do not commit directly to `main` unless instructed by the team leader.
+
+## Development Notes
+
+- Keep all frontend and backend logic inside this Next.js project.
+- Do not create separate frontend and backend repositories.
+- Use services for business logic.
+- Use repositories for database access.
+- Use Mongoose models for MongoDB collections.
+- Keep secrets only in `.env.local`.
+
+<!-- TODO: Add coding conventions, pull request rules, and branch naming rules after the team confirms them. -->
+
+## Planned Improvements
+
+- Google authentication
+- Interactive exploration map
+- Attraction images
+- Reviews and ratings
+- Social profiles
+- Community features
+- Cloudinary image storage
+- PWA configuration
+- Final Chatlas branding and responsive design
+
+<!-- TODO: Replace this section with the final development roadmap when the team confirms module priorities. -->
+
+// TODO: Install additional dependencies when Google authentication,
+// Google Maps, Cloudinary, and PWA features are implemented.
