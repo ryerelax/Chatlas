@@ -1,5 +1,5 @@
 import AttractionList from "@/components/AttractionList";
-
+// test
 export default function Home() {
   return (
     <main className="min-h-screen bg-gray-50">
