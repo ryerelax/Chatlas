@@ -3,3 +3,758 @@
 
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
+
+# Chatlas Development Guidelines
+
+This file is the single source of truth for all Chatlas development guidelines.
+
+Do not create separate Coding Standards, Git Workflow, Pull Request Guidelines, or Definition of Done documents. When the team confirms a new development rule, update this file instead.
+
+---
+
+## 1. Project Constraints
+
+Chatlas must remain:
+
+- One application
+- One GitHub repository
+- One deployment unit
+- One full-stack Next.js project
+
+Do not split Chatlas into separate frontend and backend repositories, servers, or deployment units.
+
+All application pages, API routes, business logic, and database access must remain inside this Next.js project unless the team and lecturer formally approve a change.
+
+---
+
+## 2. Current Technology Stack
+
+The current project uses:
+
+- Next.js
+- React
+- JavaScript
+- Tailwind CSS
+- MongoDB Atlas
+- Mongoose
+- ESLint
+
+Planned external services include:
+
+- Google Identity Services
+- Google Maps Platform
+- Cloudinary
+- PWA-related packages and configuration
+
+Install additional dependencies only when the related feature is being implemented.
+
+Do not install packages only to make the dependency list appear more complete.
+
+---
+
+## 3. Layered Project Structure
+
+Use the following initial structure:
+
+```text
+src/
+├── app/
+├── components/
+├── lib/
+├── models/
+├── repositories/
+└── services/
+```
+
+### 3.1 Presentation Layer
+
+Locations:
+
+```text
+src/app/
+src/components/
+```
+
+Responsibilities:
+
+- Pages
+- Layouts
+- Navigation
+- Forms
+- Client-side interaction
+- Reusable React components
+- Loading states
+- Empty states
+- Error states
+- Responsive user interface
+
+Rules:
+
+- Do not query MongoDB directly from React components.
+- Do not place Mongoose logic inside pages.
+- Keep reusable interface elements inside `src/components/`.
+- Keep route-specific pages and layouts inside `src/app/`.
+
+### 3.2 Business Logic Layer
+
+Location:
+
+```text
+src/services/
+```
+
+Responsibilities:
+
+- Input normalization
+- Validation
+- Business rules
+- Visibility rules
+- Calling repository functions
+- Preparing data for API routes or pages
+
+Rules:
+
+- Keep business rules out of React components.
+- Keep business rules out of repositories.
+- Services may call repositories, but repositories must not call services.
+
+### 3.3 Data Access Layer
+
+Locations:
+
+```text
+src/repositories/
+src/models/
+```
+
+Responsibilities:
+
+- Mongoose schemas and models
+- MongoDB queries
+- Database filtering
+- Database sorting
+- Returning database results to services
+
+Rules:
+
+- Pages and components must not call Mongoose models directly.
+- API routes should call services instead of repositories or models directly.
+- Repositories must not contain presentation logic.
+
+### 3.4 Shared Infrastructure
+
+Location:
+
+```text
+src/lib/
+```
+
+Responsibilities:
+
+- MongoDB connection helpers
+- Shared configuration
+- External service helpers
+- Reusable utility functions
+- Server-side infrastructure code
+
+---
+
+## 4. Next.js Rules
+
+- Use the App Router.
+- Use `page.js` for pages.
+- Use `layout.js` for shared layouts.
+- Use `route.js` for Route Handlers.
+- Dynamic route folders must use square brackets, for example `[id]`.
+- Do not place `page.js` and `route.js` in the same route segment.
+- Read the relevant local Next.js documentation in `node_modules/next/dist/docs/` before using unfamiliar APIs.
+- Follow deprecation notices and version-specific conventions.
+- Do not assume older Next.js patterns are still valid.
+
+Example:
+
+```text
+src/app/api/attractions/[id]/route.js
+src/app/attractions/[id]/page.js
+```
+
+These are separate routes and must not be placed in the same folder.
+
+---
+
+## 5. Coding Standards
+
+- Use JavaScript unless the team formally decides to migrate to TypeScript.
+- Use functional React components.
+- Use `async` and `await` for asynchronous operations.
+- Use clear, descriptive names.
+- Keep functions focused on one responsibility.
+- Avoid duplicate code where a reusable function or component is appropriate.
+- Keep components reasonably small and readable.
+- Validate input before passing it to the data access layer.
+- Handle loading, success, empty, and error states where relevant.
+- Avoid unnecessary console output.
+- Never log passwords, API keys, authentication tokens, or full database connection strings.
+- Do not expose internal stack traces to users.
+- Keep code formatting consistent with ESLint and the existing project style.
+
+---
+
+## 6. TODO Comment Rules
+
+Add a clear `TODO` comment when a section still requires:
+
+- Final design work
+- Personalised styling
+- Branding
+- A future integration
+- An unfinished business rule
+- A placeholder replacement
+- A later data improvement
+
+Good examples:
+
+```js
+// TODO: Replace this placeholder with the final Chatlas logo.
+```
+
+```js
+// TODO: Load the available categories dynamically from the database.
+```
+
+```js
+// TODO: Integrate Google Identity Services.
+```
+
+```jsx
+{/* TODO: Refine the spacing and colours based on the final Chatlas branding. */}
+```
+
+Avoid vague TODO comments such as:
+
+```js
+// TODO: Fix later.
+```
+
+A TODO comment must explain what remains to be done.
+
+Remove a TODO comment after the related work is completed.
+
+---
+
+## 7. Naming Conventions
+
+Use these naming conventions:
+
+- React component names: `PascalCase`
+- React component files: `PascalCase.js`
+- Variables and functions: `camelCase`
+- Service files: `camelCaseService.js`
+- Repository files: `camelCaseRepository.js`
+- Mongoose model files: `PascalCase.js`
+- Route folders: lowercase
+- Dynamic route folders: `[id]`
+- Environment variables: `UPPER_SNAKE_CASE`
+
+Examples:
+
+```text
+AttractionCard.js
+AttractionList.js
+attractionService.js
+attractionRepository.js
+Attraction.js
+src/app/attractions/[id]/page.js
+```
+
+---
+
+## 8. Import Rules
+
+Use the configured `@/*` alias for project imports where practical.
+
+Preferred:
+
+```js
+import Attraction from "@/models/Attraction";
+```
+
+Avoid unnecessarily long relative imports such as:
+
+```js
+import Attraction from "../../../models/Attraction";
+```
+
+Use relative imports only when they are clearer for files located very close together.
+
+---
+
+## 9. API Route Guidelines
+
+Route Handlers should:
+
+- Connect to the database through the shared database helper.
+- Read and validate request input.
+- Call the service layer.
+- Return a consistent JSON structure.
+- Use suitable HTTP status codes.
+- Return safe public error messages.
+- Avoid exposing secrets, stack traces, or internal database details.
+
+Recommended success response:
+
+```json
+{
+  "success": true,
+  "data": {}
+}
+```
+
+Recommended list response:
+
+```json
+{
+  "success": true,
+  "count": 0,
+  "data": []
+}
+```
+
+Recommended error response:
+
+```json
+{
+  "success": false,
+  "message": "A clear public error message."
+}
+```
+
+Common status codes:
+
+- `200` — successful request
+- `201` — successful creation
+- `400` — invalid input
+- `401` — unauthenticated
+- `403` — forbidden
+- `404` — resource not found
+- `409` — conflict
+- `500` — unexpected server error
+
+---
+
+## 10. Database Guidelines
+
+- Use MongoDB Atlas as the database.
+- Use Mongoose models for collections.
+- Keep MongoDB queries inside repositories.
+- Keep business validation inside services.
+- Keep database names and collection names consistent.
+- Validate MongoDB ObjectIds before querying by `_id`.
+- Do not hardcode database credentials.
+- Do not expose connection strings in code, screenshots, commits, pull requests, or documentation.
+
+Current attraction storage:
+
+```text
+Database: chatlas
+Collection: attractions
+```
+
+---
+
+## 11. Environment Variable Guidelines
+
+Use `.env.local` for real local values.
+
+Use `.env.example` only to show required variable names with empty values.
+
+Expected variables currently include:
+
+```env
+MONGODB_URI=
+AUTH_SECRET=
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=
+```
+
+Rules:
+
+- Never commit `.env.local`.
+- Never put real secrets in `.env.example`.
+- Never put real secrets in `README.md` or `AGENTS.md`.
+- Never send real secrets in chat or screenshots.
+- Only variables beginning with `NEXT_PUBLIC_` may be exposed to browser code.
+- Do not use `NEXT_PUBLIC_` for passwords, private API keys, or server secrets.
+- Update `.env.example` whenever a newly implemented feature requires a new environment variable.
+
+The `.gitignore` should allow `.env.example` but ignore real environment files.
+
+Recommended pattern:
+
+```gitignore
+.env*
+!.env.example
+```
+
+---
+
+## 12. Dependency Guidelines
+
+Before installing a package:
+
+- Confirm that the package is needed for an implemented feature.
+- Check that it is compatible with the current Next.js and React versions.
+- Prefer actively maintained packages.
+- Avoid duplicate packages that solve the same problem.
+- Update `package-lock.json` together with `package.json`.
+
+Useful commands:
+
+```bash
+npm install
+npm list --depth=0
+npm audit
+```
+
+Do not run:
+
+```bash
+npm audit fix --force
+```
+
+unless the team has reviewed and approved the proposed breaking changes.
+
+Audit warnings must be reviewed, but they do not justify blindly downgrading or replacing core packages.
+
+---
+
+## 13. Git Repository Collaboration
+
+The Chatlas project must use one shared GitHub repository.
+
+All six team members should be added as repository collaborators.
+
+Each member should work on the branch assigned by the team leader.
+
+A branch may temporarily contain work from more than one module when required for lecturer demonstrations or progress checking, provided the team is aware of it.
+
+Do not create separate repositories for individual modules.
+
+---
+
+## 14. Branch Guidelines
+
+Recommended branch prefixes:
+
+```text
+feature/
+fix/
+docs/
+refactor/
+chore/
+```
+
+Examples:
+
+```text
+feature/social-profile
+feature/attraction-explorer
+fix/attraction-api
+docs/update-readme
+refactor/attraction-service
+```
+
+Create a new branch:
+
+```bash
+git switch -c feature/your-feature-name
+```
+
+Switch to an existing branch:
+
+```bash
+git switch feature/your-feature-name
+```
+
+Do not commit directly to `main` unless the team leader explicitly instructs you to do so.
+
+---
+
+## 15. Commit Guidelines
+
+Before committing:
+
+```bash
+git status
+git diff
+```
+
+Stage changes:
+
+```bash
+git add .
+```
+
+Commit with a clear and specific message:
+
+```bash
+git commit -m "Add attraction details page"
+```
+
+Good commit messages:
+
+```text
+Add MongoDB attraction repository
+Add attraction category filter
+Fix attraction details route
+Update Chatlas development guidelines
+```
+
+Avoid vague commit messages:
+
+```text
+update
+changes
+fix
+final
+done
+```
+
+Each commit should represent one logical group of changes where practical.
+
+Do not commit:
+
+- `.env.local`
+- Passwords
+- API keys
+- Database connection strings
+- Authentication tokens
+- Temporary files
+- Unnecessary generated files
+- Build output
+- Editor-specific files that the team does not need
+
+---
+
+## 16. Push Guidelines
+
+Push the assigned branch:
+
+```bash
+git push -u origin feature/your-feature-name
+```
+
+For later pushes:
+
+```bash
+git push
+```
+
+Before pushing:
+
+- Confirm the correct branch is active.
+- Confirm no secrets are staged.
+- Confirm the application still runs.
+- Review `git status`.
+
+---
+
+## 17. Pull Request Guidelines
+
+When merging a feature branch into the main project, create the pull request using:
+
+```text
+base: main
+compare: feature/your-feature-name
+```
+
+The intended direction is:
+
+```text
+main ← feature branch
+```
+
+Do not reverse the base and compare branches.
+
+Before creating a pull request:
+
+- Confirm the feature works locally.
+- Confirm no secrets are included.
+- Review `git status`.
+- Review `git diff`.
+- Run lint.
+- Run the production build.
+- Push the latest branch changes.
+- Summarise what was added or changed.
+- Mention known limitations.
+- Mention remaining TODO items.
+- Add screenshots for visible user interface changes where useful.
+
+Do not merge your own pull request unless the team workflow allows it.
+
+---
+
+## 18. Definition of Done
+
+A task is considered done only when all relevant conditions below are satisfied:
+
+- The requested feature or change is implemented.
+- The feature works locally.
+- The code follows the layered architecture.
+- React components do not query MongoDB directly.
+- API routes call services instead of Mongoose models directly.
+- Services contain validation and business rules.
+- Repositories contain database queries.
+- Loading, success, empty, and error states are handled where relevant.
+- Existing related features still work.
+- No real secrets are included in tracked files.
+- New environment variable names are added to `.env.example` where required.
+- Relevant TODO comments are added for unfinished design or integration work.
+- Completed TODO comments are removed.
+- Documentation is updated where necessary.
+- ESLint passes, or any remaining issue is clearly documented.
+- The production build passes, or any remaining issue is clearly documented.
+- Changes are committed with a clear message.
+- The branch is pushed to GitHub.
+- A pull request is created when required by the team workflow.
+
+Recommended checks:
+
+```bash
+npm run lint
+npm run build
+git status
+```
+
+---
+
+## 19. User Interface Guidelines
+
+- Use mobile-first responsive layouts.
+- Keep navigation clear and understandable.
+- Use consistent spacing, typography, border radius, and button styles.
+- Use accessible labels for form controls.
+- Use semantic HTML where practical.
+- Provide visible loading, empty, error, and success states.
+- Do not create working-looking links to pages that do not exist.
+- Clearly mark unavailable future features as disabled.
+- Add TODO comments where final branding or personalisation is still pending.
+- Replace placeholders when the final assets and designs are ready.
+
+---
+
+## 20. Accessibility Guidelines
+
+- Use proper headings in logical order.
+- Use labels for form controls.
+- Use buttons for actions and links for navigation.
+- Provide meaningful link text.
+- Include appropriate `aria-label` attributes where normal visible text is insufficient.
+- Ensure keyboard users can reach interactive elements.
+- Do not rely only on colour to communicate status.
+- Add alternative text when real images are introduced.
+
+---
+
+## 21. Security Guidelines
+
+- Keep private operations in server-side code.
+- Never expose secrets in client components.
+- Never log passwords, tokens, private keys, or full connection strings.
+- Validate user input.
+- Validate identifiers.
+- Avoid rendering untrusted HTML.
+- Apply authentication and authorisation checks when protected features are implemented.
+- Use environment variables for secrets.
+- Review dependency changes before accepting breaking upgrades.
+- Do not use `npm audit fix --force` without team approval and testing.
+
+---
+
+## 22. Documentation Guidelines
+
+Maintain these files:
+
+```text
+README.md
+AGENTS.md
+.env.example
+```
+
+Use them as follows:
+
+### `README.md`
+
+Contains:
+
+- Project introduction
+- Technology overview
+- Setup instructions
+- Environment setup
+- Available routes
+- Current features
+- Basic running instructions
+
+### `AGENTS.md`
+
+Contains all:
+
+- Coding standards
+- Layered architecture rules
+- Git workflow
+- Branch rules
+- Commit rules
+- Pull request rules
+- Definition of Done
+- Security guidelines
+- Development guidelines
+
+### `.env.example`
+
+Contains:
+
+- Required environment variable names
+- Empty placeholder values only
+
+Do not create separate Coding Standards, Git Workflow, Pull Request Guidelines, or Definition of Done documents.
+
+---
+
+## 23. Current Implementation Notes
+
+The current attraction module supports:
+
+- Reading Melaka attractions from MongoDB Atlas
+- Searching by name, address, or category
+- Filtering by category
+- Filtering by minimum rating
+- Displaying result counts
+- Resetting search and filters
+- Displaying attraction details
+- Opening attraction locations in Google Maps
+- Shared site header and navigation
+
+<!-- TODO: Update this section whenever the implemented feature set changes. -->
+
+---
+
+## 24. Planned Improvements
+
+Planned work includes:
+
+- Google authentication
+- Interactive exploration map
+- Attraction images
+- Reviews and ratings
+- Social profiles
+- Community features
+- Cloudinary image storage
+- PWA configuration
+- Final Chatlas branding
+- Further responsive and accessibility improvements
+
+<!-- TODO: Update the priority order after the team confirms the development plan. -->
