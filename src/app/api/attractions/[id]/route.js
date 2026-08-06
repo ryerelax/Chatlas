@@ -1,38 +1,34 @@
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
-import { getAttractions } from "@/services/attractionService";
+import { getAttractionById } from "@/services/attractionService";
 
-export async function GET(request) {
+export async function GET(_request, { params }) {
   try {
     await connectToDatabase();
+    const { id } = await params;
+    const attraction = await getAttractionById(id);
 
-    const { searchParams } = new URL(request.url);
-
-    const search = searchParams.get("search") || "";
-    const category = searchParams.get("category") || "";
-    const location = searchParams.get("location") || "";
-    const minRating = searchParams.get("minRating") || 0;
-
-    const attractions = await getAttractions({
-      search,
-      category,
-      location,
-      minRating,
-    });
+    if (!attraction) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Attraction not found.",
+        },
+        { status: 404 }
+      );
+    }
 
     return NextResponse.json({
       success: true,
-      count: attractions.length,
-      data: attractions,
+      data: attraction,
     });
   } catch (error) {
-    console.error("Failed to retrieve attractions:", error);
+    console.error("Failed to retrieve attraction:", error);
 
-    // TODO: Return more specific error messages after final API error handling is designed.
     return NextResponse.json(
       {
         success: false,
-        message: "Failed to retrieve attractions.",
+        message: "Failed to retrieve attraction.",
       },
       { status: 500 }
     );

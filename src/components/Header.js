@@ -44,14 +44,12 @@ export default function Header() {
             Attractions
           </Link>
 
-          {/* TODO: Enable this navigation item after the exploration map page is created. */}
-          <span
-            className="cursor-not-allowed rounded-lg px-4 py-2 text-sm font-semibold text-gray-400"
-            title="Coming later"
-            aria-disabled="true"
+          <Link
+            href="/exploration-map"
+            className="rounded-lg px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-emerald-50 hover:text-emerald-700"
           >
             Map
-          </span>
+          </Link>
 
           {/* TODO: Enable this navigation item after the social profile and community modules are created. */}
           <span
@@ -101,12 +99,12 @@ export default function Header() {
               Attractions
             </Link>
 
-            <span
-              className="block cursor-not-allowed rounded-lg px-4 py-3 text-sm font-semibold text-gray-400"
-              aria-disabled="true"
+            <Link
+              href="/exploration-map"
+              className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700"
             >
               Map
-            </span>
+            </Link>
 
             <span
               className="block cursor-not-allowed rounded-lg px-4 py-3 text-sm font-semibold text-gray-400"

@@ -40,6 +40,8 @@ The project is maintained as:
 - Reset search and filter criteria
 - Display attraction details
 - Open attraction location in Google Maps
+- Display the Personal Exploration Map with supported Melaka attraction markers
+- Provide map loading, unavailable, empty, and text fallback states
 - Responsive header and navigation bar
 
 <!-- TODO: Update this list whenever a new module or feature is completed. -->
@@ -52,6 +54,7 @@ src/
 │   ├── api/
 │   │   └── attractions/
 │   ├── attractions/
+│   ├── exploration-map/
 │   ├── globals.css
 │   ├── layout.js
 │   └── page.js
@@ -83,15 +86,20 @@ Fill in the required values inside `.env.local`:
 ```env
 MONGODB_URI=
 AUTH_SECRET=
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
+AUTH_GOOGLE_ID=
+AUTH_GOOGLE_SECRET=
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=
+NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID=
 CLOUDINARY_CLOUD_NAME=
 CLOUDINARY_API_KEY=
 CLOUDINARY_API_SECRET=
 ```
 
 Do not commit `.env.local` or expose passwords, secrets, or API keys.
+
+The Google Maps map ID is optional during local development because the map
+uses Google's demo map ID when this value is empty. Configure a project map ID
+before production deployment.
 
 ## Getting Started
 
@@ -160,6 +168,11 @@ Returns one attraction by MongoDB ObjectId.
 
 Displays the attraction details page.
 
+### `/exploration-map`
+
+Displays the Personal Exploration Map and supported Melaka attraction markers.
+The page does not request the user's current location.
+
 ## Git Workflow
 
 Create or switch to your assigned feature branch before making changes:
@@ -203,7 +216,7 @@ Do not commit directly to `main` unless instructed by the team leader.
 ## Planned Improvements
 
 - Google authentication
-- Interactive exploration map
+- Visited-attraction highlighting and exploration progress
 - Attraction images
 - Reviews and ratings
 - Social profiles

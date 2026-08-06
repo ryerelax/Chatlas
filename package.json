@@ -2,13 +2,16 @@
   "name": "chatlas",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --test tests/**/*.test.js"
   },
   "dependencies": {
+    "@googlemaps/js-api-loader": "^2.1.1",
     "mongoose": "^9.9.0",
     "next": "16.2.12",
     "react": "19.2.4",
