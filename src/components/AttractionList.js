@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import AttractionCard from "@/components/AttractionCard";
 
+// TODO: Load category options dynamically when category management is finalized.
 const CATEGORIES = [
   "All",
   "Museum",
@@ -28,6 +29,7 @@ export default function AttractionList() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
 
   useEffect(() => {
     async function loadAttractions() {
@@ -89,6 +91,8 @@ export default function AttractionList() {
 
     setMinRating("0");
     setAppliedMinRating("0");
+
+    setShowMoreFilters(false);
   }
 
   function getResultMessage() {
@@ -115,7 +119,7 @@ export default function AttractionList() {
 
   return (
     <section>
-      {/* TODO: Refine the search and filter area based on the final Chatlas branding. */}
+      {/* Search and category filters follow the current Attraction Explorer Figma design. */}
       <form
         onSubmit={handleSearch}
         className="relative z-10 -mt-16 mb-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-lg"
@@ -127,7 +131,7 @@ export default function AttractionList() {
           Search Attractions
         </label>
 
-        <div className="grid gap-3 lg:grid-cols-[2fr_1fr_auto_auto]">
+        <div className="grid gap-3 lg:grid-cols-[2fr_auto_auto_auto]">
           <input
             id="attraction-search"
             type="text"
@@ -137,20 +141,13 @@ export default function AttractionList() {
             className="rounded-lg border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-emerald-500"
           />
 
-          {/* TODO: Replace these fixed categories with categories loaded dynamically from the database. */}
-          
-
-          <select
-            value={minRating}
-            onChange={(event) => setMinRating(event.target.value)}
-            className="rounded-lg border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-emerald-500"
+          <button
+            type="button"
+            onClick={() => setShowMoreFilters((current) => !current)}
+            className="rounded-lg border border-gray-300 bg-white px-5 py-3 font-semibold text-gray-700 transition hover:border-emerald-600 hover:text-emerald-700"
           >
-            <option value="0">Any Rating</option>
-            <option value="3">3.0 and above</option>
-            <option value="3.5">3.5 and above</option>
-            <option value="4">4.0 and above</option>
-            <option value="4.5">4.5 and above</option>
-          </select>
+            {showMoreFilters ? "Hide Filters" : "More Filters"}
+          </button>
 
           <button
             type="submit"
@@ -167,6 +164,36 @@ export default function AttractionList() {
             Reset
           </button>
         </div>
+        {showMoreFilters && (
+          <div className="mt-5 border-t border-gray-200 pt-5">
+            <div className="max-w-sm">
+              <label
+                htmlFor="minimum-rating"
+                className="mb-2 block text-sm font-semibold text-gray-800"
+              >
+                Minimum Rating
+              </label>
+
+              <select
+                id="minimum-rating"
+                value={minRating}
+                onChange={(event) => setMinRating(event.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-emerald-500"
+              >
+                <option value="0">Any Rating</option>
+                <option value="3">3.0 and above</option>
+                <option value="3.5">3.5 and above</option>
+                <option value="4">4.0 and above</option>
+                <option value="4.5">4.5 and above</option>
+              </select>
+            </div>
+
+            <p className="mt-4 text-sm text-gray-500">
+              Location Area filtering will be added after district data is available
+              for all attractions.
+            </p>
+          </div>
+        )}
       </form>
 
       <div className="mb-8 flex gap-2 overflow-x-auto pb-2">
@@ -233,7 +260,7 @@ export default function AttractionList() {
 
       {!isLoading && !error && attractions.length > 0 && (
         <>
-          {/* TODO: Add a location-area filter when location groups are finalized. */}
+          {/* TODO: Enable Location Area filtering after locationArea data is added to the attraction schema and records. */}
           {/* TODO: Refine the grid spacing and responsive layout based on the final Chatlas design. */}
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {attractions.map((attraction) => (
