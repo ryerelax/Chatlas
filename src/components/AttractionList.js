@@ -3,6 +3,17 @@
 import { useEffect, useState } from "react";
 import AttractionCard from "@/components/AttractionCard";
 
+const CATEGORIES = [
+  "All",
+  "Museum",
+  "Religious",
+  "Tourist",
+  "Historical",
+  "Nature",
+  "Entertainment",
+  "Gallery",
+];
+
 export default function AttractionList() {
   const [attractions, setAttractions] = useState([]);
 
@@ -107,7 +118,7 @@ export default function AttractionList() {
       {/* TODO: Refine the search and filter area based on the final Chatlas branding. */}
       <form
         onSubmit={handleSearch}
-        className="mb-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
+        className="relative z-10 -mt-16 mb-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-lg"
       >
         <label
           htmlFor="attraction-search"
@@ -116,31 +127,18 @@ export default function AttractionList() {
           Search Attractions
         </label>
 
-        <div className="grid gap-3 lg:grid-cols-[2fr_1fr_1fr_auto_auto]">
+        <div className="grid gap-3 lg:grid-cols-[2fr_1fr_auto_auto]">
           <input
             id="attraction-search"
             type="text"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search by name, address, or category"
+            placeholder="Search attractions in Melaka"
             className="rounded-lg border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-emerald-500"
           />
 
           {/* TODO: Replace these fixed categories with categories loaded dynamically from the database. */}
-          <select
-            value={category}
-            onChange={(event) => setCategory(event.target.value)}
-            className="rounded-lg border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-emerald-500"
-          >
-            <option value="All">All Categories</option>
-            <option value="Museum">Museum</option>
-            <option value="Religious">Religious</option>
-            <option value="Tourist">Tourist</option>
-            <option value="Historical">Historical</option>
-            <option value="Nature">Nature</option>
-            <option value="Entertainment">Entertainment</option>
-            <option value="Gallery">Gallery</option>
-          </select>
+          
 
           <select
             value={minRating}
@@ -156,7 +154,7 @@ export default function AttractionList() {
 
           <button
             type="submit"
-            className="rounded-lg bg-emerald-600 px-6 py-3 font-semibold text-white transition hover:bg-emerald-700"
+            className="rounded-lg bg-amber-400 px-6 py-3 font-semibold text-gray-900 transition hover:bg-amber-500"
           >
             Search
           </button>
@@ -170,6 +168,30 @@ export default function AttractionList() {
           </button>
         </div>
       </form>
+
+      <div className="mb-8 flex gap-2 overflow-x-auto pb-2">
+        {CATEGORIES.map((item) => {
+          const isSelected = appliedCategory === item;
+
+          return (
+            <button
+              key={item}
+              type="button"
+              onClick={() => {
+                setCategory(item);
+                setAppliedCategory(item);
+              }}
+              className={`shrink-0 rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                isSelected
+                  ? "border-emerald-700 bg-emerald-700 text-white"
+                  : "border-gray-300 bg-white text-gray-700 hover:border-emerald-600 hover:text-emerald-700"
+              }`}
+            >
+              {item === "All" ? "All Categories" : item}
+            </button>
+          );
+        })}
+      </div>
 
       <div className="mb-5">
         <p className="text-sm text-gray-600">
