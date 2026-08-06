@@ -196,8 +196,16 @@ export default function AttractionList() {
           </p>
 
           <p className="mt-2 text-gray-500">
-            Try changing the keyword, category, rating, or reset the filters.
+            Try changing the keyword, category, rating, or clear all filters.
           </p>
+
+          <button
+            type="button"
+            onClick={handleReset}
+            className="mt-6 rounded-lg bg-emerald-600 px-5 py-2.5 font-semibold text-white transition hover:bg-emerald-700"
+          >
+            Clear Search and Filters
+          </button>
         </div>
       )}
 
