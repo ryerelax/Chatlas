@@ -1,5 +1,5 @@
-import AttractionList from "@/components/AttractionList";
-// test
+import AttractionList from "@/presentation/components/AttractionList";
+
 export default function Home() {
   return (
     <main className="min-h-screen bg-gray-50">

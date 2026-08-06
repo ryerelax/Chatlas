@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import AttractionCard from "@/components/AttractionCard";
+import AttractionCard from "@/presentation/components/AttractionCard";
 
 export default function AttractionList() {
   const [attractions, setAttractions] = useState([]);
