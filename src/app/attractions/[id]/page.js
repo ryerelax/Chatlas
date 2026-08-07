@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";  
+import ReviewList from "@/components/reviews/ReviewList";
 
 export default function AttractionDetailsPage() {
   const params = useParams();
@@ -160,6 +161,18 @@ export default function AttractionDetailsPage() {
               View on Google Maps
             </a>
           )}
+        
+        {/* Review Section */}
+        <section className="mt-10">
+          <h2 className="text-2xl font-bold text-gray-900">
+            Community Reviews
+          </h2>
+
+          <div className="mt-6">
+            <ReviewList />
+          </div>
+        </section>
+
         </article>
       </div>
     </main>
