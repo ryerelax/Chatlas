@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
-import WishlistItem from "@/models/WishlistItem";
+import WishlistItem from "@/data/models/WishlistItem";
 
 // GET - Fetch all wishlist items
 export async function GET() {
