@@ -40,7 +40,6 @@ export async function POST(request) {
       );
     }
 
-    // Check if already exists
     const existing = await WishlistItem.findOne({ userId, attractionId });
     if (existing) {
       return NextResponse.json(
