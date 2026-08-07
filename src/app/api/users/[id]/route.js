@@ -1,19 +1,19 @@
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/infrastructure/database/mongodb";
-import { getAttractionById } from "@/business/services/attractionService";
+import { getPublicUserProfile } from "@/business/services/userService";
 
 export async function GET(request, { params }) {
   try {
     await connectToDatabase();
 
     const { id } = await params;
-    const attraction = await getAttractionById(id);
+    const result = await getPublicUserProfile(id);
 
-    if (!attraction) {
+    if (result.status === "not_found") {
       return NextResponse.json(
         {
           success: false,
-          message: "Attraction not found.",
+          message: "User profile not found.",
         },
         { status: 404 }
       );
@@ -21,17 +21,15 @@ export async function GET(request, { params }) {
 
     return NextResponse.json({
       success: true,
-      data: attraction,
+      data: result.data,
     });
   } catch (error) {
-    console.error("Failed to retrieve attraction:", error);
+    console.error("Failed to retrieve public user profile:", error);
 
-    // TODO: Return more specific public error messages after
-    // the final API error-handling strategy is confirmed.
     return NextResponse.json(
       {
         success: false,
-        message: "Failed to retrieve attraction.",
+        message: "Unable to load the user profile. Please try again.",
       },
       { status: 500 }
     );
