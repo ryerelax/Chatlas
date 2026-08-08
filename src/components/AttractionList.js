@@ -8,7 +8,7 @@ const CATEGORIES = [
   "All",
   "Museum",
   "Religious",
-  "Tourist",
+  "Tourist Attraction",
   "Historical",
   "Nature",
   "Entertainment",
