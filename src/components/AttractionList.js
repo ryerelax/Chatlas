@@ -17,6 +17,8 @@ const CATEGORIES = [
 
 export default function AttractionList() {
   const [attractions, setAttractions] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
@@ -26,6 +28,8 @@ export default function AttractionList() {
 
   const [minRating, setMinRating] = useState("0");
   const [appliedMinRating, setAppliedMinRating] = useState("0");
+
+  const [page, setPage] = useState(1);
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
@@ -51,11 +55,9 @@ export default function AttractionList() {
           query.set("minRating", appliedMinRating);
         }
 
-        const url = query.toString()
-          ? `/api/attractions?${query.toString()}`
-          : "/api/attractions";
+        query.set("page", String(page));
 
-        const response = await fetch(url);
+        const response = await fetch(`/api/attractions?${query.toString()}`);
 
         if (!response.ok) {
           throw new Error("Unable to load attractions.");
@@ -63,6 +65,8 @@ export default function AttractionList() {
 
         const result = await response.json();
         setAttractions(result.data || []);
+        setTotalCount(result.count || 0);
+        setTotalPages(result.pagination?.totalPages || 1);
       } catch (error) {
         console.error("Failed to load attractions:", error);
         setError("Failed to load attractions. Please try again.");
@@ -72,7 +76,7 @@ export default function AttractionList() {
     }
 
     loadAttractions();
-  }, [appliedSearch, appliedCategory, appliedMinRating]);
+  }, [appliedSearch, appliedCategory, appliedMinRating, page]);
 
   function handleSearch(event) {
     event.preventDefault();
@@ -80,6 +84,7 @@ export default function AttractionList() {
     setAppliedSearch(search.trim());
     setAppliedCategory(category);
     setAppliedMinRating(minRating);
+    setPage(1);
   }
 
   function handleReset() {
@@ -92,7 +97,22 @@ export default function AttractionList() {
     setMinRating("0");
     setAppliedMinRating("0");
 
+    setPage(1);
     setShowMoreFilters(false);
+  }
+
+  function handleCategorySelect(item) {
+    setCategory(item);
+    setAppliedCategory(item);
+    setPage(1);
+  }
+
+  function goToPreviousPage() {
+    setPage((current) => Math.max(1, current - 1));
+  }
+
+  function goToNextPage() {
+    setPage((current) => Math.min(totalPages, current + 1));
   }
 
   function getResultMessage() {
@@ -111,10 +131,10 @@ export default function AttractionList() {
     }
 
     if (criteria.length === 0) {
-      return `${attractions.length} attraction(s) available`;
+      return `${totalCount} attraction(s) available`;
     }
 
-    return `${attractions.length} result(s) found for ${criteria.join(", ")}`;
+    return `${totalCount} result(s) found for ${criteria.join(", ")}`;
   }
 
   return (
@@ -204,10 +224,7 @@ export default function AttractionList() {
             <button
               key={item}
               type="button"
-              onClick={() => {
-                setCategory(item);
-                setAppliedCategory(item);
-              }}
+              onClick={() => handleCategorySelect(item)}
               className={`shrink-0 rounded-full border px-4 py-2 text-sm font-semibold transition ${
                 isSelected
                   ? "border-emerald-700 bg-emerald-700 text-white"
@@ -270,6 +287,35 @@ export default function AttractionList() {
                 />
             ))}
           </div>
+
+          {totalPages > 1 && (
+            <nav
+              aria-label="Attraction results pages"
+              className="mt-8 flex items-center justify-center gap-4"
+            >
+              <button
+                type="button"
+                onClick={goToPreviousPage}
+                disabled={page <= 1}
+                className="rounded-lg border border-gray-300 px-4 py-2 font-semibold text-gray-700 transition hover:border-emerald-600 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Previous
+              </button>
+
+              <span className="text-sm font-semibold text-gray-700">
+                Page {page} of {totalPages}
+              </span>
+
+              <button
+                type="button"
+                onClick={goToNextPage}
+                disabled={page >= totalPages}
+                className="rounded-lg border border-gray-300 px-4 py-2 font-semibold text-gray-700 transition hover:border-emerald-600 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next
+              </button>
+            </nav>
+          )}
         </>
       )}
     </section>

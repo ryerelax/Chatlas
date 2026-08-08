@@ -36,6 +36,7 @@ The project is maintained as:
 - Search attractions by name, address, or category
 - Filter attractions by category
 - Filter attractions by minimum rating
+- Paginate attraction results (15 per page)
 - Display attraction result count
 - Reset search and filter criteria
 - Display attraction details
@@ -145,11 +146,12 @@ Supported query parameters:
 - `search`
 - `category`
 - `minRating`
+- `page` (defaults to `1`; 15 results per page)
 
 Example:
 
 ```text
-/api/attractions?category=Museum&minRating=4
+/api/attractions?category=Museum&minRating=4&page=2
 ```
 
 ### `/api/attractions/[id]`
