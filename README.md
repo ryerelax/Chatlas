@@ -156,6 +156,9 @@ Example:
 
 Returns one attraction by MongoDB ObjectId.
 
+- `400` if `id` is not a valid MongoDB ObjectId.
+- `404` if `id` is valid but no matching active attraction exists.
+
 ### `/attractions/[id]`
 
 Displays the attraction details page.
