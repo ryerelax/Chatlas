@@ -12,6 +12,31 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* Attraction Explorer design tokens, ported from the Figma Make reference
+   (Chatlas_Figma_Make_Package) so detail/location pages share one palette. */
+@theme {
+  --color-attraction-primary: #006c56;
+  --color-attraction-primary-hover: #005e4b;
+  --color-attraction-primary-dark: #004638;
+  --color-attraction-primary-soft: #e6f7f0;
+  --color-attraction-primary-soft-strong: #cdf5e5;
+  --color-attraction-primary-muted: #61ad9f;
+
+  --color-attraction-ink: #10213b;
+  --color-attraction-body: #405066;
+  --color-attraction-muted: #65748a;
+
+  --color-attraction-page-bg: #f7f9fb;
+  --color-attraction-surface-soft: #f1f6f4;
+
+  --color-attraction-border: #d8e1e7;
+  --color-attraction-border-strong: #bbc8d0;
+  --color-attraction-divider: #e8edf1;
+
+  --color-attraction-rating-star: #ffab00;
+  --color-attraction-error: #c2413b;
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;

@@ -6,9 +6,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "sync:photos": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/syncAttractionPhotos.mjs",
+    "classify:areas": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/classifyLocationAreas.mjs",
+    "fix:address": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/fixAttractionAddress.mjs",
+    "sync:descriptions": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/syncAttractionDescriptions.mjs"
   },
   "dependencies": {
+    "cloudinary": "^2.10.0",
     "mongoose": "^9.9.0",
     "next": "16.2.12",
     "react": "19.2.4",
