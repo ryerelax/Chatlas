@@ -67,8 +67,9 @@ const attractionSchema = new mongoose.Schema(
       trim: true,
     },
 
-    // TODO: Backfill from Google Places API (New) editorialSummary.text. Not all
-    // attractions have an editorial summary, so this stays empty for some records.
+    // Backfilled from Google Places API (New) editorialSummary.text by
+    // scripts/syncAttractionDescriptions.mjs. Not all attractions have an
+    // editorial summary, so this stays empty for some records.
     description: {
       type: String,
       default: "",

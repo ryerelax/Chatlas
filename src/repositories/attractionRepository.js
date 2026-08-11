@@ -102,3 +102,27 @@ export async function updateAttractionAddress(attractionId, address) {
     { returnDocument: "after" }
   ).lean();
 }
+
+export async function findAttractionsMissingDescription({ force = false } = {}) {
+  const query = {
+    state: "Melaka",
+    isActive: true,
+  };
+
+  if (!force) {
+    query.$or = [{ description: { $exists: false } }, { description: "" }];
+  }
+
+  return Attraction.find(query)
+    .select("_id name googlePlaceId description")
+    .sort({ name: 1 })
+    .lean();
+}
+
+export async function updateAttractionDescription(attractionId, description) {
+  return Attraction.findByIdAndUpdate(
+    attractionId,
+    { $set: { description } },
+    { returnDocument: "after" }
+  ).lean();
+}

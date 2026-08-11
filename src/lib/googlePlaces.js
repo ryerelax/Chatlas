@@ -77,3 +77,25 @@ export async function fetchPlaceFormattedAddress(placeId, apiKey) {
   const data = await response.json();
   return data.formattedAddress;
 }
+
+// Fetches a place's editorial summary. Not every place has one — callers
+// should treat undefined/empty as "no description available", not an error.
+export async function fetchPlaceEditorialSummary(placeId, apiKey) {
+  if (!apiKey) {
+    throw new Error("Google Places API key is not configured.");
+  }
+
+  const response = await fetch(`${PLACES_API_BASE}/places/${placeId}`, {
+    headers: {
+      "X-Goog-Api-Key": apiKey,
+      "X-Goog-FieldMask": "editorialSummary",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Place Details request failed with status ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.editorialSummary?.text || "";
+}

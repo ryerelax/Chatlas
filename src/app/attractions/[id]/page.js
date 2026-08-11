@@ -129,7 +129,7 @@ export default function AttractionDetailsPage() {
                     : "text-base italic leading-relaxed text-attraction-muted"
                 }
               >
-                {hasDescription ? attraction.description : "Description coming soon."}
+                {hasDescription ? attraction.description : "No description available for this attraction yet."}
               </p>
             </div>
 

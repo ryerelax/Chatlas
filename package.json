@@ -9,7 +9,8 @@
     "lint": "eslint",
     "sync:photos": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/syncAttractionPhotos.mjs",
     "classify:areas": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/classifyLocationAreas.mjs",
-    "fix:address": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/fixAttractionAddress.mjs"
+    "fix:address": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/fixAttractionAddress.mjs",
+    "sync:descriptions": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/syncAttractionDescriptions.mjs"
   },
   "dependencies": {
     "cloudinary": "^2.10.0",
