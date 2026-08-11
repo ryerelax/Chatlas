@@ -75,6 +75,13 @@ const attractionSchema = new mongoose.Schema(
       trim: true,
     },
 
+    // Stable Cloudinary URLs, populated by scripts/syncAttractionPhotos.js.
+    // Not all attractions have Places photos, so this stays empty for some records.
+    photos: {
+      type: [String],
+      default: [],
+    },
+
     state: {
       type: String,
       default: "Melaka",

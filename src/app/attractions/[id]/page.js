@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import StarRating from "@/components/StarRating";
 import { BackArrowIcon, LocationPinIcon } from "@/components/AttractionIcons";
+import AttractionPhotoGallery from "@/components/AttractionPhotoGallery";
 
 export default function AttractionDetailsPage() {
   const params = useParams();
@@ -115,8 +116,7 @@ export default function AttractionDetailsPage() {
               </div>
             </div>
 
-            {/* TODO: Replace with a real photo gallery once Cloudinary image storage is wired up. */}
-            <NoPhotoPlaceholder />
+            <AttractionPhotoGallery attraction={attraction} />
 
             <div className="mt-7 rounded-[18px] border border-attraction-border bg-white p-6">
               <h2 className="mb-3.5 text-lg font-bold text-attraction-ink">
@@ -191,27 +191,6 @@ export default function AttractionDetailsPage() {
         </div>
       </div>
     </main>
-  );
-}
-
-function NoPhotoPlaceholder() {
-  return (
-    <div className="flex flex-col items-center gap-3 rounded-[18px] bg-attraction-primary-soft px-6 py-12 text-center">
-      <svg width="48" height="48" viewBox="0 0 48 48" fill="none" aria-hidden="true">
-        <rect width="48" height="48" rx="12" className="fill-attraction-primary-soft-strong" />
-        <path
-          d="M12 34l9-9 6 6 4-4 9 9"
-          className="stroke-attraction-primary-muted"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <circle cx="18" cy="20" r="4" className="fill-attraction-primary-muted" />
-      </svg>
-      <p className="text-[15px] font-medium text-attraction-muted">
-        No photo available for this attraction
-      </p>
-    </div>
   );
 }
 

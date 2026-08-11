@@ -46,3 +46,27 @@ export async function findAttractionById(attractionId) {
     isActive: true,
   }).lean();
 }
+
+export async function findAttractionsMissingPhotos({ force = false } = {}) {
+  const query = {
+    state: "Melaka",
+    isActive: true,
+  };
+
+  if (!force) {
+    query.$or = [{ photos: { $exists: false } }, { photos: { $size: 0 } }];
+  }
+
+  return Attraction.find(query)
+    .select("_id name googlePlaceId photos")
+    .sort({ name: 1 })
+    .lean();
+}
+
+export async function updateAttractionPhotos(attractionId, photos) {
+  return Attraction.findByIdAndUpdate(
+    attractionId,
+    { $set: { photos } },
+    { returnDocument: "after" }
+  ).lean();
+}
