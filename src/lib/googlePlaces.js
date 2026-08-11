@@ -54,3 +54,26 @@ export async function fetchPlacePhotoUrls(placeId, { apiKey, maxPhotos = 6, maxW
 
   return photoUrls;
 }
+
+// Re-fetches the authoritative formatted address for a place. Used to repair
+// records whose stored `address` doesn't match their `googlePlaceId`/coordinates
+// (see scripts/fixAttractionAddress.mjs).
+export async function fetchPlaceFormattedAddress(placeId, apiKey) {
+  if (!apiKey) {
+    throw new Error("Google Places API key is not configured.");
+  }
+
+  const response = await fetch(`${PLACES_API_BASE}/places/${placeId}`, {
+    headers: {
+      "X-Goog-Api-Key": apiKey,
+      "X-Goog-FieldMask": "formattedAddress",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Place Details request failed with status ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.formattedAddress;
+}

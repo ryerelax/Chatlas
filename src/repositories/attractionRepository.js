@@ -3,6 +3,7 @@ import Attraction from "@/models/Attraction";
 export async function findAttractions({
   search = "",
   category = "",
+  locationArea = "",
   minRating = 0,
   page = 1,
   limit = 15,
@@ -23,6 +24,10 @@ export async function findAttractions({
 
   if (category && category !== "All") {
     query.category = category;
+  }
+
+  if (locationArea && locationArea !== "All") {
+    query.locationArea = locationArea;
   }
 
   const skip = (page - 1) * limit;
@@ -67,6 +72,33 @@ export async function updateAttractionPhotos(attractionId, photos) {
   return Attraction.findByIdAndUpdate(
     attractionId,
     { $set: { photos } },
+    { returnDocument: "after" }
+  ).lean();
+}
+
+export async function findAllActiveAttractions() {
+  return Attraction.find({ state: "Melaka", isActive: true })
+    .select("_id name address locationArea")
+    .sort({ address: 1 })
+    .lean();
+}
+
+export async function updateAttractionLocationArea(attractionId, locationArea) {
+  return Attraction.findByIdAndUpdate(
+    attractionId,
+    { $set: { locationArea } },
+    { returnDocument: "after" }
+  ).lean();
+}
+
+export async function findAttractionByIdForRepair(attractionId) {
+  return Attraction.findById(attractionId).select("_id name address googlePlaceId").lean();
+}
+
+export async function updateAttractionAddress(attractionId, address) {
+  return Attraction.findByIdAndUpdate(
+    attractionId,
+    { $set: { address } },
     { returnDocument: "after" }
   ).lean();
 }

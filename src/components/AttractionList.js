@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import AttractionCard from "@/components/AttractionCard";
+import { LOCATION_AREAS } from "@/lib/locationAreas";
 
 // TODO: Load category options dynamically when category management is finalized.
 const CATEGORIES = [
@@ -29,6 +30,9 @@ export default function AttractionList() {
   const [minRating, setMinRating] = useState("0");
   const [appliedMinRating, setAppliedMinRating] = useState("0");
 
+  const [locationArea, setLocationArea] = useState("All");
+  const [appliedLocationArea, setAppliedLocationArea] = useState("All");
+
   const [page, setPage] = useState(1);
 
   const [isLoading, setIsLoading] = useState(true);
@@ -49,6 +53,10 @@ export default function AttractionList() {
 
         if (appliedCategory !== "All") {
           query.set("category", appliedCategory);
+        }
+
+        if (appliedLocationArea !== "All") {
+          query.set("locationArea", appliedLocationArea);
         }
 
         if (appliedMinRating !== "0") {
@@ -76,13 +84,14 @@ export default function AttractionList() {
     }
 
     loadAttractions();
-  }, [appliedSearch, appliedCategory, appliedMinRating, page]);
+  }, [appliedSearch, appliedCategory, appliedLocationArea, appliedMinRating, page]);
 
   function handleSearch(event) {
     event.preventDefault();
 
     setAppliedSearch(search.trim());
     setAppliedCategory(category);
+    setAppliedLocationArea(locationArea);
     setAppliedMinRating(minRating);
     setPage(1);
   }
@@ -93,6 +102,9 @@ export default function AttractionList() {
 
     setCategory("All");
     setAppliedCategory("All");
+
+    setLocationArea("All");
+    setAppliedLocationArea("All");
 
     setMinRating("0");
     setAppliedMinRating("0");
@@ -124,6 +136,10 @@ export default function AttractionList() {
 
     if (appliedCategory !== "All") {
       criteria.push(`category ${appliedCategory}`);
+    }
+
+    if (appliedLocationArea !== "All") {
+      criteria.push(`area ${appliedLocationArea}`);
     }
 
     if (appliedMinRating !== "0") {
@@ -185,8 +201,8 @@ export default function AttractionList() {
           </button>
         </div>
         {showMoreFilters && (
-          <div className="mt-5 border-t border-gray-200 pt-5">
-            <div className="max-w-sm">
+          <div className="mt-5 grid gap-5 border-t border-gray-200 pt-5 sm:grid-cols-2">
+            <div>
               <label
                 htmlFor="minimum-rating"
                 className="mb-2 block text-sm font-semibold text-gray-800"
@@ -208,10 +224,29 @@ export default function AttractionList() {
               </select>
             </div>
 
-            <p className="mt-4 text-sm text-gray-500">
-              Location Area filtering will be added after district data is available
-              for all attractions.
-            </p>
+            <div>
+              <label
+                htmlFor="location-area"
+                className="mb-2 block text-sm font-semibold text-gray-800"
+              >
+                Location Area
+              </label>
+
+              {/* TODO: This zone list is a team draft, not yet confirmed (see src/lib/locationAreas.js). */}
+              <select
+                id="location-area"
+                value={locationArea}
+                onChange={(event) => setLocationArea(event.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-emerald-500"
+              >
+                <option value="All">All Areas</option>
+                {LOCATION_AREAS.map((area) => (
+                  <option key={area} value={area}>
+                    {area}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         )}
       </form>
@@ -262,7 +297,7 @@ export default function AttractionList() {
           </p>
 
           <p className="mt-2 text-gray-500">
-            Try changing the keyword, category, rating, or clear all filters.
+            Try changing the keyword, category, area, rating, or clear all filters.
           </p>
 
           <button
@@ -277,7 +312,6 @@ export default function AttractionList() {
 
       {!isLoading && !error && attractions.length > 0 && (
         <>
-          {/* TODO: Enable Location Area filtering after locationArea data is added to the attraction schema and records. */}
           {/* TODO: Refine the grid spacing and responsive layout based on the final Chatlas design. */}
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {attractions.map((attraction) => (

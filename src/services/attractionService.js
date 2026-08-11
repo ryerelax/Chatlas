@@ -9,17 +9,20 @@ const PAGE_SIZE = 15;
 export async function getAttractions({
   search = "",
   category = "",
+  locationArea = "",
   minRating = 0,
   page = 1,
 }) {
   const normalizedSearch = search.trim();
   const normalizedCategory = category.trim();
+  const normalizedLocationArea = locationArea.trim();
   const normalizedMinRating = Number(minRating) || 0;
   const normalizedPage = Math.max(1, Number(page) || 1);
 
   const { items, total } = await findAttractions({
     search: normalizedSearch,
     category: normalizedCategory,
+    locationArea: normalizedLocationArea,
     minRating: normalizedMinRating,
     page: normalizedPage,
     limit: PAGE_SIZE,

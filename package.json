@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "sync:photos": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/syncAttractionPhotos.mjs"
+    "sync:photos": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/syncAttractionPhotos.mjs",
+    "classify:areas": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/classifyLocationAreas.mjs",
+    "fix:address": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/fixAttractionAddress.mjs"
   },
   "dependencies": {
     "cloudinary": "^2.10.0",

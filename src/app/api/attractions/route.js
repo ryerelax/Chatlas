@@ -10,11 +10,12 @@ export async function GET(request) {
 
     const search = searchParams.get("search") || "";
     const category = searchParams.get("category") || "";
+    const locationArea = searchParams.get("locationArea") || "";
     const minRating = searchParams.get("minRating") || 0;
     const page = searchParams.get("page") || 1;
 
     const { items, total, page: currentPage, limit, totalPages } =
-      await getAttractions({ search, category, minRating, page });
+      await getAttractions({ search, category, locationArea, minRating, page });
 
     return NextResponse.json({
       success: true,

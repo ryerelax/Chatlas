@@ -82,6 +82,14 @@ const attractionSchema = new mongoose.Schema(
       default: [],
     },
 
+    // Draft Melaka zone classification for PB09 (see scripts/classifyLocationAreas.js).
+    // Not yet confirmed by the team — empty when an address didn't match any zone.
+    locationArea: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
     state: {
       type: String,
       default: "Melaka",
