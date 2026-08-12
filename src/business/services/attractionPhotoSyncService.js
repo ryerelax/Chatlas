@@ -1,6 +1,6 @@
-import { fetchPlacePhotoUrls } from "@/lib/googlePlaces";
-import { uploadImageFromUrl } from "@/lib/cloudinary";
-import { updateAttractionPhotos } from "@/repositories/attractionRepository";
+import { fetchPlacePhotoUrls } from "@/infrastructure/external/googlePlaces";
+import { uploadImageFromUrl } from "@/infrastructure/external/cloudinary";
+import { updateAttractionPhotos } from "@/data/repositories/attractionRepository";
 
 const PHOTOS_PER_ATTRACTION = 6;
 
