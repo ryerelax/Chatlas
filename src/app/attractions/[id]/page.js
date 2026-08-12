@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import ReviewForm from "@/components/reviews/ReviewForm";
 import ReviewList from "@/components/reviews/ReviewList";
 import StarRating from "@/components/StarRating";
 import { BackArrowIcon, LocationPinIcon } from "@/components/AttractionIcons";
@@ -167,7 +168,8 @@ export default function AttractionDetailsPage() {
                 </div>
               </div>
 
-              <ReviewList />
+              <ReviewForm />
+              <ReviewList attractionId={attractionId} />
             </section>
           </div>
 

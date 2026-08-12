@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import {
   createReview,
   findReviewsByAttraction,
@@ -26,5 +27,11 @@ export async function submitReview(reviewData) {
  * Get reviews for an attraction
  */
 export async function getReviewsByAttraction(attractionId) {
-  return findReviewsByAttraction(attractionId);
+  const normalizedAttractionId = attractionId?.trim();
+
+  if (!mongoose.Types.ObjectId.isValid(normalizedAttractionId)) {
+    return null;
+  }
+
+  return findReviewsByAttraction(normalizedAttractionId);
 }
