@@ -1,4 +1,4 @@
-import Review from "@/models/Review";
+import Review from "@/data/models/Review";
 
 /**
  * Create a new review

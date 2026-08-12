@@ -13,9 +13,9 @@
 // Requires GOOGLE_PLACES_API_KEY and the CLOUDINARY_* variables in .env.local.
 
 import mongoose from "mongoose";
-import { connectToDatabase } from "@/lib/mongodb";
-import { findAttractionsMissingPhotos } from "@/repositories/attractionRepository";
-import { syncAttractionPhotos } from "@/services/attractionPhotoSyncService";
+import { connectToDatabase } from "@/infrastructure/database/mongodb";
+import { findAttractionsMissingPhotos } from "@/data/repositories/attractionRepository";
+import { syncAttractionPhotos } from "@/business/services/attractionPhotoSyncService";
 
 const DELAY_BETWEEN_ATTRACTIONS_MS = 300;
 

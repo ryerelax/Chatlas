@@ -1,4 +1,4 @@
-import AttractionList from "@/components/AttractionList";
+import AttractionList from "@/presentation/components/AttractionList";
 
 export default function Home() {
   return (

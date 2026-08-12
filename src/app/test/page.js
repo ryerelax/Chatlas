@@ -1,4 +1,4 @@
-import ReviewCard from "@/components/reviews/ReviewCard";
+import ReviewCard from "@/presentation/components/reviews/ReviewCard";
 
 export default function TestPage() {
   return (

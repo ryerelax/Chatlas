@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import {
   createReview,
   findReviewsByAttraction,
-} from "@/repositories/reviewRepository";
+} from "@/data/repositories/reviewRepository";
 
 /**
  * Create a new review

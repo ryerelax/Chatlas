@@ -11,9 +11,9 @@
 //   npm run sync:descriptions -- --limit=5 # cap how many attractions to process
 
 import mongoose from "mongoose";
-import { connectToDatabase } from "@/lib/mongodb";
-import { findAttractionsMissingDescription } from "@/repositories/attractionRepository";
-import { syncAttractionDescription } from "@/services/attractionDescriptionSyncService";
+import { connectToDatabase } from "@/infrastructure/database/mongodb";
+import { findAttractionsMissingDescription } from "@/data/repositories/attractionRepository";
+import { syncAttractionDescription } from "@/business/services/attractionDescriptionSyncService";
 
 const DELAY_BETWEEN_ATTRACTIONS_MS = 200;
 

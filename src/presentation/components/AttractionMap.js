@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { LocationPinIcon } from "@/components/AttractionIcons";
-import { loadGoogleMaps } from "@/lib/googleMapsLoader";
+import { LocationPinIcon } from "@/presentation/components/AttractionIcons";
+import { loadGoogleMaps } from "@/presentation/lib/googleMapsLoader";
 
 const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
