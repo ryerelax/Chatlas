@@ -1,12 +1,10 @@
-import ExplorationMap from "@/components/ExplorationMap";
+import ExplorationMap from "@/presentation/components/ExplorationMap";
 
 export const metadata = {
   title: "Personal Exploration Map | Chatlas",
   description: "Explore supported attractions across Melaka on the Chatlas map.",
 };
 
-// TODO: Add the shared server-side session guard after the User Management
-// branch exposes the final authentication helper.
 export default function ExplorationMapPage() {
   return (
     <main className="min-h-screen bg-[#F7F9FB]">

@@ -4,21 +4,23 @@ import {
   createExplorationMapViewModel,
   createExplorationPageState,
   createExplorationProgressSummary,
-  getAttractionDetailsHref,
-  getMapMarkerPresentation,
   normaliseAttractionId,
   normaliseMapAttractions,
   normaliseReviewedAttractionIds,
   selectDevelopmentPreviewReviewedAttractionIds,
   VISITED_DATA_STATUS,
-} from "../src/lib/explorationMap.js";
+} from "../src/business/services/explorationMapService.js";
+import {
+  getAttractionDetailsHref,
+  getMapMarkerPresentation,
+} from "../src/presentation/lib/explorationMapPresentation.js";
 import {
   createDevelopmentVisitedPreviewAdapter,
   getDevelopmentMapPreviewMode,
   getDevelopmentVisitedPreviewMode,
   isDevelopmentVisitedPreviewEnabled,
   loadVisitedAttractionIds,
-} from "../src/lib/visitedAttractionsAdapter.js";
+} from "../src/presentation/lib/visitedAttractionsAdapter.js";
 
 const supportedAttractionFixtures = [
   {
@@ -357,7 +359,8 @@ test("the production adapter reports integration pending without fake visited ID
 
   assert.equal(result.status, VISITED_DATA_STATUS.UNAVAILABLE);
   assert.deepEqual(result.data, []);
-  assert.match(result.message, /Authentication and Review integration/);
+  assert.match(result.message, /Review integration/);
+  assert.doesNotMatch(result.message, /Authentication/);
 });
 
 test("the adapter returns mock reviewed IDs only while running in development", async () => {

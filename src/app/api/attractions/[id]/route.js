@@ -1,11 +1,24 @@
 import { NextResponse } from "next/server";
-import { connectToDatabase } from "@/lib/mongodb";
-import { getAttractionById } from "@/services/attractionService";
+import mongoose from "mongoose";
+import { connectToDatabase } from "@/infrastructure/database/mongodb";
+import { getAttractionById } from "@/business/services/attractionService";
 
-export async function GET(_request, { params }) {
+export async function GET(request, { params }) {
   try {
     await connectToDatabase();
+
     const { id } = await params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid attraction id.",
+        },
+        { status: 400 }
+      );
+    }
+
     const attraction = await getAttractionById(id);
 
     if (!attraction) {
