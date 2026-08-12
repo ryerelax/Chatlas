@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import AttractionCard from "@/components/AttractionCard";
-import { LOCATION_AREAS } from "@/lib/locationAreas";
+import AttractionCard from "@/presentation/components/AttractionCard";
+import { LOCATION_AREAS } from "@/business/services/locationAreas";
 
 // TODO: Load category options dynamically when category management is finalized.
 const CATEGORIES = [
@@ -232,7 +232,7 @@ export default function AttractionList() {
                 Location Area
               </label>
 
-              {/* TODO: This zone list is a team draft, not yet confirmed (see src/lib/locationAreas.js). */}
+              {/* TODO: This zone list is a team draft, not yet confirmed (see src/business/services/locationAreas.js). */}
               <select
                 id="location-area"
                 value={locationArea}

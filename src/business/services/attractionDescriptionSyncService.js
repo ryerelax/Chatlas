@@ -1,5 +1,5 @@
-import { fetchPlaceEditorialSummary } from "@/lib/googlePlaces";
-import { updateAttractionDescription } from "@/repositories/attractionRepository";
+import { fetchPlaceEditorialSummary } from "@/infrastructure/external/googlePlaces";
+import { updateAttractionDescription } from "@/data/repositories/attractionRepository";
 
 // Fetches an attraction's description from Google Places (New) editorialSummary.
 // Intended to run from scripts/syncAttractionDescriptions.mjs, not from a

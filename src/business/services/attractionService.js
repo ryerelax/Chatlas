@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import {
   findAttractions,
   findAttractionById,
-} from "@/repositories/attractionRepository";
+} from "@/data/repositories/attractionRepository";
 
 const PAGE_SIZE = 15;
 

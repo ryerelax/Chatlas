@@ -1,5 +1,5 @@
-import Header from "@/components/Header";
-import ServiceWorkerRegistration from "@/components/ServiceWorkerRegistration";
+import Header from "@/presentation/components/Header";
+import ServiceWorkerRegistration from "@/presentation/components/ServiceWorkerRegistration";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { SessionProvider } from "next-auth/react";

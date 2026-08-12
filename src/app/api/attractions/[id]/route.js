@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import mongoose from "mongoose";
-import { connectToDatabase } from "@/lib/mongodb";
-import { getAttractionById } from "@/services/attractionService";
+import { connectToDatabase } from "@/infrastructure/database/mongodb";
+import { getAttractionById } from "@/business/services/attractionService";
 
 export async function GET(request, { params }) {
   try {
