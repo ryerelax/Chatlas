@@ -1,24 +1,30 @@
+<<<<<<< HEAD
 import AttractionList from "@/presentation/components/AttractionList";
+=======
+import AttractionList from "@/components/AttractionList";
+>>>>>>> 9bb6934e3f719f771410e47434459778afe8dd53
 
 export default function Home() {
   return (
     <main className="min-h-screen bg-gray-50">
-      {/* TODO: Replace this simple header with the final Chatlas navigation bar. */}
-      <header className="border-b border-gray-200 bg-white">
-        <div className="mx-auto max-w-7xl px-6 py-6">
-          <h1 className="text-3xl font-bold text-gray-900">
-            Explore Melaka Attractions
+      <section className="bg-[#0F5A43]">
+        <div className="mx-auto max-w-7xl px-6 py-14 md:py-16">
+          <p className="mb-4 font-semibold text-white/85">
+            Explore Melaka with the community
+          </p>
+
+          <h1 className="max-w-3xl text-3xl font-bold leading-tight text-white md:text-5xl">
+            Discover attractions and record your travel journey
           </h1>
 
-          <p className="mt-2 text-gray-600">
-            Discover historical places, museums, nature spots, and local
-            attractions around Melaka.
+          <p className="mt-5 max-w-3xl text-lg leading-relaxed text-white/80">
+            Browse popular and lesser-known attractions, read traveller
+            experiences and start exploring Melaka.
           </p>
         </div>
-      </header>
+      </section>
 
       <div className="mx-auto max-w-7xl px-6 py-10">
-        {/* TODO: Add a personalized hero section or Chatlas introduction banner later. */}
         <AttractionList />
       </div>
     </main>

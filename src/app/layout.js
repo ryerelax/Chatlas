@@ -1,6 +1,12 @@
+<<<<<<< HEAD
 import Header from "@/presentation/components/Header";
+=======
+import Header from "@/components/Header";
+import ServiceWorkerRegistration from "@/components/ServiceWorkerRegistration";
+>>>>>>> 9bb6934e3f719f771410e47434459778afe8dd53
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { SessionProvider } from "next-auth/react";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -24,14 +30,18 @@ export default function RootLayout({ children }) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col bg-gray-50">
-        {/* TODO: Add a global travel announcement or system notification banner later. */}
-        <Header />
+        <SessionProvider>
+          <ServiceWorkerRegistration />
 
-        <div className="flex-1">
-          {children}
-        </div>
+          {/* TODO: Add a global travel announcement or system notification banner later. */}
+          <Header />
 
-        {/* TODO: Add a shared Chatlas footer after the final branding and navigation structure are confirmed. */}
+          <div className="flex-1">
+            {children}
+          </div>
+
+          {/* TODO: Add a shared Chatlas footer after the final branding and navigation structure are confirmed. */}
+        </SessionProvider>
       </body>
     </html>
   );

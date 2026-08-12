@@ -1,77 +1,49 @@
 # Chatlas
 
-Chatlas is a mobile-first tourism Progressive Web Application for discovering attractions and travel activity in Melaka.
+Chatlas is a mobile-first tourism Progressive Web Application for discovering attractions in Melaka.
 
-The system is planned around six core modules:
-
-- User Management
-- Attraction Explorer
-- Review & Community
-- Exploration Map
-- Social Profile
-- Personal Collection
-
-The current implementation focuses on the initial project setup and Attraction Explorer prototype.
+The system allows users to browse, search, filter, and view attraction details. Future modules will include map exploration, Google authentication, reviews, social profiles, and community features.
 
 ## Technology Stack
 
 - Next.js
 - React
-- JavaScript
 - Tailwind CSS
 - MongoDB Atlas
 - Mongoose
-- ESLint
 - Google Identity Services
-- Google Maps JavaScript API
-- Google Places API
+- Google Maps Platform
 - Cloudinary
-
-Google Identity, Maps, Places, Cloudinary, and full PWA support are planned integrations and may not yet be fully implemented.
 
 ## System Architecture
 
-Chatlas uses a Layered Architecture with three distinctive logical layers inside one full-stack Next.js Progressive Web Application:
+Chatlas uses a layered architecture within one Next.js application:
 
-1. **Presentation Layer**
-2. **Business Logic Layer**
-3. **Data Access Layer**
-
-The project also contains a supporting `infrastructure` folder for technical helpers such as database connections and external-service clients. Infrastructure is not a fourth logical business layer.
-
-The dependency direction is:
-
-```text
-Presentation Layer
-        ↓
-Business Logic Layer
-        ↓
-Data Access Layer
-        ↓
-MongoDB Atlas
-```
-
-The current HTTP request flow is:
-
-```text
-Page or Component
-        ↓
-Next.js Route Handler
-        ↓
-Service
-        ↓
-Repository
-        ↓
-Mongoose Model
-        ↓
-MongoDB Atlas
-```
+- **Presentation Layer:** React components and pages
+- **Business Logic Layer:** Services and Next.js Route Handlers
+- **Data Access Layer:** Repositories and Mongoose models
+- **Database:** MongoDB Atlas
 
 The project is maintained as:
 
 - One application
 - One GitHub repository
 - One deployment unit
+
+## Current Features
+
+- Display Melaka attractions from MongoDB Atlas
+- Search attractions by name, address, or category
+- Filter attractions by category
+- Filter attractions by minimum rating
+- Paginate attraction results (15 per page)
+- Display attraction result count
+- Reset search and filter criteria
+- Display attraction details
+- Open attraction location in Google Maps
+- Responsive header and navigation bar
+
+<!-- TODO: Update this list whenever a new module or feature is completed. -->
 
 ## Project Structure
 
@@ -80,75 +52,28 @@ src/
 ├── app/
 │   ├── api/
 │   │   └── attractions/
-│   │       ├── route.js
-│   │       └── [id]/
-│   │           └── route.js
 │   ├── attractions/
-│   │   └── [id]/
-│   │       └── page.js
+│   ├── globals.css
 │   ├── layout.js
-│   ├── page.js
-│   └── globals.css
-│
-├── presentation/
-│   └── components/
-│       ├── Header.js
-│       ├── AttractionCard.js
-│       └── AttractionList.js
-│
-├── business/
-│   └── services/
-│       └── attractionService.js
-│
-├── data/
-│   ├── models/
-│   │   └── Attraction.js
-│   └── repositories/
-│       └── attractionRepository.js
-│
-└── infrastructure/
-    └── database/
-        └── mongodb.js
+│   └── page.js
+├── components/
+├── lib/
+├── models/
+├── repositories/
+└── services/
 ```
-
-### Folder Responsibilities
-
-| Folder | Responsibility |
-|---|---|
-| `src/app/` | Next.js pages, layouts, Route Handlers, and route structure |
-| `src/presentation/components/` | Reusable React user-interface components |
-| `src/business/services/` | Validation, input normalization, and business rules |
-| `src/data/models/` | Mongoose schemas and models |
-| `src/data/repositories/` | MongoDB queries and data-access operations |
-| `src/infrastructure/` | Database connections and reusable external-service helpers |
-
-## Current Features
-
-- Display Melaka attractions from MongoDB Atlas
-- Browse a default attraction list
-- Search attractions by name, address, or category
-- Filter attractions by category
-- Filter attractions by minimum rating
-- Display the current result count and applied criteria
-- Reset search and filter criteria
-- Display loading, error, and no-result states
-- Display attraction details
-- Open an attraction location using its Google Maps link
-- Shared responsive header and navigation
-
-<!-- TODO: Update this list whenever a new module or feature is completed. -->
 
 ## Environment Variables
 
 Copy `.env.example` and create a new file named `.env.local`.
 
-Windows PowerShell:
+For Windows PowerShell:
 
 ```powershell
 Copy-Item .env.example .env.local
 ```
 
-macOS or Linux:
+For macOS or Linux:
 
 ```bash
 cp .env.example .env.local
@@ -167,13 +92,11 @@ CLOUDINARY_API_KEY=
 CLOUDINARY_API_SECRET=
 ```
 
-Only fill values required by the currently implemented features.
-
-Never commit `.env.local` or expose passwords, secrets, private API keys, or database connection strings.
+Do not commit `.env.local` or expose passwords, secrets, or API keys.
 
 ## Getting Started
 
-Install dependencies:
+Install the project dependencies:
 
 ```bash
 npm install
@@ -185,7 +108,7 @@ Start the development server:
 npm run dev
 ```
 
-Open:
+Open the following address in your browser:
 
 ```text
 http://localhost:3000
@@ -193,27 +116,26 @@ http://localhost:3000
 
 ## MongoDB Atlas Setup
 
-Before running the Attraction Explorer module:
+Before running the attraction module:
 
-1. Obtain access to the shared Chatlas MongoDB Atlas project.
-2. Ensure the `chatlas` database contains the `attractions` collection.
-3. Add the current network IP address to the MongoDB Atlas IP Access List.
-4. Put the MongoDB connection string in `.env.local`.
-5. Restart the development server after changing `.env.local`.
+1. Create or access the Chatlas MongoDB Atlas project.
+2. Ensure the database contains the `attractions` collection.
+3. Add your current IP address to the MongoDB Atlas IP Access List.
+4. Place your MongoDB connection string in `.env.local`.
 
-Example format only:
+Example:
 
 ```env
 MONGODB_URI=mongodb://username:password@host1:27017,host2:27017,host3:27017/chatlas?ssl=true&replicaSet=...
 ```
 
-Never place the real database password inside `.env.example`, `README.md`, source code, screenshots, commits, or Pull Requests.
+Never place the real database password inside `.env.example` or `README.md`.
 
 ## Available Routes
 
 ### `/`
 
-Displays the current homepage and attraction explorer.
+Displays the attraction explorer.
 
 ### `/api/attractions`
 
@@ -224,53 +146,78 @@ Supported query parameters:
 - `search`
 - `category`
 - `minRating`
+- `page` (defaults to `1`; 15 results per page)
 
 Example:
 
 ```text
-/api/attractions?category=Museum&minRating=4
+/api/attractions?category=Museum&minRating=4&page=2
 ```
 
 ### `/api/attractions/[id]`
 
 Returns one attraction by MongoDB ObjectId.
 
+- `400` if `id` is not a valid MongoDB ObjectId.
+- `404` if `id` is valid but no matching active attraction exists.
+
 ### `/attractions/[id]`
 
 Displays the attraction details page.
 
-## Development Guidelines
+## Git Workflow
 
-All Coding Standards, layered-architecture rules, Git Workflow, branch rules, Pull Request guidelines, security guidelines, and Definition of Done requirements are maintained in:
-
-```text
-AGENTS.md
-```
-
-Team members should read `AGENTS.md` before making major changes.
-
-## Useful Commands
+Create or switch to your assigned feature branch before making changes:
 
 ```bash
-npm install
-npm run dev
-npm run lint
-npm run build
+git switch -c feature/your-feature-name
+```
+
+Check your changes:
+
+```bash
 git status
 ```
+
+Stage and commit:
+
+```bash
+git add .
+git commit -m "Describe the completed change"
+```
+
+Push the branch:
+
+```bash
+git push -u origin feature/your-feature-name
+```
+
+Do not commit directly to `main` unless instructed by the team leader.
+
+## Development Notes
+
+- Keep all frontend and backend logic inside this Next.js project.
+- Do not create separate frontend and backend repositories.
+- Use services for business logic.
+- Use repositories for database access.
+- Use Mongoose models for MongoDB collections.
+- Keep secrets only in `.env.local`.
+
+<!-- TODO: Add coding conventions, pull request rules, and branch naming rules after the team confirms them. -->
 
 ## Planned Improvements
 
 - Google authentication
-- Interactive attraction map
-- Attraction photo previews and lightbox
-- Review creation, ratings, editing, and deletion
-- Personal exploration map and progress
-- Social profiles and comparison features
-- Wishlist, favourites, reviews, photos, and travel history
+- Interactive exploration map
+- Attraction images
+- Reviews and ratings
+- Social profiles
+- Community features
 - Cloudinary image storage
-- PWA Service Worker and offline caching
+- PWA configuration
 - Final Chatlas branding and responsive design
 
-<!-- TODO: Update the roadmap when the team confirms implementation priorities. -->
-<!-- TODO: Add additional dependencies only when the related authentication, Maps, Cloudinary, or PWA feature is implemented. -->
+<!-- TODO: Replace this section with the final development roadmap when the team confirms module priorities. -->
+
+// TODO: Install additional dependencies when Google authentication,
+// Google Maps, Cloudinary, and PWA features are implemented.

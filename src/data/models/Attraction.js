@@ -67,6 +67,30 @@ const attractionSchema = new mongoose.Schema(
       trim: true,
     },
 
+    // Backfilled from Google Places API (New) editorialSummary.text by
+    // scripts/syncAttractionDescriptions.mjs. Not all attractions have an
+    // editorial summary, so this stays empty for some records.
+    description: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    // Stable Cloudinary URLs, populated by scripts/syncAttractionPhotos.js.
+    // Not all attractions have Places photos, so this stays empty for some records.
+    photos: {
+      type: [String],
+      default: [],
+    },
+
+    // Draft Melaka zone classification for PB09 (see scripts/classifyLocationAreas.js).
+    // Not yet confirmed by the team — empty when an address didn't match any zone.
+    locationArea: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
     state: {
       type: String,
       default: "Melaka",
