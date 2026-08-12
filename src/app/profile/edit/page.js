@@ -17,7 +17,7 @@ export default function EditProfilePage() {
   const [imagePreview, setImagePreview] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // ✅ 从 API 获取用户数据（与 My Profile 保持一致）
+  // 从 API 获取用户数据（与 My Profile 保持一致）
   const fetchUserData = async () => {
     try {
       const response = await fetch("/api/user");
@@ -49,12 +49,12 @@ export default function EditProfilePage() {
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        setMessage({ type: "error", text: "File is too large. Maximum size is 2MB." });
+      if (file.size > 5 * 1024 * 1024) {
+        setMessage({ type: "error", text: "File is too large. Maximum size is 5MB." });
         return;
       }
-      if (!["image/jpeg", "image/png"].includes(file.type)) {
-        setMessage({ type: "error", text: "Unsupported file format. Please upload JPG or PNG." });
+      if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+        setMessage({ type: "error", text: "Unsupported file format. Please upload JPG, PNG, or WEBP." });
         return;
       }
       setImageFile(file);
@@ -68,16 +68,44 @@ export default function EditProfilePage() {
     setMessage(null);
 
     try {
+      let profilePictureUrl = null;
+
+      // 如果有新图片，上传到 Cloudinary
+      if (imageFile) {
+        console.log("🔍 Uploading image to Cloudinary...");
+        const uploadFormData = new FormData();
+        uploadFormData.append("file", imageFile);
+
+        const uploadRes = await fetch("/api/upload", {
+          method: "POST",
+          body: uploadFormData,
+        });
+
+        const uploadResult = await uploadRes.json();
+        console.log("🔍 Cloudinary upload result:", uploadResult);
+
+        if (!uploadResult.success) {
+          throw new Error(uploadResult.message);
+        }
+        profilePictureUrl = uploadResult.data.url;
+        console.log("✅ Cloudinary upload successful:", profilePictureUrl);
+      } else {
+        console.log("ℹ️ No image to upload, keeping existing");
+      }
+
       const updateData = {
         displayName,
         bio,
         location,
       };
 
-      // 如果有新图片，使用预览 URL（后续可替换为 Cloudinary 上传）
-      if (imagePreview) {
-        updateData.profilePicture = imagePreview;
+      // ✅ 如果有新的 Cloudinary URL，添加到更新数据中
+      if (profilePictureUrl) {
+        updateData.profilePicture = profilePictureUrl;
+        console.log("🔍 Adding profilePicture to updateData:", profilePictureUrl);
       }
+
+      console.log("🔍 Final updateData being sent:", updateData);
 
       const response = await fetch("/api/user", {
         method: "PUT",
@@ -86,31 +114,37 @@ export default function EditProfilePage() {
       });
 
       const result = await response.json();
+      console.log("🔍 Update API response:", result);
+
       if (!result.success) throw new Error(result.message);
 
-      // ✅ 更新 session
+      // ✅ 使用服务器返回的 profilePicture，或使用新上传的 URL
+      const newImageUrl = profilePictureUrl || result.data.profilePicture || session.user.image;
+
+      // 更新 session
       await update({
         ...session,
         user: {
           ...session.user,
           displayName: displayName,
-          image: result.data.profilePicture || session.user.image,
+          image: newImageUrl,
           bio: bio,
           location: location,
         },
       });
 
-      // ✅ 更新本地状态
-      if (result.data.profilePicture) {
-        setProfilePicture(result.data.profilePicture);
+      // 更新本地状态
+      if (newImageUrl) {
+        setProfilePicture(newImageUrl);
       }
 
       setMessage({ type: "success", text: "Profile updated successfully!" });
-      
+
       setTimeout(() => {
         router.push("/profile");
       }, 1500);
     } catch (error) {
+      console.error("❌ Error:", error);
       setMessage({ type: "error", text: error.message || "Failed to update profile." });
     } finally {
       setIsLoading(false);
@@ -125,7 +159,7 @@ export default function EditProfilePage() {
     );
   }
 
-  // ✅ 头像来源：预览 → 数据库 → session
+  // 头像来源：预览 → 数据库 → session
   const avatarSrc = imagePreview || profilePicture || session?.user?.image || "/default-avatar.png";
 
   return (
@@ -146,7 +180,7 @@ export default function EditProfilePage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          {/* ✅ Avatar Upload - 与 My Profile 一致 */}
+          {/* Avatar Upload */}
           <div className="flex flex-col items-center">
             <div className="relative">
               <img
@@ -176,16 +210,16 @@ export default function EditProfilePage() {
                 </svg>
                 <input
                   type="file"
-                  accept="image/jpeg,image/png"
+                  accept="image/jpeg,image/png,image/webp"
                   onChange={handleImageChange}
                   className="hidden"
                 />
               </label>
             </div>
-            <p className="text-xs text-gray-500 mt-2">JPG or PNG, max 2MB</p>
+            <p className="text-xs text-gray-500 mt-2">JPG, PNG or WEBP, max 5MB</p>
           </div>
 
-          {/* ✅ Display Name - 与 My Profile 一致 */}
+          {/* Display Name */}
           <div>
             <label className="block text-sm font-medium text-black mb-1">Display name</label>
             <input
@@ -199,7 +233,7 @@ export default function EditProfilePage() {
             <p className="text-xs text-gray-500 mt-1">{displayName.length}/50</p>
           </div>
 
-          {/* ✅ Email - 只读 */}
+          {/* Email - 只读 */}
           <div>
             <label className="block text-sm font-medium text-black mb-1">Email</label>
             <input
@@ -210,7 +244,7 @@ export default function EditProfilePage() {
             />
           </div>
 
-          {/* ✅ Location - 与 My Profile 一致 */}
+          {/* Location */}
           <div>
             <label className="block text-sm font-medium text-black mb-1">Location</label>
             <input
@@ -222,7 +256,7 @@ export default function EditProfilePage() {
             />
           </div>
 
-          {/* ✅ Bio - 与 My Profile 一致 */}
+          {/* Bio */}
           <div>
             <label className="block text-sm font-medium text-black mb-1">Bio</label>
             <textarea
