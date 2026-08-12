@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-import AttractionList from "@/presentation/components/AttractionList";
-=======
-import AttractionList from "@/components/AttractionList";
->>>>>>> 9bb6934e3f719f771410e47434459778afe8dd53
+import AttractionList from "@/presentation/components/AttractionList"
 
 export default function Home() {
   return (

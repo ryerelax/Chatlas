@@ -4,10 +4,9 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import StarRating from "@/components/StarRating";
-import { BackArrowIcon, LocationPinIcon } from "@/components/AttractionIcons";
-import AttractionPhotoGallery from "@/components/AttractionPhotoGallery";
-
+import StarRating from "@/presentation/components/StarRating";
+import { BackArrowIcon, LocationPinIcon } from "@/presentation/components/AttractionIcons";
+import AttractionPhotoGallery from "@/presentation/components/AttractionPhotoGallery"; 
 export default function AttractionDetailsPage() {
   const params = useParams();
   const attractionId = params.id;

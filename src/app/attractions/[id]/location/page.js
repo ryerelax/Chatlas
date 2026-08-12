@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import StarRating from "@/components/StarRating";
-import { BackArrowIcon } from "@/components/AttractionIcons";
-import AttractionMap from "@/components/AttractionMap";
+import StarRating from "@/presentation/components/StarRating";
+import { BackArrowIcon } from "@/presentation/components/AttractionIcons";
+import AttractionMap from "@/presentation/components/AttractionMap";
 
 export default function AttractionLocationPage() {
   const params = useParams();

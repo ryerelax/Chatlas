@@ -1,36 +1,24 @@
 import { NextResponse } from "next/server";
-<<<<<<< HEAD
 import { connectToDatabase } from "@/infrastructure/database/mongodb";
 import { getAttractionById } from "@/business/services/attractionService";
-=======
-import mongoose from "mongoose";
-import { connectToDatabase } from "@/lib/mongodb";
-import { getAttractionById } from "@/services/attractionService";
->>>>>>> 9bb6934e3f719f771410e47434459778afe8dd53
 
 export async function GET(request, { params }) {
   try {
-    await connectToDatabase();
-
+    // Validate ID first
     const { id } = await params;
-<<<<<<< HEAD
-    const attraction = await getAttractionById(id);
-
-=======
-
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!id) {
       return NextResponse.json(
         {
           success: false,
-          message: "Invalid attraction id.",
+          message: "Attraction ID is required.",
         },
         { status: 400 }
       );
     }
 
+    await connectToDatabase();
     const attraction = await getAttractionById(id);
 
->>>>>>> 9bb6934e3f719f771410e47434459778afe8dd53
     if (!attraction) {
       return NextResponse.json(
         {
@@ -48,11 +36,6 @@ export async function GET(request, { params }) {
   } catch (error) {
     console.error("Failed to retrieve attraction:", error);
 
-<<<<<<< HEAD
-    // TODO: Return more specific public error messages after
-    // the final API error-handling strategy is confirmed.
-=======
->>>>>>> 9bb6934e3f719f771410e47434459778afe8dd53
     return NextResponse.json(
       {
         success: false,
