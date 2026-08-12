@@ -12,12 +12,12 @@
 //   npm run fix:address -- 6a50e51a10ae986b194de69c
 
 import mongoose from "mongoose";
-import { connectToDatabase } from "@/lib/mongodb";
+import { connectToDatabase } from "@/infrastructure/database/mongodb";
 import {
   findAttractionByIdForRepair,
   updateAttractionAddress,
-} from "@/repositories/attractionRepository";
-import { fetchPlaceFormattedAddress } from "@/lib/googlePlaces";
+} from "@/data/repositories/attractionRepository";
+import { fetchPlaceFormattedAddress } from "@/infrastructure/googlePlaces";
 
 async function main() {
   const attractionId = process.argv[2];
