@@ -74,30 +74,49 @@ export async function PUT(request) {
     const body = await request.json();
     const { displayName, bio, location, profilePicture } = body;
 
+    console.log("🔍 PUT /api/user received:", { displayName, bio, location, profilePicture });
+
     await connectToDatabase();
 
-    const updatedUser = await User.findOneAndUpdate(
+    // ✅ 构建动态更新对象，只更新提供的字段
+    const updateFields = {
+      displayName: displayName || "",
+      bio: bio || "",
+      location: location || "",
+    };
+
+    // ✅ 只有当 profilePicture 被明确提供时才更新它
+    if (profilePicture !== undefined && profilePicture !== null) {
+      updateFields.profilePicture = profilePicture;
+    }
+
+    // 使用 updateOne 确保更新成功
+    const updateResult = await User.updateOne(
       { 
         $or: [
           { googleId: session.user.id },
           { email: session.user.email }
         ]
       },
-      {
-        displayName: displayName || "",
-        bio: bio || "",
-        location: location || "",
-        profilePicture: profilePicture || "",
-      },
-      { new: true }
+      { $set: updateFields }
     );
 
-    if (!updatedUser) {
+    if (updateResult.matchedCount === 0) {
       return NextResponse.json(
         { success: false, message: "User not found" },
         { status: 404 }
       );
     }
+
+    // 获取更新后的用户数据
+    const updatedUser = await User.findOne({ 
+      $or: [
+        { googleId: session.user.id },
+        { email: session.user.email }
+      ]
+    });
+
+    console.log("🔍 Updated user:", updatedUser);
 
     return NextResponse.json({
       success: true,
