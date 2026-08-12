@@ -1,4 +1,4 @@
-import { fetchPlaceEditorialSummary } from "@/infrastructure/googlePlaces";
+import { fetchPlaceEditorialSummary } from "@/infrastructure/external/googlePlaces";
 import { updateAttractionDescription } from "@/data/repositories/attractionRepository";
 
 // Fetches an attraction's description from Google Places (New) editorialSummary.

@@ -90,8 +90,7 @@ src/
 │
 └── infrastructure/
     ├── database/                  # MongoDB connection helper
-    ├── cloudinary.js              # Cloudinary SDK wrapper
-    └── googlePlaces.js            # Google Places API (New) client
+    └── external/                  # Third-party API clients (Cloudinary, Google Places API (New))
 ```
 
 `src/app/`, `src/auth.ts`, `src/auth.config.ts`, and `src/middleware.js` stay exactly where Next.js/Auth.js require them — do not move these into a nested layer folder even though they implement Presentation/Business-adjacent behaviour.
@@ -178,16 +177,17 @@ Rules:
 
 ### 3.4 Shared Infrastructure
 
-Location:
+Locations:
 
 ```text
-src/infrastructure/
+src/infrastructure/database/    # MongoDB connection helper
+src/infrastructure/external/    # Third-party API clients (Cloudinary, Google Places API (New))
 ```
 
 Responsibilities:
 
 - MongoDB connection helper (`database/mongodb.js`)
-- External service clients (Cloudinary, Google Places API (New))
+- External service clients (`external/cloudinary.js`, `external/googlePlaces.js`)
 - Shared configuration
 - Server-side infrastructure code
 
@@ -195,6 +195,7 @@ Rules:
 
 - A file belongs here only if it's server-side and has no business logic of its own — just a thin client/wrapper around an external system. Once it starts making business decisions (what to do with the data), that logic belongs in `src/business/services/`, which may call into `src/infrastructure/`.
 - Client-side helpers (anything that runs in the browser) belong in `src/presentation/lib/` instead, not here.
+- Keep each third-party integration's client under `src/infrastructure/external/`, not loose at the `src/infrastructure/` root, so the database helper and external API clients stay clearly separated.
 
 ---
 

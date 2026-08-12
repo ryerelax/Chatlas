@@ -1,5 +1,5 @@
-import { fetchPlacePhotoUrls } from "@/infrastructure/googlePlaces";
-import { uploadImageFromUrl } from "@/infrastructure/cloudinary";
+import { fetchPlacePhotoUrls } from "@/infrastructure/external/googlePlaces";
+import { uploadImageFromUrl } from "@/infrastructure/external/cloudinary";
 import { updateAttractionPhotos } from "@/data/repositories/attractionRepository";
 
 const PHOTOS_PER_ATTRACTION = 6;

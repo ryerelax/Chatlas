@@ -17,7 +17,7 @@ import {
   findAttractionByIdForRepair,
   updateAttractionAddress,
 } from "@/data/repositories/attractionRepository";
-import { fetchPlaceFormattedAddress } from "@/infrastructure/googlePlaces";
+import { fetchPlaceFormattedAddress } from "@/infrastructure/external/googlePlaces";
 
 async function main() {
   const attractionId = process.argv[2];
