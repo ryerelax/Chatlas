@@ -1,4 +1,4 @@
-import Attraction from "@/models/Attraction";
+import Attraction from "@/data/models/Attraction";
 
 export async function findAttractions({
   search = "",
