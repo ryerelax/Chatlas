@@ -6,7 +6,8 @@ import Review from "@/data/models/Review";
  * @returns {Promise<Object>} - The created review document
  */
 export async function createReview(reviewData) {
-  return Review.create(reviewData);
+  const review = await Review.create(reviewData);
+  return review.toObject();
 }
 
 /**

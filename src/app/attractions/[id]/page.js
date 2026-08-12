@@ -16,6 +16,7 @@ export default function AttractionDetailsPage() {
   const [attraction, setAttraction] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [reviewRefreshVersion, setReviewRefreshVersion] = useState(0);
 
   useEffect(() => {
     async function loadAttractionDetails() {
@@ -168,8 +169,16 @@ export default function AttractionDetailsPage() {
                 </div>
               </div>
 
-              <ReviewForm />
-              <ReviewList attractionId={attractionId} />
+              <ReviewForm
+                attractionId={attractionId}
+                onReviewSubmitted={() =>
+                  setReviewRefreshVersion((version) => version + 1)
+                }
+              />
+              <ReviewList
+                attractionId={attractionId}
+                refreshVersion={reviewRefreshVersion}
+              />
             </section>
           </div>
 

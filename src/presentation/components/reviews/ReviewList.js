@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import ReviewCard from "./ReviewCard";
 
-export default function ReviewList({ attractionId }) {
+export default function ReviewList({ attractionId, refreshVersion = 0 }) {
   const [reviews, setReviews] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
@@ -43,7 +43,7 @@ export default function ReviewList({ attractionId }) {
     }
 
     return () => controller.abort();
-  }, [attractionId]);
+  }, [attractionId, refreshVersion]);
 
   if (isLoading) {
     return <ReviewListSkeleton />;

@@ -4,25 +4,29 @@ import { useState } from "react";
 
 const STAR_OPTIONS = [1, 2, 3, 4, 5];
 
-export default function ReviewForm() {
+export default function ReviewForm({ attractionId, onReviewSubmitted }) {
   const [rating, setRating] = useState(0);
   const [reviewText, setReviewText] = useState("");
   const [errors, setErrors] = useState({});
   const [statusMessage, setStatusMessage] = useState("");
+  const [statusType, setStatusType] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   function handleRatingChange(value) {
     setRating(value);
     setStatusMessage("");
+    setStatusType("");
     setErrors((current) => ({ ...current, rating: "" }));
   }
 
   function handleReviewTextChange(event) {
     setReviewText(event.target.value);
     setStatusMessage("");
+    setStatusType("");
     setErrors((current) => ({ ...current, reviewText: "" }));
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
 
     const nextErrors = {};
@@ -33,24 +37,59 @@ export default function ReviewForm() {
 
     if (!reviewText.trim()) {
       nextErrors.reviewText = "Enter your review before continuing.";
+    } else if (reviewText.trim().length > 1000) {
+      nextErrors.reviewText = "Keep your review to 1,000 characters or fewer.";
     }
 
     setErrors(nextErrors);
 
     if (Object.keys(nextErrors).length > 0) {
       setStatusMessage("");
+      setStatusType("");
       return;
     }
 
-    setStatusMessage(
-      "Review submission will be enabled once account authentication is connected."
-    );
+    try {
+      setIsSubmitting(true);
+      setStatusMessage("");
+      setStatusType("");
+
+      const response = await fetch("/api/reviews", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          attractionId,
+          rating,
+          reviewText: reviewText.trim(),
+        }),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || "Unable to submit your review.");
+      }
+
+      setRating(0);
+      setReviewText("");
+      setErrors({});
+      setStatusType("success");
+      setStatusMessage("Your review has been submitted.");
+      onReviewSubmitted?.(result.data);
+    } catch (error) {
+      setStatusType("error");
+      setStatusMessage(error.message || "Unable to submit your review.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
     <form
       onSubmit={handleSubmit}
       noValidate
+      aria-busy={isSubmitting}
       className="mb-8 rounded-[18px] border border-attraction-border bg-white p-[18px] md:p-6"
     >
       <div>
@@ -153,8 +192,12 @@ export default function ReviewForm() {
 
       {statusMessage && (
         <div
-          role="status"
-          className="mt-6 rounded-[10px] bg-[#EAF3FA] px-4 py-3 text-sm leading-relaxed text-attraction-body"
+          role={statusType === "error" ? "alert" : "status"}
+          className={`mt-6 rounded-[10px] px-4 py-3 text-sm leading-relaxed ${
+            statusType === "error"
+              ? "bg-[#FDECEC] text-attraction-error"
+              : "bg-[#E8F7EF] text-attraction-body"
+          }`}
         >
           {statusMessage}
         </div>
@@ -162,9 +205,10 @@ export default function ReviewForm() {
 
       <button
         type="submit"
-        className="mt-6 flex h-[46px] w-full items-center justify-center rounded-[10px] bg-attraction-primary px-5 text-[15px] font-semibold text-white transition-colors duration-200 hover:bg-attraction-primary-hover active:bg-[#004D3E] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-attraction-primary sm:w-auto"
+        disabled={isSubmitting}
+        className="mt-6 flex h-[46px] w-full items-center justify-center rounded-[10px] bg-attraction-primary px-5 text-[15px] font-semibold text-white transition-colors duration-200 hover:bg-attraction-primary-hover active:bg-[#004D3E] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-attraction-primary disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
       >
-        Submit review
+        {isSubmitting ? "Submitting..." : "Submit review"}
       </button>
     </form>
   );
