@@ -3,6 +3,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import ProfileAvatar from "@/presentation/components/ProfileAvatar";
 
 export default function EditProfilePage() {
   const { data: session, status, update } = useSession();
@@ -18,33 +19,39 @@ export default function EditProfilePage() {
   const [loading, setLoading] = useState(true);
 
   // 从 API 获取用户数据（与 My Profile 保持一致）
-  const fetchUserData = async () => {
-    try {
-      const response = await fetch("/api/user");
-      const result = await response.json();
-      if (result.success) {
-        const data = result.data;
-        setDisplayName(data.displayName || data.name || "");
-        setBio(data.bio || "");
-        setLocation(data.location || "");
-        setProfilePicture(data.profilePicture || session?.user?.image || "");
-      }
-    } catch (error) {
-      console.error("Error fetching user data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
     if (status === "unauthenticated") {
-      router.push("/login");
+      router.replace("/login");
       return;
     }
-    if (status === "authenticated") {
-      fetchUserData();
+
+    if (status !== "authenticated") return;
+
+    let cancelled = false;
+
+    async function loadUserData() {
+      try {
+        const response = await fetch("/api/user");
+        const result = await response.json();
+        if (!cancelled && result.success) {
+          const data = result.data;
+          setDisplayName(data.displayName || data.name || "");
+          setBio(data.bio || "");
+          setLocation(data.location || "");
+          setProfilePicture(data.profilePicture || session?.user?.image || "");
+        }
+      } catch (error) {
+        if (!cancelled) console.error("Error fetching user data:", error);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     }
-  }, [status, router]);
+
+    loadUserData();
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user?.image, status, router]);
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
@@ -72,7 +79,6 @@ export default function EditProfilePage() {
 
       // 如果有新图片，上传到 Cloudinary
       if (imageFile) {
-        console.log("🔍 Uploading image to Cloudinary...");
         const uploadFormData = new FormData();
         uploadFormData.append("file", imageFile);
 
@@ -82,15 +88,10 @@ export default function EditProfilePage() {
         });
 
         const uploadResult = await uploadRes.json();
-        console.log("🔍 Cloudinary upload result:", uploadResult);
-
         if (!uploadResult.success) {
           throw new Error(uploadResult.message);
         }
         profilePictureUrl = uploadResult.data.url;
-        console.log("✅ Cloudinary upload successful:", profilePictureUrl);
-      } else {
-        console.log("ℹ️ No image to upload, keeping existing");
       }
 
       const updateData = {
@@ -102,10 +103,7 @@ export default function EditProfilePage() {
       // ✅ 如果有新的 Cloudinary URL，添加到更新数据中
       if (profilePictureUrl) {
         updateData.profilePicture = profilePictureUrl;
-        console.log("🔍 Adding profilePicture to updateData:", profilePictureUrl);
       }
-
-      console.log("🔍 Final updateData being sent:", updateData);
 
       const response = await fetch("/api/user", {
         method: "PUT",
@@ -114,8 +112,6 @@ export default function EditProfilePage() {
       });
 
       const result = await response.json();
-      console.log("🔍 Update API response:", result);
-
       if (!result.success) throw new Error(result.message);
 
       // ✅ 使用服务器返回的 profilePicture，或使用新上传的 URL
@@ -183,10 +179,10 @@ export default function EditProfilePage() {
           {/* Avatar Upload */}
           <div className="flex flex-col items-center">
             <div className="relative">
-              <img
+              <ProfileAvatar
+                name={displayName || session?.user?.name || "User"}
                 src={avatarSrc}
-                alt="Profile"
-                className="w-24 h-24 rounded-full border-4 border-[#006C56] object-cover"
+                size="large"
               />
               <label className="absolute bottom-0 right-0 bg-[#006C56] text-white rounded-full p-1.5 cursor-pointer hover:bg-[#005E4B]">
                 <svg

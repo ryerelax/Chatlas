@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { useState } from "react";
+import ProfileAvatar from "@/presentation/components/ProfileAvatar";
 
 export default function Header() {
   const { data: session, status } = useSession();
@@ -26,7 +27,7 @@ export default function Header() {
           <Link href="/" className="rounded-lg px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-emerald-50 hover:text-emerald-700">Home</Link>
           <Link href="/#attractions" className="rounded-lg px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-emerald-50 hover:text-emerald-700">Attractions</Link>
           <span className="cursor-not-allowed rounded-lg px-4 py-2 text-sm font-semibold text-gray-400" title="Coming later">Map</span>
-          <span className="cursor-not-allowed rounded-lg px-4 py-2 text-sm font-semibold text-gray-400" title="Coming later">Community</span>
+          <Link href="/profiles" className="rounded-lg px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-emerald-50 hover:text-emerald-700">Travellers</Link>
         </nav>
 
         {/* Desktop auth */}
@@ -37,10 +38,10 @@ export default function Header() {
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                 className="flex items-center gap-2 focus:outline-none"
               >
-                <img
-                  src={session.user.image || "/default-avatar.png"}
-                  alt="Profile"
-                  className="w-8 h-8 rounded-full border border-gray-300 object-cover"
+                <ProfileAvatar
+                  name={session.user.displayName || session.user.name || "User"}
+                  src={session.user.image || ""}
+                  size="small"
                 />
                 <span className="text-sm text-gray-700 hidden sm:inline">
                   {session.user.displayName || session.user.name?.split(" ")[0] || "User"}
@@ -85,7 +86,7 @@ export default function Header() {
             <Link href="/" className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700">Home</Link>
             <Link href="/#attractions" className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700">Attractions</Link>
             <span className="block cursor-not-allowed rounded-lg px-4 py-3 text-sm font-semibold text-gray-400">Map</span>
-            <span className="block cursor-not-allowed rounded-lg px-4 py-3 text-sm font-semibold text-gray-400">Community</span>
+            <Link href="/profiles" className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700">Travellers</Link>
             <div className="my-2 border-t border-gray-200" />
 
             {isLoggedIn ? (

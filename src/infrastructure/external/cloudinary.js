@@ -40,3 +40,19 @@ export async function uploadImageFromUrl(imageUrl, { folder, publicId } = {}) {
 
   return result.secure_url;
 }
+
+export async function uploadProfileImageData(imageData, userId) {
+  const client = getConfiguredClient();
+  const result = await client.uploader.upload(imageData, {
+    folder: "chatlas/profiles",
+    public_id: `user_${userId}`,
+    overwrite: true,
+    resource_type: "image",
+    transformation: [
+      { width: 300, height: 300, crop: "fill" },
+      { quality: "auto" },
+    ],
+  });
+
+  return result.secure_url;
+}
