@@ -93,7 +93,7 @@ export default function ReviewList({ attractionId, refreshVersion = 0 }) {
   }
 
   return (
-    <div className="divide-y divide-attraction-divider">
+    <div className="space-y-4">
       {reviews.map((review) => (
         <ReviewCard key={review._id} review={review} />
       ))}
@@ -104,21 +104,29 @@ export default function ReviewList({ attractionId, refreshVersion = 0 }) {
 function ReviewListSkeleton() {
   return (
     <div
-      className="divide-y divide-attraction-divider"
+      className="space-y-4"
       role="status"
       aria-label="Loading reviews"
     >
       {[1, 2].map((item) => (
-        <div key={item} className="animate-pulse py-[18px]">
-          <div className="flex items-start gap-3">
-            <div className="h-14 w-14 shrink-0 rounded-full bg-[#E7ECEF]" />
+        <div
+          key={item}
+          className="animate-pulse rounded-[18px] border border-attraction-border bg-white p-[18px] shadow-sm sm:p-6"
+        >
+          <div className="flex items-start gap-4">
+            <div className="h-12 w-12 shrink-0 rounded-full bg-[#E7ECEF] sm:h-14 sm:w-14" />
             <div className="flex-1">
-              <div className="h-4 w-32 rounded bg-[#E7ECEF]" />
-              <div className="mt-2 h-3 w-44 rounded bg-[#F4F6F7]" />
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="h-4 w-32 rounded bg-[#E7ECEF]" />
+                  <div className="mt-2.5 h-3 w-28 rounded bg-[#F4F6F7]" />
+                </div>
+                <div className="h-3 w-20 rounded bg-[#F4F6F7]" />
+              </div>
             </div>
           </div>
-          <div className="mt-4 h-4 w-full rounded bg-[#E7ECEF]" />
-          <div className="mt-2 h-4 w-3/4 rounded bg-[#F4F6F7]" />
+          <div className="mt-5 h-4 rounded bg-[#E7ECEF] sm:ml-[72px]" />
+          <div className="mt-2.5 h-4 w-3/4 rounded bg-[#F4F6F7] sm:ml-[72px]" />
         </div>
       ))}
       <span className="sr-only">Loading reviews...</span>
