@@ -1,25 +1,25 @@
 // One-off / re-runnable maintenance script for PB09.
 //
 // Classifies every active Melaka attraction into one of the draft location-area
-// zones (src/lib/locationAreas.js), using postcode + locality-keyword rules run
+// zones (src/business/services/locationAreas.js), using postcode + locality-keyword rules run
 // against the seeded `address` field (falling back to `name` when the address
 // is too generic to classify). Anything that still doesn't match falls into the
 // "Other / Greater Melaka" catch-all zone rather than being force-fit into one
 // of the four named tourist zones.
 //
 // This is a DRAFT zone list, not yet confirmed by the team. Re-run this script
-// after src/lib/locationAreas.js's rules are adjusted.
+// after src/business/services/locationAreas.js's rules are adjusted.
 //
 // Usage:
 //   npm run classify:areas
 
 import mongoose from "mongoose";
-import { connectToDatabase } from "@/lib/mongodb";
+import { connectToDatabase } from "@/infrastructure/database/mongodb";
 import {
   findAllActiveAttractions,
   updateAttractionLocationArea,
-} from "@/repositories/attractionRepository";
-import { LOCATION_AREAS, classifyLocationArea } from "@/lib/locationAreas";
+} from "@/data/repositories/attractionRepository";
+import { LOCATION_AREAS, classifyLocationArea } from "@/business/services/locationAreas";
 
 async function main() {
   await connectToDatabase();

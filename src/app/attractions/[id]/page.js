@@ -6,7 +6,12 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import StarRating from "@/presentation/components/StarRating";
 import { BackArrowIcon, LocationPinIcon } from "@/presentation/components/AttractionIcons";
+<<<<<<< HEAD
 import AttractionPhotoGallery from "@/presentation/components/AttractionPhotoGallery"; 
+=======
+import AttractionPhotoGallery from "@/presentation/components/AttractionPhotoGallery";
+
+>>>>>>> development
 export default function AttractionDetailsPage() {
   const params = useParams();
   const attractionId = params.id;

@@ -3,9 +3,7 @@
     "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
-      "@/lib/*": ["./src/lib/*"],
-      "@/models/*": ["./src/models/*"]
+      "@/*": ["./src/*"]
     }
   },
   "exclude": ["node_modules", ".next"]
