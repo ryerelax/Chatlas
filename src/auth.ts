@@ -18,7 +18,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           const existingUser = await User.findOne({ email: user.email });
 
           if (!existingUser) {
-            // ✅ 新用户：保存 Google 头像
+            // ✅ 新用户：保存 Google 头像和 googleId
             await User.create({
               name: user.name,
               email: user.email,
@@ -30,15 +30,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             });
             console.log("✅ New user saved to database");
           } else {
-            // ✅ 已有用户：只更新 name，不覆盖 profilePicture
+            // ✅ 已有用户：更新 name，并确保 googleId 存在
             await User.updateOne(
               { email: user.email },
               {
                 name: user.name,
-                // ❌ 删除这一行：profilePicture: user.image,
+                googleId: profile?.sub,  // ← 关键修复：同步 googleId
               }
             );
-            console.log("✅ Existing user updated (name only, profilePicture preserved)");
+            console.log("✅ Existing user updated (name and googleId synced)");
           }
           return true;
         } catch (error) {
