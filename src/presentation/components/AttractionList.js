@@ -3,18 +3,9 @@
 import { useEffect, useState } from "react";
 import AttractionCard from "@/presentation/components/AttractionCard";
 import { LOCATION_AREAS } from "@/business/services/locationAreas";
+import { ATTRACTION_CATEGORIES } from "@/business/services/attractionCategories";
 
-// TODO: Load category options dynamically when category management is finalized.
-const CATEGORIES = [
-  "All",
-  "Museum",
-  "Religious",
-  "Tourist Attraction",
-  "Historical",
-  "Nature",
-  "Entertainment",
-  "Gallery",
-];
+const CATEGORIES = ["All", ...ATTRACTION_CATEGORIES];
 
 export default function AttractionList() {
   const [attractions, setAttractions] = useState([]);

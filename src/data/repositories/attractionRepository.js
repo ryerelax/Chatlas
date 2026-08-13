@@ -126,3 +126,15 @@ export async function updateAttractionDescription(attractionId, description) {
     { returnDocument: "after" }
   ).lean();
 }
+
+export async function findActiveAttractionByGooglePlaceId(googlePlaceId) {
+  return Attraction.findOne({
+    googlePlaceId,
+    isActive: true,
+  }).lean();
+}
+
+export async function createAttraction(data) {
+  const attraction = await Attraction.create(data);
+  return attraction.toObject();
+}

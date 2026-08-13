@@ -96,6 +96,15 @@ const attractionSchema = new mongoose.Schema(
       default: "Melaka",
     },
 
+    // Set only for Registered-User-submitted attractions (Decision 4). Denormalized
+    // from the submitter's session at submission time — absent entirely on the
+    // original seeded records. Not a ref to the User collection by design.
+    submittedBy: {
+      googleId: { type: String, trim: true },
+      email: { type: String, trim: true },
+      name: { type: String, trim: true },
+    },
+
     isActive: {
       type: Boolean,
       default: true,
