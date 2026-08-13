@@ -5,3 +5,9 @@ export async function findUserByGoogleId(googleId) {
     .select("_id name displayName profilePicture")
     .lean();
 }
+
+export async function findUserByEmail(email) {
+  return User.findOne({ email })
+    .select("_id name displayName profilePicture")
+    .lean();
+}

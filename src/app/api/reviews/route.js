@@ -43,7 +43,7 @@ export async function POST(request) {
   try {
     const session = await auth();
 
-    if (!session?.user?.id) {
+    if (!session?.user?.email) {
       return NextResponse.json(
         {
           success: false,
@@ -68,7 +68,7 @@ export async function POST(request) {
 
     const review = await submitReview({
       attractionId: body.attractionId,
-      googleId: session.user.id,
+      email: session.user.email,
       rating: body.rating,
       reviewText: body.reviewText,
     });

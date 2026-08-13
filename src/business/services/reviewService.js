@@ -4,7 +4,7 @@ import {
   createReview,
   findReviewsByAttraction,
 } from "@/data/repositories/reviewRepository";
-import { findUserByGoogleId } from "@/data/repositories/userRepository";
+import { findUserByEmail } from "@/data/repositories/userRepository";
 
 export class ReviewServiceError extends Error {
   constructor(message, statusCode) {
@@ -16,22 +16,22 @@ export class ReviewServiceError extends Error {
 
 export async function submitReview({
   attractionId,
-  googleId,
+  email,
   rating,
   reviewText,
 }) {
   const normalizedAttractionId = normalizeAttractionId(attractionId);
   const normalizedRating = normalizeRating(rating);
   const normalizedReviewText = normalizeReviewText(reviewText);
-  const normalizedGoogleId = typeof googleId === "string" ? googleId.trim() : "";
+  const normalizedEmail = typeof email === "string" ? email.trim() : "";
 
-  if (!normalizedGoogleId) {
+  if (!normalizedEmail) {
     throw new ReviewServiceError("User account not found.", 404);
   }
 
   const [attraction, user] = await Promise.all([
     findAttractionById(normalizedAttractionId),
-    findUserByGoogleId(normalizedGoogleId),
+    findUserByEmail(normalizedEmail),
   ]);
 
   if (!attraction) {
