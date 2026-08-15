@@ -151,3 +151,15 @@ export async function addAttractionPhoto(attractionId, photoUrl) {
     { returnDocument: "after" }
   ).lean();
 }
+
+// Community description edit (Melaka-gated, distinct from
+// updateAttractionDescription above, which is the sync:descriptions
+// script's own automated Places-backfill path and must not carry an
+// editor snapshot).
+export async function updateAttractionDescriptionByUser(attractionId, description, editedBy) {
+  return Attraction.findOneAndUpdate(
+    { _id: attractionId, isActive: true },
+    { $set: { description, descriptionLastEditedBy: editedBy } },
+    { returnDocument: "after" }
+  ).lean();
+}

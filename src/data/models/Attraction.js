@@ -105,6 +105,19 @@ const attractionSchema = new mongoose.Schema(
       name: { type: String, trim: true },
     },
 
+    // Set only after a Melaka-based community member edits the description
+    // (separate from the original Places editorialSummary backfill or the
+    // Decision-4 submission-time value). Denormalized session snapshot at
+    // edit time, same pattern as submittedBy — not a live User reference.
+    // Overwritten on each subsequent edit; tracks only the most recent
+    // editor, not a full history.
+    descriptionLastEditedBy: {
+      googleId: { type: String, trim: true },
+      email: { type: String, trim: true },
+      name: { type: String, trim: true },
+      editedAt: { type: Date },
+    },
+
     isActive: {
       type: Boolean,
       default: true,

@@ -9,6 +9,7 @@ import StarRating from "@/presentation/components/StarRating";
 import { BackArrowIcon, LocationPinIcon } from "@/presentation/components/AttractionIcons";
 import AttractionPhotoGallery from "@/presentation/components/AttractionPhotoGallery";
 import CommunityPhotoUpload from "@/presentation/components/CommunityPhotoUpload";
+import CommunityDescriptionEdit from "@/presentation/components/CommunityDescriptionEdit";
 
 export default function AttractionDetailsPage() {
   const params = useParams();
@@ -85,8 +86,6 @@ export default function AttractionDetailsPage() {
     );
   }
 
-  const hasDescription = attraction.description && attraction.description.trim().length > 0;
-
   return (
     <main className="min-h-screen bg-attraction-page-bg">
       <div className="mx-auto max-w-[1120px] px-4 py-8 pb-16 md:px-6 lg:px-[38px]">
@@ -137,20 +136,13 @@ export default function AttractionDetailsPage() {
               }
             />
 
-            <div className="mt-7 rounded-[18px] border border-attraction-border bg-white p-6">
-              <h2 className="mb-3.5 text-lg font-bold text-attraction-ink">
-                About this attraction
-              </h2>
-              <p
-                className={
-                  hasDescription
-                    ? "text-base leading-relaxed text-attraction-body"
-                    : "text-base italic leading-relaxed text-attraction-muted"
-                }
-              >
-                {hasDescription ? attraction.description : "No description available for this attraction yet."}
-              </p>
-            </div>
+            <CommunityDescriptionEdit
+              attractionId={attractionId}
+              description={attraction.description}
+              onDescriptionUpdated={(newDescription) =>
+                setAttraction((current) => ({ ...current, description: newDescription }))
+              }
+            />
 
             {/* Review & Community Section */}
             <section className="mt-8">
