@@ -28,15 +28,59 @@ function getConfiguredClient() {
 
 // Uploads an image directly from a source URL (Cloudinary fetches it server-side)
 // and returns the resulting stable, permanent secure URL.
-export async function uploadImageFromUrl(imageUrl, { folder, publicId } = {}) {
-  const client = getConfiguredClient();
+export function createCloudinaryAdapter(getClient = getConfiguredClient) {
+  return {
+    async uploadImageFromUrl(imageUrl, { folder, publicId } = {}) {
+      const client = getClient();
 
-  const result = await client.uploader.upload(imageUrl, {
-    folder,
-    public_id: publicId,
-    overwrite: true,
-    resource_type: "image",
-  });
+      const result = await client.uploader.upload(imageUrl, {
+        folder,
+        public_id: publicId,
+        overwrite: true,
+        resource_type: "image",
+      });
 
-  return result.secure_url;
+      return result.secure_url;
+    },
+
+    async uploadVerifiedVisitImage(dataUri, { publicId } = {}) {
+      const client = getClient();
+
+      const result = await client.uploader.upload(dataUri, {
+        folder: "chatlas/verified-visits",
+        public_id: publicId,
+        overwrite: false,
+        resource_type: "image",
+        transformation: [
+          { width: 1600, height: 1600, crop: "limit" },
+          { quality: "auto", fetch_format: "auto" },
+        ],
+      });
+
+      return {
+        photoUrl: result.secure_url,
+        cloudinaryPublicId: result.public_id,
+      };
+    },
+
+    async deleteCloudinaryImage(cloudinaryPublicId) {
+      if (!cloudinaryPublicId) return;
+
+      const client = getClient();
+      await client.uploader.destroy(cloudinaryPublicId, {
+        resource_type: "image",
+      });
+    },
+  };
 }
+
+const cloudinaryAdapter = createCloudinaryAdapter();
+
+export const uploadImageFromUrl = (...args) =>
+  cloudinaryAdapter.uploadImageFromUrl(...args);
+
+export const uploadVerifiedVisitImage = (...args) =>
+  cloudinaryAdapter.uploadVerifiedVisitImage(...args);
+
+export const deleteCloudinaryImage = (...args) =>
+  cloudinaryAdapter.deleteCloudinaryImage(...args);
