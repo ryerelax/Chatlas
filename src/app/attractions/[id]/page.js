@@ -193,7 +193,8 @@ export default function AttractionDetailsPage() {
               <InfoRow
                 icon={<StarIcon />}
                 label="Rating"
-                value={`${(attraction.rating || 0).toFixed(1)} out of 5 (${(attraction.totalReviews || 0).toLocaleString()} reviews)`}
+                value={`${(attraction.combinedRating ?? attraction.rating ?? 0).toFixed(1)} out of 5`}
+                subValue={`${(attraction.chatlasReviewCount ?? 0).toLocaleString()} on Chatlas, ${(attraction.googleReviewCount ?? attraction.totalReviews ?? 0).toLocaleString()} on Google Maps`}
               />
             </div>
 
@@ -215,7 +216,7 @@ function Divider() {
   return <div className="my-3.5 border-t border-attraction-divider" />;
 }
 
-function InfoRow({ icon, label, value }) {
+function InfoRow({ icon, label, value, subValue }) {
   return (
     <div className="flex items-start gap-3">
       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-attraction-primary-soft text-attraction-primary">
@@ -226,6 +227,9 @@ function InfoRow({ icon, label, value }) {
           {label}
         </p>
         <p className="text-sm leading-relaxed text-attraction-body">{value}</p>
+        {subValue && (
+          <p className="text-xs leading-relaxed text-attraction-muted">{subValue}</p>
+        )}
       </div>
     </div>
   );
