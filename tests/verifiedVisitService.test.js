@@ -165,14 +165,26 @@ test("verify handles a missing persisted user without leaking lookup details", a
   assert.equal(calls.uploads.length, 0);
 });
 
-test("verify rejects a missing or inactive Melaka attraction before upload", async () => {
-  const { service, calls } = createHarness({ findAttractionById: async () => null });
+test("verify rejects missing, inactive, and unsupported attractions before upload", async (t) => {
+  const rejectedAttractions = [
+    ["missing", null],
+    ["inactive", { _id: ATTRACTION_ID, latitude: 2, longitude: 102, state: "Melaka", isActive: false }],
+    ["outside Melaka", { _id: ATTRACTION_ID, latitude: 2, longitude: 102, state: "Johor", isActive: true }],
+  ];
 
-  await expectServiceError(
-    () => service.verifyVisitPhoto(validVerifyInput()),
-    { statusCode: 404, message: "Attraction not found." }
-  );
-  assert.equal(calls.uploads.length, 0);
+  for (const [label, attraction] of rejectedAttractions) {
+    await t.test(label, async () => {
+      const { service, calls } = createHarness({
+        findAttractionById: async () => attraction,
+      });
+
+      await expectServiceError(
+        () => service.verifyVisitPhoto(validVerifyInput()),
+        { statusCode: 404, message: "Attraction not found." }
+      );
+      assert.equal(calls.uploads.length, 0);
+    });
+  }
 });
 
 test("verify rejects malformed and unsupported image data URIs before upload", async (t) => {
@@ -242,17 +254,27 @@ test("verify rejects accuracy above 100 before upload", async () => {
   assert.equal(calls.uploads.length, 0);
 });
 
-test("verify accepts the distance and accuracy boundaries", async () => {
-  const { service, calls } = createHarness();
+test("verify accepts 149 and 150 metre distances with 99 and 100 metre accuracy", async (t) => {
+  for (const boundary of [
+    { distanceMetres: 149, accuracyMeters: 99 },
+    { distanceMetres: 150, accuracyMeters: 100 },
+  ]) {
+    await t.test(JSON.stringify(boundary), async () => {
+      const { service, calls } = createHarness();
 
-  await service.verifyVisitPhoto(validVerifyInput({
-    latitude: 2 + latitudeOffset(149.999),
-    accuracyMeters: 100,
-  }));
+      await service.verifyVisitPhoto(validVerifyInput({
+        latitude: 2 + latitudeOffset(boundary.distanceMetres),
+        accuracyMeters: boundary.accuracyMeters,
+      }));
 
-  assert.equal(calls.uploads.length, 1);
-  assert.ok(calls.appends[0].photo.distanceMeters <= 150);
-  assert.equal(calls.appends[0].photo.accuracyMeters, 100);
+      assert.equal(calls.uploads.length, 1);
+      assert.ok(calls.appends[0].photo.distanceMeters <= 150);
+      assert.equal(
+        calls.appends[0].photo.accuracyMeters,
+        boundary.accuracyMeters
+      );
+    });
+  }
 });
 
 test("verify rejects non-finite and out-of-range location evidence before upload", async (t) => {

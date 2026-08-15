@@ -60,17 +60,20 @@ test("map service preserves a complete attraction result without pagination", as
   assert.equal(result.length, 16);
 });
 
-test("attraction explorer service keeps its 15-item page while map service keeps all records", async () => {
+test("attraction explorer pagination stays independent while map service keeps all records", async () => {
   const explorerRepositoryCalls = [];
   const explorerService = createAttractionService({
     findAttractions: async (options) => {
       explorerRepositoryCalls.push(options);
-      return { items: Array.from({ length: 15 }, (_, index) => index), total: 16 };
+      return {
+        items: [{ _id: "attraction-31" }],
+        total: 31,
+      };
     },
     findAttractionById: async () => null,
     isValidObjectId: () => true,
   });
-  const mapRecords = Array.from({ length: 16 }, (_, index) => ({
+  const mapRecords = Array.from({ length: 31 }, (_, index) => ({
     _id: `attraction-${index + 1}`,
   }));
   const mapService = createExplorationMapService({
@@ -78,23 +81,24 @@ test("attraction explorer service keeps its 15-item page while map service keeps
   });
 
   const [explorerResult, mapResult] = await Promise.all([
-    explorerService.getAttractions({ page: 2 }),
+    explorerService.getAttractions({ page: 3 }),
     mapService.getExplorationMapAttractions(),
   ]);
 
-  assert.equal(explorerResult.items.length, 15);
-  assert.equal(explorerResult.totalPages, 2);
+  assert.deepEqual(explorerResult.items, [{ _id: "attraction-31" }]);
+  assert.equal(explorerResult.totalPages, 3);
   assert.deepEqual(explorerRepositoryCalls, [
     {
       search: "",
       category: "",
       locationArea: "",
       minRating: 0,
-      page: 2,
+      page: 3,
       limit: 15,
     },
   ]);
-  assert.equal(mapResult.length, 16);
+  assert.equal(mapResult.length, 31);
+  assert.equal(mapResult.at(-1)._id, "attraction-31");
 });
 
 test("map route returns the full service result and count", async () => {

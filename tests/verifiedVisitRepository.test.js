@@ -101,6 +101,105 @@ test("append uses user, attraction, date, and an atomic fewer-than-three filter"
   assert.equal(result._id, "visit-1");
 });
 
+test("dated photo groups allow three independently by attraction and Malaysia date", async () => {
+  const groups = new Map();
+  let visitSequence = 0;
+
+  const groupKey = ({ userId, attractionId, visitDateKey }) =>
+    `${userId}|${attractionId}|${visitDateKey}`;
+  const snapshot = (visit) => ({
+    ...visit,
+    photos: [...visit.photos],
+  });
+  const model = {
+    findOneAndUpdate(filter, update, options) {
+      const input = {
+        userId: filter.userId,
+        attractionId: filter.attractionId,
+        visitDateKey: filter.visitDateKey,
+      };
+      const key = groupKey(input);
+      const existingVisit = groups.get(key);
+
+      if (existingVisit && existingVisit.photos.length < 3) {
+        existingVisit.photos.push(update.$push.photos);
+        return chain(snapshot(existingVisit), {});
+      }
+      if (existingVisit && options.upsert === false) {
+        return chain(null, {});
+      }
+      if (existingVisit) {
+        throw Object.assign(targetVisitDuplicateError(), {
+          keyValue: input,
+        });
+      }
+      if (options.upsert === false) {
+        return chain(null, {});
+      }
+
+      const createdVisit = {
+        _id: `visit-${++visitSequence}`,
+        ...input,
+        photos: [update.$push.photos],
+      };
+      groups.set(key, createdVisit);
+      return chain(snapshot(createdVisit), {});
+    },
+    findOne(filter) {
+      const visit = groups.get(groupKey(filter));
+      return chain(
+        visit?.photos.length >= 3 ? snapshot(visit) : null,
+        {}
+      );
+    },
+    distinct(field, filter) {
+      assert.equal(field, "attractionId");
+      return Promise.resolve(
+        [...groups.values()]
+          .filter((visit) =>
+            visit.userId === filter.userId && visit.photos.length > 0
+          )
+          .map((visit) => visit.attractionId)
+      );
+    },
+  };
+  const repository = createVerifiedVisitRepository(model);
+
+  async function append(attractionId, visitDateKey, photoIndex) {
+    return repository.appendPhotoToDatedVisit({
+      userId: "user-1",
+      attractionId,
+      visitDateKey,
+      photo: {
+        ...photo,
+        photoUrl: `https://example.test/${attractionId}-${visitDateKey}-${photoIndex}.jpg`,
+      },
+    });
+  }
+
+  for (let photoIndex = 1; photoIndex <= 3; photoIndex += 1) {
+    assert.ok(await append("attraction-1", "2026-08-15", photoIndex));
+  }
+  assert.equal(await append("attraction-1", "2026-08-15", 4), null);
+
+  for (let photoIndex = 1; photoIndex <= 3; photoIndex += 1) {
+    assert.ok(await append("attraction-2", "2026-08-15", photoIndex));
+    assert.ok(await append("attraction-1", "2026-08-16", photoIndex));
+  }
+
+  assert.equal(groups.get("user-1|attraction-1|2026-08-15").photos.length, 3);
+  assert.equal(groups.get("user-1|attraction-2|2026-08-15").photos.length, 3);
+  assert.equal(groups.get("user-1|attraction-1|2026-08-16").photos.length, 3);
+  assert.match(
+    groups.get("user-1|attraction-1|2026-08-15").photos[0].photoUrl,
+    /2026-08-15-1\.jpg$/
+  );
+  assert.deepEqual(
+    await repository.findDistinctVerifiedAttractionIds("user-1"),
+    ["attraction-1", "attraction-2"]
+  );
+});
+
 test("append retries a target duplicate-key upsert without upsert when the group has capacity", async () => {
   const observed = [];
   const repository = createVerifiedVisitRepository({

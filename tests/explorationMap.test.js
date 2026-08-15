@@ -195,6 +195,44 @@ test("createExplorationMapViewModel marks supported visited attractions as visit
   assert.equal(viewModel.visitedDataStatus, VISITED_DATA_STATUS.SUCCESS);
 });
 
+test("repeated verified IDs across dates count once in markers, list, and progress", () => {
+  const attractions = [
+    { ...supportedAttractionFixtures[0], id: "64b000000000000000000011" },
+    { ...supportedAttractionFixtures[1], id: "64b000000000000000000012" },
+    { ...supportedAttractionFixtures[0], id: "64b000000000000000000013" },
+  ];
+  const repeatedAcrossDates = [
+    "64b000000000000000000011",
+    "64b000000000000000000011",
+    "64b000000000000000000012",
+    "64b000000000000000000012",
+    "64b000000000000000000099",
+  ];
+  const viewModel = createExplorationMapViewModel(
+    attractions,
+    repeatedAcrossDates,
+    VISITED_DATA_STATUS.SUCCESS
+  );
+  const markerIds = viewModel.attractions
+    .filter((attraction) => attraction.isVisited === true)
+    .map((attraction) => attraction.id);
+  const listIds = viewModel.visitedAttractions.map((attraction) => attraction.id);
+
+  assert.deepEqual(markerIds, [
+    "64b000000000000000000011",
+    "64b000000000000000000012",
+  ]);
+  assert.deepEqual(viewModel.visitedAttractionIds, markerIds);
+  assert.deepEqual(listIds, markerIds);
+  assert.equal(viewModel.progress.visitedCount, listIds.length);
+  assert.equal(viewModel.progress.totalCount, attractions.length);
+  assert.equal(viewModel.progress.percentage, 66.7);
+  assert.equal(
+    getAttractionDetailsHref(listIds[0]),
+    "/attractions/64b000000000000000000011"
+  );
+});
+
 test("createExplorationMapViewModel represents a successful empty result truthfully", () => {
   const viewModel = createExplorationMapViewModel(
     supportedAttractionFixtures,

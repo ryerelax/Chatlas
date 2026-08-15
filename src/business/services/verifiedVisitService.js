@@ -203,7 +203,11 @@ export function createVerifiedVisitService(dependencies) {
       throw asSafeInternalError(SAVE_ERROR_MESSAGE);
     }
 
-    if (!attraction?._id) {
+    if (
+      !attraction?._id
+      || attraction.isActive !== true
+      || attraction.state !== "Melaka"
+    ) {
       throw new VerifiedVisitServiceError("Attraction not found.", 404);
     }
 
