@@ -5,6 +5,7 @@ export async function findAttractions({
   category = "",
   locationArea = "",
   minRating = 0,
+  communitySubmitted = false,
   page = 1,
   limit = 15,
 }) {
@@ -28,6 +29,10 @@ export async function findAttractions({
 
   if (locationArea && locationArea !== "All") {
     query.locationArea = locationArea;
+  }
+
+  if (communitySubmitted) {
+    query.submittedBy = { $exists: true };
   }
 
   const skip = (page - 1) * limit;

@@ -35,12 +35,14 @@ export async function getAttractions({
   category = "",
   locationArea = "",
   minRating = 0,
+  communitySubmitted = false,
   page = 1,
 }) {
   const normalizedSearch = search.trim();
   const normalizedCategory = category.trim();
   const normalizedLocationArea = locationArea.trim();
   const normalizedMinRating = Number(minRating) || 0;
+  const normalizedCommunitySubmitted = communitySubmitted === true || communitySubmitted === "true";
   const normalizedPage = Math.max(1, Number(page) || 1);
 
   const { items, total } = await findAttractions({
@@ -48,6 +50,7 @@ export async function getAttractions({
     category: normalizedCategory,
     locationArea: normalizedLocationArea,
     minRating: normalizedMinRating,
+    communitySubmitted: normalizedCommunitySubmitted,
     page: normalizedPage,
     limit: PAGE_SIZE,
   });

@@ -24,6 +24,9 @@ export default function AttractionList() {
   const [locationArea, setLocationArea] = useState("All");
   const [appliedLocationArea, setAppliedLocationArea] = useState("All");
 
+  const [communitySubmitted, setCommunitySubmitted] = useState(false);
+  const [appliedCommunitySubmitted, setAppliedCommunitySubmitted] = useState(false);
+
   const [page, setPage] = useState(1);
 
   const [isLoading, setIsLoading] = useState(true);
@@ -54,6 +57,10 @@ export default function AttractionList() {
           query.set("minRating", appliedMinRating);
         }
 
+        if (appliedCommunitySubmitted) {
+          query.set("communitySubmitted", "true");
+        }
+
         query.set("page", String(page));
 
         const response = await fetch(`/api/attractions?${query.toString()}`);
@@ -75,7 +82,7 @@ export default function AttractionList() {
     }
 
     loadAttractions();
-  }, [appliedSearch, appliedCategory, appliedLocationArea, appliedMinRating, page]);
+  }, [appliedSearch, appliedCategory, appliedLocationArea, appliedMinRating, appliedCommunitySubmitted, page]);
 
   function handleSearch(event) {
     event.preventDefault();
@@ -84,6 +91,7 @@ export default function AttractionList() {
     setAppliedCategory(category);
     setAppliedLocationArea(locationArea);
     setAppliedMinRating(minRating);
+    setAppliedCommunitySubmitted(communitySubmitted);
     setPage(1);
   }
 
@@ -99,6 +107,9 @@ export default function AttractionList() {
 
     setMinRating("0");
     setAppliedMinRating("0");
+
+    setCommunitySubmitted(false);
+    setAppliedCommunitySubmitted(false);
 
     setPage(1);
     setShowMoreFilters(false);
@@ -135,6 +146,10 @@ export default function AttractionList() {
 
     if (appliedMinRating !== "0") {
       criteria.push(`rating ${appliedMinRating} and above`);
+    }
+
+    if (appliedCommunitySubmitted) {
+      criteria.push("community-submitted only");
     }
 
     if (criteria.length === 0) {
@@ -236,6 +251,25 @@ export default function AttractionList() {
                     {area}
                   </option>
                 ))}
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="community-submitted"
+                className="mb-2 block text-sm font-semibold text-gray-800"
+              >
+                Source
+              </label>
+
+              <select
+                id="community-submitted"
+                value={communitySubmitted ? "community" : "all"}
+                onChange={(event) => setCommunitySubmitted(event.target.value === "community")}
+                className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-emerald-500"
+              >
+                <option value="all">All Attractions</option>
+                <option value="community">Community-submitted only</option>
               </select>
             </div>
           </div>
