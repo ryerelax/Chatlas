@@ -14,8 +14,9 @@ export function calculateDistanceMetres(origin, destination) {
   const deltaLng = toRadians(Number(destination.longitude) - Number(origin.longitude));
   const a = Math.sin(deltaLat / 2) ** 2
     + Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLng / 2) ** 2;
+  const clampedA = Math.min(1, Math.max(0, a));
 
-  return EARTH_RADIUS_METRES * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return EARTH_RADIUS_METRES * 2 * Math.atan2(Math.sqrt(clampedA), Math.sqrt(1 - clampedA));
 }
 
 export function validateGeolocationEvidence({ latitude, longitude, accuracyMeters }) {
@@ -43,6 +44,7 @@ export function findNearbyAttractions(attractions, position) {
   const validPosition = validateGeolocationEvidence(position);
 
   return attractions
+    .filter((attraction) => attraction && typeof attraction === "object")
     .map((attraction) => ({
       attraction,
       distanceMetres: calculateDistanceMetres(validPosition, attraction),
