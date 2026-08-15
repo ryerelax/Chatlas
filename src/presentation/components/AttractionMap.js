@@ -2,11 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { LocationPinIcon } from "@/presentation/components/AttractionIcons";
-<<<<<<< HEAD
-import { loadGoogleMaps } from "@/infrastructure/database/googleMapsLoader";
-=======
 import { loadGoogleMaps } from "@/presentation/lib/googleMapsLoader";
->>>>>>> development
 
 const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 

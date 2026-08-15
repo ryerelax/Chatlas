@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-import AttractionList from "@/presentation/components/AttractionList"
-=======
 import AttractionList from "@/presentation/components/AttractionList";
->>>>>>> development
 
 export default function Home() {
   return (

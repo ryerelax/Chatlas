@@ -1,8 +1,5 @@
 import { NextResponse } from "next/server";
-<<<<<<< HEAD
-=======
 import mongoose from "mongoose";
->>>>>>> development
 import { connectToDatabase } from "@/infrastructure/database/mongodb";
 import { getAttractionById } from "@/business/services/attractionService";
 
