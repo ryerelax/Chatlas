@@ -17,28 +17,6 @@ export default function AttractionDetailsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [reviewRefreshVersion, setReviewRefreshVersion] = useState(0);
-  const [chatlasReviewCount, setChatlasReviewCount] = useState(null);
-
-  useEffect(() => {
-    async function loadChatlasReviewCount() {
-      try {
-        const response = await fetch(
-          `/api/reviews?attractionId=${encodeURIComponent(attractionId)}`
-        );
-        const result = await response.json();
-
-        if (response.ok && result.success) {
-          setChatlasReviewCount(result.count);
-        }
-      } catch (error) {
-        console.error("Failed to load Chatlas review count:", error);
-      }
-    }
-
-    if (attractionId) {
-      loadChatlasReviewCount();
-    }
-  }, [attractionId, reviewRefreshVersion]);
 
   useEffect(() => {
     async function loadAttractionDetails() {
@@ -137,12 +115,14 @@ export default function AttractionDetailsPage() {
                 {attraction.name}
               </h1>
 
-              <div className="flex flex-wrap items-center gap-4">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
                 <StarRating
-                  rating={attraction.rating || 0}
-                  reviewCount={attraction.totalReviews || 0}
+                  rating={attraction.combinedRating ?? attraction.rating ?? 0}
                   size={16}
                 />
+                <p className="text-[13px] text-attraction-muted">
+                  {(attraction.chatlasReviewCount ?? 0).toLocaleString()} on Chatlas, {(attraction.googleReviewCount ?? attraction.totalReviews ?? 0).toLocaleString()} on Google Maps
+                </p>
                 {/* TODO: Show a Location Area pin once the schema/data supports a district field. */}
               </div>
             </div>
@@ -175,18 +155,6 @@ export default function AttractionDetailsPage() {
                   <p className="mt-1 text-sm text-attraction-muted">
                     See what other travellers say about this attraction.
                   </p>
-
-                  {chatlasReviewCount !== null && (
-                    <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px]">
-                      <span className="rounded-full bg-attraction-primary-soft px-2.5 py-1 font-semibold text-attraction-primary">
-                        {chatlasReviewCount.toLocaleString()} review{chatlasReviewCount === 1 ? "" : "s"} on Chatlas
-                      </span>
-                      <span className="text-attraction-muted">·</span>
-                      <span className="rounded-full bg-gray-100 px-2.5 py-1 font-semibold text-gray-600">
-                        {(attraction.totalReviews || 0).toLocaleString()} on Google Maps
-                      </span>
-                    </p>
-                  )}
                 </div>
               </div>
 
