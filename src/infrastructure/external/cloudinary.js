@@ -76,11 +76,14 @@ export function createCloudinaryAdapter(getClient = getConfiguredClient) {
 
 const cloudinaryAdapter = createCloudinaryAdapter();
 
-export const uploadImageFromUrl = (...args) =>
-  cloudinaryAdapter.uploadImageFromUrl(...args);
+export async function uploadImageFromUrl(imageUrl, { folder, publicId } = {}) {
+  return cloudinaryAdapter.uploadImageFromUrl(imageUrl, { folder, publicId });
+}
 
-export const uploadVerifiedVisitImage = (...args) =>
-  cloudinaryAdapter.uploadVerifiedVisitImage(...args);
+export async function uploadVerifiedVisitImage(dataUri, { publicId } = {}) {
+  return cloudinaryAdapter.uploadVerifiedVisitImage(dataUri, { publicId });
+}
 
-export const deleteCloudinaryImage = (...args) =>
-  cloudinaryAdapter.deleteCloudinaryImage(...args);
+export async function deleteCloudinaryImage(cloudinaryPublicId) {
+  return cloudinaryAdapter.deleteCloudinaryImage(cloudinaryPublicId);
+}

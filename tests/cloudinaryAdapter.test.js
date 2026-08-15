@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createCloudinaryAdapter } from "../src/infrastructure/external/cloudinary.js";
+import {
+  createCloudinaryAdapter,
+  deleteCloudinaryImage,
+  uploadImageFromUrl,
+  uploadVerifiedVisitImage,
+} from "../src/infrastructure/external/cloudinary.js";
 
 function createFakeClient() {
   const uploads = [];
@@ -25,6 +30,17 @@ function createFakeClient() {
     deletes,
   };
 }
+
+test("public Cloudinary exports declare one required argument and are async functions", () => {
+  for (const operation of [
+    uploadImageFromUrl,
+    uploadVerifiedVisitImage,
+    deleteCloudinaryImage,
+  ]) {
+    assert.equal(operation.length, 1);
+    assert.equal(operation.constructor.name, "AsyncFunction");
+  }
+});
 
 test("verified visit uploads return only safe image identifiers with the required transformation", async () => {
   const fake = createFakeClient();
