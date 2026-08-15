@@ -1,13 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-<<<<<<< HEAD
-import AttractionCard from "./AttractionCard";
-import { LOCATION_AREAS } from "@/infrastructure/database/locationAreas";
-=======
 import AttractionCard from "@/presentation/components/AttractionCard";
 import { LOCATION_AREAS } from "@/business/services/locationAreas";
->>>>>>> development
 
 // TODO: Load category options dynamically when category management is finalized.
 const CATEGORIES = [
