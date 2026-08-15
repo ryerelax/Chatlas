@@ -8,6 +8,7 @@ import ReviewList from "@/presentation/components/reviews/ReviewList";
 import StarRating from "@/presentation/components/StarRating";
 import { BackArrowIcon, LocationPinIcon } from "@/presentation/components/AttractionIcons";
 import AttractionPhotoGallery from "@/presentation/components/AttractionPhotoGallery";
+import CommunityPhotoUpload from "@/presentation/components/CommunityPhotoUpload";
 
 export default function AttractionDetailsPage() {
   const params = useParams();
@@ -128,6 +129,13 @@ export default function AttractionDetailsPage() {
             </div>
 
             <AttractionPhotoGallery attraction={attraction} />
+
+            <CommunityPhotoUpload
+              attractionId={attractionId}
+              onPhotoAdded={(updatedAttraction) =>
+                setAttraction((current) => ({ ...current, photos: updatedAttraction.photos }))
+              }
+            />
 
             <div className="mt-7 rounded-[18px] border border-attraction-border bg-white p-6">
               <h2 className="mb-3.5 text-lg font-bold text-attraction-ink">

@@ -9,10 +9,9 @@ import {
 } from "@/data/repositories/attractionRepository";
 import { isValidAttractionCategory } from "@/business/services/attractionCategories";
 import { classifyLocationArea } from "@/business/services/locationAreas";
+import { isValidPhotoType, isValidPhotoSize } from "@/business/services/photoValidation";
 
 const MIN_SEARCH_INPUT_LENGTH = 2;
-const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024;
 const MAX_PHOTOS_PER_SUBMISSION = 6;
 
 export class InvalidSubmissionError extends Error {}
@@ -68,10 +67,10 @@ export async function submitAttraction({
   }
 
   for (const photo of photoFiles) {
-    if (!ALLOWED_PHOTO_TYPES.includes(photo.mimeType)) {
+    if (!isValidPhotoType(photo.mimeType)) {
       throw new InvalidSubmissionError("Photos must be JPG, PNG, or WEBP images.");
     }
-    if (photo.buffer.length > MAX_PHOTO_SIZE_BYTES) {
+    if (!isValidPhotoSize(photo.buffer.length)) {
       throw new InvalidSubmissionError("Each photo must be 5MB or smaller.");
     }
   }

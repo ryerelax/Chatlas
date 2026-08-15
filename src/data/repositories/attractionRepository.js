@@ -138,3 +138,11 @@ export async function createAttraction(data) {
   const attraction = await Attraction.create(data);
   return attraction.toObject();
 }
+
+export async function addAttractionPhoto(attractionId, photoUrl) {
+  return Attraction.findOneAndUpdate(
+    { _id: attractionId, isActive: true },
+    { $push: { photos: photoUrl } },
+    { returnDocument: "after" }
+  ).lean();
+}
