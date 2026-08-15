@@ -10,6 +10,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import ExplorationProgress from "@/presentation/components/ExplorationProgress";
+import VisitVerificationFlow from "@/presentation/components/VisitVerificationFlow";
 import VisitedAttractionsList from "@/presentation/components/VisitedAttractionsList";
 import { loadGoogleMaps } from "@/presentation/lib/googleMapsLoader";
 import {
@@ -30,6 +31,7 @@ import {
   getDevelopmentVisitedPreviewMode,
   loadVisitedAttractionIds,
 } from "@/presentation/lib/visitedAttractionsAdapter";
+import { getVerificationAuthenticationState } from "@/presentation/lib/visitVerificationPresentation";
 const MAP_UNAVAILABLE_MESSAGE =
   "We couldn't load the map. You can still explore the attraction lists below.";
 
@@ -393,6 +395,11 @@ export default function ExplorationMap() {
   const explorationViewModel = explorationPageState.viewModel;
   const mapAttractions = explorationViewModel.attractions;
   const visitedAttractions = explorationViewModel.visitedAttractions;
+  const verificationAuthenticationState =
+    getVerificationAuthenticationState(
+      explorationViewModel.visitedDataStatus,
+      { developmentPreviewActive: developmentVisitedPreviewMode !== null }
+    );
 
   useEffect(() => {
     mapAttractionByIdRef.current = new Map(
@@ -775,6 +782,31 @@ export default function ExplorationMap() {
         </div>
       </div>
 
+      <VisitVerificationFlow
+        key={
+          verificationAuthenticationState.authenticationRequired
+            ? "authentication-required"
+            : verificationAuthenticationState.authenticationUnavailable
+              ? "authentication-unavailable"
+              : "verification-available"
+        }
+        attractions={mapAttractions}
+        authenticationConfirmed={
+          verificationAuthenticationState.authenticationConfirmed
+        }
+        authenticationRequired={
+          verificationAuthenticationState.authenticationRequired
+        }
+        authenticationPending={
+          verificationAuthenticationState.authenticationPending
+        }
+        authenticationUnavailable={
+          verificationAuthenticationState.authenticationUnavailable
+        }
+        onAuthenticationRetry={loadVisitedAttractions}
+        onVerified={loadVisitedAttractions}
+      />
+
       <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
         <div className="relative min-h-80 overflow-hidden rounded-3xl border border-[#D8E1E7] bg-[#F1F6F4] shadow-sm lg:min-h-136">
           <div
@@ -908,7 +940,7 @@ export default function ExplorationMap() {
       </div>
 
       <p className="mt-4 text-sm text-[#65748A]">
-        This map shows attraction locations only. Chatlas does not request your current location or provide route navigation.
+        This map shows attraction locations only. Chatlas requests your current location only when you start visit verification and does not provide route navigation.
       </p>
 
       <div className="mt-8 grid items-start gap-6 xl:grid-cols-[minmax(300px,0.8fr)_minmax(0,1.2fr)]">
