@@ -2,8 +2,8 @@ export const runtime = "nodejs";
 
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
-import { connectToDatabase } from "@/infrastructure/database/mongodb";
-import User from "@/data/models/User";
+import { connectToDatabase } from "src/infrastructure/database/mongodb.js";
+import User from "src/data/models/User";
 
 // GET - 获取当前用户信息
 export async function GET(request) {
