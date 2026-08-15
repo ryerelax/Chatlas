@@ -3,11 +3,16 @@
 /* eslint-disable @next/next/no-img-element -- Public profile avatars can come from user-configured hosts outside the attraction image allowlist. */
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   buildVerifiedPhotoDeleteUrl,
   formatMalaysiaDisplayDate,
+  getVerifiedPhotoDeleteActionState,
+  getVerifiedPhotoDeleteResponseDecision,
+  getVerifiedPhotoLoadFailureDecision,
   normaliseVerifiedPhotosPayload,
+  removeConfirmedVerifiedPhoto,
   VERIFIED_PHOTO_DELETE_ERROR,
   VERIFIED_PHOTOS_LOAD_ERROR,
 } from "@/presentation/lib/verifiedVisitorPhotosPresentation";
@@ -33,7 +38,11 @@ export default function VerifiedVisitorPhotos({ attractionId }) {
   const [status, setStatus] = useState("loading");
   const [deletingPhotoId, setDeletingPhotoId] = useState("");
   const [deleteErrorPhotoId, setDeleteErrorPhotoId] = useState("");
+  const [authenticationRequired, setAuthenticationRequired] = useState(false);
   const [refreshVersion, setRefreshVersion] = useState(0);
+  const [requestKind, setRequestKind] = useState("initial");
+  const [refreshPending, setRefreshPending] = useState(false);
+  const [refreshError, setRefreshError] = useState(false);
   const [deleteRequestController] = useState(createRequestController);
 
   useEffect(() => {
@@ -53,20 +62,36 @@ export default function VerifiedVisitorPhotos({ attractionId }) {
         setPhotos(safePhotos);
         setStatus("success");
         setDeleteErrorPhotoId("");
+        setAuthenticationRequired(false);
+        setRefreshPending(false);
+        setRefreshError(false);
       } catch (error) {
         if (error?.name === "AbortError" || controller.signal.aborted) return;
-        setStatus("error");
+        const decision = getVerifiedPhotoLoadFailureDecision(requestKind);
+        if (!decision.preservePhotos) setPhotos([]);
+        setStatus(decision.status);
+        setRefreshPending(false);
+        setRefreshError(decision.showRefreshError);
       }
     }
 
     if (attractionId) loadPhotos();
     return () => controller.abort();
-  }, [attractionId, refreshVersion]);
+  }, [attractionId, refreshVersion, requestKind]);
 
   useEffect(() => () => deleteRequestController.abort(), [deleteRequestController]);
 
-  function retryLoad() {
+  function requestInitialLoad() {
     setStatus("loading");
+    setRequestKind("initial");
+    setRefreshError(false);
+    setRefreshVersion((version) => version + 1);
+  }
+
+  function requestCanonicalRefresh() {
+    setRequestKind("refresh");
+    setRefreshPending(true);
+    setRefreshError(false);
     setRefreshVersion((version) => version + 1);
   }
 
@@ -85,10 +110,22 @@ export default function VerifiedVisitorPhotos({ attractionId }) {
         method: "DELETE",
         signal: controller.signal,
       });
-      if (!response.ok) throw new Error(VERIFIED_PHOTO_DELETE_ERROR);
+      const decision = getVerifiedPhotoDeleteResponseDecision(response, {
+        aborted: controller.signal.aborted,
+      });
+      if (decision.type === "cancelled") return;
+      if (decision.type === "authentication-required") {
+        setAuthenticationRequired(true);
+        return;
+      }
+      if (decision.type === "retryable-error") {
+        throw new Error(VERIFIED_PHOTO_DELETE_ERROR);
+      }
       if (controller.signal.aborted) return;
-      setStatus("loading");
-      setRefreshVersion((version) => version + 1);
+      setPhotos((currentPhotos) => (
+        removeConfirmedVerifiedPhoto(currentPhotos, photo.photoId)
+      ));
+      requestCanonicalRefresh();
     } catch (error) {
       if (error?.name === "AbortError" || controller.signal.aborted) return;
       setDeleteErrorPhotoId(photo.photoId);
@@ -101,7 +138,7 @@ export default function VerifiedVisitorPhotos({ attractionId }) {
   if (status === "loading") {
     content = <LoadingState />;
   } else if (status === "error") {
-    content = <ErrorState onRetry={retryLoad} />;
+    content = <ErrorState onRetry={requestInitialLoad} />;
   } else if (photos.length === 0) {
     content = (
       <div className="rounded-[14px] border border-dashed border-attraction-border-strong bg-attraction-surface-soft px-5 py-8 text-center">
@@ -118,7 +155,10 @@ export default function VerifiedVisitorPhotos({ attractionId }) {
             key={photo.photoId}
             photo={photo}
             isDeleting={deletingPhotoId === photo.photoId}
-            isDeleteDisabled={Boolean(deletingPhotoId)}
+            deleteActionState={getVerifiedPhotoDeleteActionState(photo, {
+              authenticationRequired,
+              deletionPending: Boolean(deletingPhotoId) || refreshPending,
+            })}
             deleteFailed={deleteErrorPhotoId === photo.photoId}
             onDelete={deletePhoto}
           />
@@ -151,8 +191,80 @@ export default function VerifiedVisitorPhotos({ attractionId }) {
           </p>
         </div>
       </div>
+      {authenticationRequired && (
+        <AuthenticationRequiredState onReload={requestCanonicalRefresh} />
+      )}
+      {(refreshPending || refreshError) && (
+        <RefreshState
+          isPending={refreshPending}
+          onRetry={requestCanonicalRefresh}
+        />
+      )}
       {content}
     </section>
+  );
+}
+
+function AuthenticationRequiredState({ onReload }) {
+  return (
+    <div
+      role="status"
+      className="mb-4 rounded-[14px] border border-attraction-border bg-attraction-surface-soft p-4"
+    >
+      <p className="text-sm font-semibold text-attraction-ink">
+        Sign in to manage your verified visitor photos.
+      </p>
+      <p className="mt-1 text-sm leading-relaxed text-attraction-muted">
+        Your photos remain public, but deletion requires a signed-in owner session.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Link
+          href="/login"
+          className="inline-flex min-h-11 items-center rounded-[10px] bg-attraction-primary px-4 text-sm font-semibold text-white transition hover:bg-attraction-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-attraction-primary focus-visible:ring-offset-2"
+        >
+          Sign in
+        </Link>
+        <button
+          type="button"
+          onClick={onReload}
+          className="min-h-11 rounded-[10px] border border-attraction-border-strong bg-white px-4 text-sm font-semibold text-attraction-primary-dark transition hover:bg-attraction-primary-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-attraction-primary focus-visible:ring-offset-2"
+        >
+          Reload photos
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function RefreshState({ isPending, onRetry }) {
+  if (isPending) {
+    return (
+      <p
+        role="status"
+        aria-live="polite"
+        className="mb-4 rounded-[10px] bg-attraction-primary-soft px-4 py-3 text-sm font-medium text-attraction-primary-dark"
+      >
+        Refreshing verified visitor photos...
+      </p>
+    );
+  }
+
+  return (
+    <div
+      role="alert"
+      className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-attraction-border bg-attraction-surface-soft px-4 py-3"
+    >
+      <p className="text-sm font-medium text-attraction-ink">
+        The latest verified visitor photos could not be loaded. The current photos are preserved below.
+      </p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="min-h-11 shrink-0 rounded-[10px] border border-attraction-border-strong bg-white px-4 text-sm font-semibold text-attraction-primary-dark transition hover:bg-attraction-primary-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-attraction-primary focus-visible:ring-offset-2"
+      >
+        Retry refresh
+      </button>
+    </div>
   );
 }
 
@@ -200,7 +312,7 @@ function ErrorState({ onRetry }) {
   );
 }
 
-function PhotoCard({ photo, isDeleting, isDeleteDisabled, deleteFailed, onDelete }) {
+function PhotoCard({ photo, isDeleting, deleteActionState, deleteFailed, onDelete }) {
   const displayDate = formatMalaysiaDisplayDate(photo.capturedDate);
   const displayName = photo.user.displayName || "Chatlas user";
   const initial = displayName.trim().charAt(0).toUpperCase() || "C";
@@ -247,7 +359,7 @@ function PhotoCard({ photo, isDeleting, isDeleteDisabled, deleteFailed, onDelete
           </div>
         </div>
 
-        {photo.canDelete && (
+        {deleteActionState !== "hidden" && (
           <div className="mt-4 border-t border-attraction-divider pt-3">
             {deleteFailed && (
               <p
@@ -261,7 +373,7 @@ function PhotoCard({ photo, isDeleting, isDeleteDisabled, deleteFailed, onDelete
             <button
               type="button"
               onClick={() => onDelete(photo)}
-              disabled={isDeleteDisabled}
+              disabled={deleteActionState === "disabled"}
               aria-label={`Delete verified visit photo shared on ${displayDate}`}
               aria-describedby={deleteFailed ? deleteErrorId : undefined}
               className="min-h-11 w-full rounded-[10px] border border-attraction-border-strong bg-white px-4 text-sm font-semibold text-attraction-error transition hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-attraction-primary focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60"

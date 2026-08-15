@@ -4,12 +4,17 @@ export const VERIFIED_PHOTO_DELETE_ERROR =
   "The verified photo could not be deleted. Please try again.";
 
 function requirePublicCard(card) {
-  const capturedTime = new Date(card?.capturedDate).getTime();
+  const visitId = normaliseRequiredString(card?.visitId);
+  const photoId = normaliseRequiredString(card?.photoId);
+  const attractionId = normaliseRequiredString(card?.attractionId);
+  const photoUrl = normaliseCloudinaryPhotoUrl(card?.photoUrl);
+  const capturedDate = normaliseRequiredString(card?.capturedDate);
+  const capturedTime = capturedDate ? new Date(capturedDate).getTime() : Number.NaN;
   if (
-    typeof card?.visitId !== "string"
-    || typeof card?.photoId !== "string"
-    || typeof card?.attractionId !== "string"
-    || typeof card?.photoUrl !== "string"
+    !visitId
+    || !photoId
+    || !attractionId
+    || !photoUrl
     || !Number.isFinite(capturedTime)
     || typeof card?.user?.displayName !== "string"
     || card?.verified !== true
@@ -18,18 +23,55 @@ function requirePublicCard(card) {
   }
 
   return {
-    visitId: card.visitId,
-    photoId: card.photoId,
-    attractionId: card.attractionId,
-    photoUrl: card.photoUrl,
+    visitId,
+    photoId,
+    attractionId,
+    photoUrl,
     capturedDate: new Date(capturedTime).toISOString(),
     user: {
       displayName: card.user.displayName,
-      avatarUrl: typeof card.user.avatarUrl === "string" ? card.user.avatarUrl : "",
+      avatarUrl: normaliseSafeAvatarUrl(card.user.avatarUrl),
     },
     verified: true,
     canDelete: card.canDelete === true,
   };
+}
+
+function normaliseRequiredString(value) {
+  if (typeof value !== "string") return "";
+  return value.trim();
+}
+
+function parseHttpsUrl(value) {
+  const candidate = normaliseRequiredString(value);
+  if (!candidate) return null;
+
+  try {
+    const url = new URL(candidate);
+    if (url.protocol !== "https:" || url.username || url.password) return null;
+    return url;
+  } catch {
+    return null;
+  }
+}
+
+function normaliseCloudinaryPhotoUrl(value) {
+  const url = parseHttpsUrl(value);
+  if (
+    !url
+    || url.hostname !== "res.cloudinary.com"
+    || url.port
+    || url.pathname === "/"
+  ) {
+    return "";
+  }
+
+  return url.toString();
+}
+
+function normaliseSafeAvatarUrl(value) {
+  const url = parseHttpsUrl(value);
+  return url ? url.toString() : "";
 }
 
 export function normaliseVerifiedPhotosPayload(payload) {
@@ -55,4 +97,43 @@ export function formatMalaysiaDisplayDate(capturedDate) {
 
 export function buildVerifiedPhotoDeleteUrl({ visitId, photoId }) {
   return `/api/exploration-map/verified-visits/${encodeURIComponent(visitId)}/photos/${encodeURIComponent(photoId)}`;
+}
+
+export function getVerifiedPhotoDeleteResponseDecision(
+  response,
+  { aborted = false } = {}
+) {
+  if (aborted) return { type: "cancelled" };
+  if (response?.status === 204) return { type: "success" };
+  if (response?.status === 401) return { type: "authentication-required" };
+  return { type: "retryable-error" };
+}
+
+export function getVerifiedPhotoDeleteActionState(
+  photo,
+  { authenticationRequired, deletionPending }
+) {
+  if (authenticationRequired || photo?.canDelete !== true) return "hidden";
+  return deletionPending ? "disabled" : "enabled";
+}
+
+export function removeConfirmedVerifiedPhoto(photos, photoId) {
+  if (!Array.isArray(photos)) return [];
+  return photos.filter((photo) => photo?.photoId !== photoId);
+}
+
+export function getVerifiedPhotoLoadFailureDecision(requestKind) {
+  if (requestKind === "refresh") {
+    return {
+      status: "success",
+      preservePhotos: true,
+      showRefreshError: true,
+    };
+  }
+
+  return {
+    status: "error",
+    preservePhotos: false,
+    showRefreshError: false,
+  };
 }

@@ -560,7 +560,7 @@ test("public photo presentation normalises API cards and builds the owner delete
         visitId: "visit/older",
         photoId: "photo older",
         attractionId: "attraction-1",
-        photoUrl: "https://images.example/older.jpg",
+        photoUrl: "https://res.cloudinary.com/chatlas/image/upload/older.jpg",
         capturedDate: "2026-08-15T08:00:00.000Z",
         user: { displayName: "Older visitor", avatarUrl: "" },
         verified: true,
@@ -570,7 +570,7 @@ test("public photo presentation normalises API cards and builds the owner delete
         visitId: "visit/newer",
         photoId: "photo newer",
         attractionId: "attraction-1",
-        photoUrl: "https://images.example/newer.jpg",
+        photoUrl: "https://res.cloudinary.com/chatlas/image/upload/newer.jpg",
         capturedDate: "2026-08-15T16:30:00.000Z",
         user: { displayName: "Newer visitor", avatarUrl: "" },
         verified: true,
@@ -592,6 +592,156 @@ test("public photo presentation normalises API cards and builds the owner delete
     }),
     /could not be loaded/i
   );
+});
+
+test("public photo presentation rejects incomplete cards and incompatible photo URLs", async (t) => {
+  const { normaliseVerifiedPhotosPayload } = await import(
+    "../src/presentation/lib/verifiedVisitorPhotosPresentation.js"
+  );
+  const validCard = {
+    visitId: "visit-1",
+    photoId: "photo-1",
+    attractionId: "attraction-1",
+    photoUrl: "https://res.cloudinary.com/chatlas/image/upload/verified.jpg",
+    capturedDate: "2026-08-15T16:30:00.000Z",
+    user: {
+      displayName: "Visitor",
+      avatarUrl: "https://profiles.example.test/avatar.jpg",
+    },
+    verified: true,
+    canDelete: false,
+  };
+  const invalidValues = [
+    ["null captured date", { capturedDate: null }],
+    ["blank captured date", { capturedDate: "   " }],
+    ["invalid captured date", { capturedDate: "not-a-date" }],
+    ["blank visit ID", { visitId: "   " }],
+    ["blank photo ID", { photoId: "" }],
+    ["blank attraction ID", { attractionId: "\t" }],
+    ["blank photo URL", { photoUrl: "   " }],
+    ["non-HTTPS photo URL", { photoUrl: "http://res.cloudinary.com/chatlas/photo.jpg" }],
+    ["wrong photo host", { photoUrl: "https://images.example.test/photo.jpg" }],
+    ["invalid photo URL", { photoUrl: "not a URL" }],
+  ];
+
+  for (const [label, override] of invalidValues) {
+    await t.test(label, () => {
+      assert.throws(
+        () => normaliseVerifiedPhotosPayload({
+          success: true,
+          data: [{ ...validCard, ...override }],
+        }),
+        /could not be loaded/i
+      );
+    });
+  }
+
+  const [normalised] = normaliseVerifiedPhotosPayload({
+    success: true,
+    data: [{
+      ...validCard,
+      user: { ...validCard.user, avatarUrl: "javascript:alert(1)" },
+    }],
+  });
+  assert.equal(normalised.user.avatarUrl, "");
+});
+
+test("verified photo delete decisions distinguish success, sign-in, and retryable failures", async () => {
+  const {
+    getVerifiedPhotoDeleteActionState,
+    getVerifiedPhotoDeleteResponseDecision,
+  } = await import("../src/presentation/lib/verifiedVisitorPhotosPresentation.js");
+  const ownerPhoto = { photoId: "photo-1", canDelete: true };
+
+  assert.deepEqual(
+    getVerifiedPhotoDeleteResponseDecision({ status: 204, ok: true }),
+    { type: "success" }
+  );
+  assert.deepEqual(
+    getVerifiedPhotoDeleteResponseDecision({
+      status: 401,
+      ok: false,
+      message: "unsafe server detail",
+      json() {
+        throw new Error("must not parse response JSON");
+      },
+    }),
+    { type: "authentication-required" }
+  );
+  assert.deepEqual(
+    getVerifiedPhotoDeleteResponseDecision({ status: 500, ok: false }),
+    { type: "retryable-error" }
+  );
+  assert.deepEqual(
+    getVerifiedPhotoDeleteResponseDecision({ status: 200, ok: true }),
+    { type: "retryable-error" }
+  );
+  assert.deepEqual(
+    getVerifiedPhotoDeleteResponseDecision(
+      { status: 401, ok: false },
+      { aborted: true }
+    ),
+    { type: "cancelled" }
+  );
+
+  assert.equal(
+    getVerifiedPhotoDeleteActionState(ownerPhoto, {
+      authenticationRequired: true,
+      deletionPending: false,
+    }),
+    "hidden"
+  );
+  assert.equal(
+    getVerifiedPhotoDeleteActionState(ownerPhoto, {
+      authenticationRequired: false,
+      deletionPending: true,
+    }),
+    "disabled"
+  );
+  assert.equal(
+    getVerifiedPhotoDeleteActionState(ownerPhoto, {
+      authenticationRequired: false,
+      deletionPending: false,
+    }),
+    "enabled"
+  );
+  assert.equal(
+    getVerifiedPhotoDeleteActionState({ ...ownerPhoto, canDelete: false }, {
+      authenticationRequired: false,
+      deletionPending: false,
+    }),
+    "hidden"
+  );
+});
+
+test("confirmed deletion removes one card while refresh failure preserves canonical content", async () => {
+  const {
+    getVerifiedPhotoLoadFailureDecision,
+    removeConfirmedVerifiedPhoto,
+  } = await import("../src/presentation/lib/verifiedVisitorPhotosPresentation.js");
+  const photos = [
+    { photoId: "photo-1", canDelete: true },
+    { photoId: "photo-2", canDelete: true },
+  ];
+
+  assert.deepEqual(
+    removeConfirmedVerifiedPhoto(photos, "photo-1"),
+    [{ photoId: "photo-2", canDelete: true }]
+  );
+  assert.deepEqual(photos.map((photo) => photo.photoId), ["photo-1", "photo-2"]);
+  assert.deepEqual(removeConfirmedVerifiedPhoto(photos, "photo-2"), [photos[0]]);
+  assert.deepEqual(removeConfirmedVerifiedPhoto([photos[0]], "photo-1"), []);
+
+  assert.deepEqual(getVerifiedPhotoLoadFailureDecision("initial"), {
+    status: "error",
+    preservePhotos: false,
+    showRefreshError: false,
+  });
+  assert.deepEqual(getVerifiedPhotoLoadFailureDecision("refresh"), {
+    status: "success",
+    preservePhotos: true,
+    showRefreshError: true,
+  });
 });
 
 for (const [label, overrides] of [
