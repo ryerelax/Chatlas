@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { VerifiedVisitServiceError } from "../src/business/services/verifiedVisitService.js";
+import {
+  createVerifiedVisitService,
+  VerifiedVisitServiceError,
+} from "../src/business/services/verifiedVisitService.js";
 import {
   createVerifiedVisitsHandlers,
 } from "../src/app/api/exploration-map/verified-visits/handler.js";
@@ -475,6 +478,122 @@ test("public GET returns only the safe service result", async () => {
   }
 });
 
+test("public GET exposes exact safe card keys in newest-first order", async () => {
+  const attractionId = "507f1f77bcf86cd799439011";
+  const service = createVerifiedVisitService({
+    isValidObjectId: (value) => value === attractionId,
+    findPublicVerifiedPhotos: async () => [
+      {
+        _id: "visit-older",
+        user: {
+          displayName: "Older visitor",
+          name: "Private fallback",
+          profilePicture: "https://images.example/older-avatar.jpg",
+          email: "private@example.test",
+        },
+        canDelete: false,
+        photos: [{
+          _id: "photo-older",
+          photoUrl: "https://images.example/older.jpg",
+          capturedAt: "2026-08-15T08:00:00.000Z",
+          latitude: 2.1944,
+          cloudinaryPublicId: "private/older",
+        }],
+      },
+      {
+        _id: "visit-newer",
+        user: {
+          displayName: "Newer visitor",
+          profilePicture: "https://images.example/newer-avatar.jpg",
+        },
+        canDelete: true,
+        photos: [{
+          _id: "photo-newer",
+          photoUrl: "https://images.example/newer.jpg",
+          capturedAt: "2026-08-15T12:00:00.000Z",
+          distanceMeters: 12,
+          accuracyMeters: 8,
+        }],
+      },
+    ],
+  });
+  const GET = createPublicHandler({
+    getPublicVerifiedPhotos: service.getPublicVerifiedPhotos,
+  });
+
+  const response = await GET(null, { params: Promise.resolve({ id: attractionId }) });
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(body.data.map((card) => card.photoId), ["photo-newer", "photo-older"]);
+  for (const card of body.data) {
+    assert.deepEqual(Object.keys(card).sort(), [
+      "attractionId",
+      "canDelete",
+      "capturedDate",
+      "photoId",
+      "photoUrl",
+      "user",
+      "verified",
+      "visitId",
+    ]);
+    assert.deepEqual(Object.keys(card.user).sort(), ["avatarUrl", "displayName"]);
+  }
+  assert.equal(JSON.stringify(body).includes("cloudinaryPublicId"), false);
+  assert.equal(JSON.stringify(body).includes("latitude"), false);
+  assert.equal(JSON.stringify(body).includes("accuracyMeters"), false);
+  assert.equal(JSON.stringify(body).includes("distanceMeters"), false);
+  assert.equal(JSON.stringify(body).includes("email"), false);
+});
+
+test("public photo presentation normalises API cards and builds the owner delete URL", async () => {
+  const {
+    buildVerifiedPhotoDeleteUrl,
+    formatMalaysiaDisplayDate,
+    normaliseVerifiedPhotosPayload,
+  } = await import("../src/presentation/lib/verifiedVisitorPhotosPresentation.js");
+
+  const cards = normaliseVerifiedPhotosPayload({
+    success: true,
+    data: [
+      {
+        visitId: "visit/older",
+        photoId: "photo older",
+        attractionId: "attraction-1",
+        photoUrl: "https://images.example/older.jpg",
+        capturedDate: "2026-08-15T08:00:00.000Z",
+        user: { displayName: "Older visitor", avatarUrl: "" },
+        verified: true,
+        canDelete: false,
+      },
+      {
+        visitId: "visit/newer",
+        photoId: "photo newer",
+        attractionId: "attraction-1",
+        photoUrl: "https://images.example/newer.jpg",
+        capturedDate: "2026-08-15T16:30:00.000Z",
+        user: { displayName: "Newer visitor", avatarUrl: "" },
+        verified: true,
+        canDelete: true,
+      },
+    ],
+  });
+
+  assert.deepEqual(cards.map((card) => card.photoId), ["photo newer", "photo older"]);
+  assert.equal(formatMalaysiaDisplayDate(cards[0].capturedDate), "16 August 2026");
+  assert.equal(
+    buildVerifiedPhotoDeleteUrl(cards[0]),
+    "/api/exploration-map/verified-visits/visit%2Fnewer/photos/photo%20newer"
+  );
+  assert.throws(
+    () => normaliseVerifiedPhotosPayload({
+      success: true,
+      data: [{ ...cards[0], verified: false }],
+    }),
+    /could not be loaded/i
+  );
+});
+
 for (const [label, overrides] of [
   ["database", { connectToDatabase: async () => { throw new Error("private URI"); } }],
   ["service", { getPublicVerifiedPhotos: async () => { throw new Error("private fields"); } }],
@@ -569,6 +688,43 @@ test("DELETE awaits route IDs, uses only the session identity, and returns an em
     photoId: "507f1f77bcf86cd799439013",
   });
 });
+
+for (const [label, remainingPhotos, expectedEmptyDeletes] of [
+  ["final photo", [], ["507f1f77bcf86cd799439012"]],
+  ["one of several photos", [{ _id: "507f1f77bcf86cd799439014" }], []],
+]) {
+  test(`DELETE ${label} removes the asset and keeps the dated visit only when non-empty`, async () => {
+    const deletedAssets = [];
+    const emptyDeletes = [];
+    const service = createVerifiedVisitService({
+      isValidObjectId: (value) => /^[a-f\d]{24}$/i.test(value),
+      findUserByGoogleId: async () => ({ _id: "507f1f77bcf86cd799439010" }),
+      findOwnedPhotoForDeletion: async () => ({
+        cloudinaryPublicId: "private/verified-photo",
+      }),
+      deleteCloudinaryImage: async (publicId) => deletedAssets.push(publicId),
+      removeOwnedPhoto: async () => ({
+        _id: "507f1f77bcf86cd799439012",
+        photos: remainingPhotos,
+      }),
+      deleteVisitWhenEmpty: async (visitId) => emptyDeletes.push(visitId),
+    });
+    const DELETE = createDeleteHandler({
+      deleteOwnedVerifiedPhoto: service.deleteOwnedVerifiedPhoto,
+    });
+
+    const response = await DELETE(null, {
+      params: Promise.resolve({
+        visitId: "507f1f77bcf86cd799439012",
+        photoId: "507f1f77bcf86cd799439013",
+      }),
+    });
+
+    assert.equal(response.status, 204);
+    assert.deepEqual(deletedAssets, ["private/verified-photo"]);
+    assert.deepEqual(emptyDeletes, expectedEmptyDeletes);
+  });
+}
 
 for (const [label, overrides] of [
   ["database", { connectToDatabase: async () => { throw new Error("database details"); } }],

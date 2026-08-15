@@ -8,6 +8,7 @@ import ReviewList from "@/presentation/components/reviews/ReviewList";
 import StarRating from "@/presentation/components/StarRating";
 import { BackArrowIcon, LocationPinIcon } from "@/presentation/components/AttractionIcons";
 import AttractionPhotoGallery from "@/presentation/components/AttractionPhotoGallery";
+import VerifiedVisitorPhotos from "@/presentation/components/VerifiedVisitorPhotos";
 
 export default function AttractionDetailsPage() {
   const params = useParams();
@@ -180,6 +181,8 @@ export default function AttractionDetailsPage() {
                 refreshVersion={reviewRefreshVersion}
               />
             </section>
+
+            <VerifiedVisitorPhotos key={attractionId} attractionId={attractionId} />
           </div>
 
           {/* Right column */}
