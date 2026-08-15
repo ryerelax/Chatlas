@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import VerifiedVisit from "../src/data/models/VerifiedVisit.js";
 import { createVerifiedVisitRepository } from "../src/data/repositories/verifiedVisitRepository.js";
 
 const photo = {
@@ -29,6 +30,42 @@ function chain(result, observed) {
     lean: async () => result,
   };
 }
+
+function targetVisitDuplicateError() {
+  return Object.assign(new Error("duplicate visit group"), {
+    code: 11000,
+    keyPattern: { userId: 1, attractionId: 1, visitDateKey: 1 },
+    keyValue: {
+      userId: "user-1",
+      attractionId: "attraction-1",
+      visitDateKey: "2026-08-15",
+    },
+  });
+}
+
+test("verified visit schema protects private photo evidence and has one dated-group unique index", () => {
+  const datedGroupIndex = VerifiedVisit.schema.indexes().find(([keys, options]) =>
+    keys.userId === 1 &&
+    keys.attractionId === 1 &&
+    keys.visitDateKey === 1 &&
+    options.unique === true
+  );
+  const photoSchema = VerifiedVisit.schema.path("photos").schema;
+
+  assert.deepEqual(datedGroupIndex, [
+    { userId: 1, attractionId: 1, visitDateKey: 1 },
+    { unique: true },
+  ]);
+  for (const field of [
+    "cloudinaryPublicId",
+    "latitude",
+    "longitude",
+    "accuracyMeters",
+    "distanceMeters",
+  ]) {
+    assert.equal(photoSchema.path(field).options.select, false);
+  }
+});
 
 test("append uses user, attraction, date, and an atomic fewer-than-three filter", async () => {
   const observed = {};
@@ -64,11 +101,50 @@ test("append uses user, attraction, date, and an atomic fewer-than-three filter"
   assert.equal(result._id, "visit-1");
 });
 
-test("append returns null only when an atomic full-group upsert collides", async () => {
-  const duplicateKeyError = Object.assign(new Error("duplicate visit group"), { code: 11000 });
+test("append retries a target duplicate-key upsert without upsert when the group has capacity", async () => {
+  const observed = [];
   const repository = createVerifiedVisitRepository({
-    findOneAndUpdate() {
-      throw duplicateKeyError;
+    findOneAndUpdate(filter, update, options) {
+      observed.push({ filter, update, options });
+      if (observed.length === 1) {
+        throw targetVisitDuplicateError();
+      }
+
+      return chain({ _id: "visit-1", photos: [photo] }, {});
+    },
+  });
+
+  const result = await repository.appendPhotoToDatedVisit({
+    userId: "user-1",
+    attractionId: "attraction-1",
+    visitDateKey: "2026-08-15",
+    photo,
+  });
+
+  assert.equal(result._id, "visit-1");
+  assert.equal(observed.length, 2);
+  assert.deepEqual(observed[1].filter, observed[0].filter);
+  assert.deepEqual(observed[1].options, {
+    upsert: false,
+    new: true,
+    runValidators: true,
+  });
+});
+
+test("append returns null only after a target duplicate retry confirms the exact group is full", async () => {
+  const observed = { updates: [] };
+  const repository = createVerifiedVisitRepository({
+    findOneAndUpdate(filter, update, options) {
+      observed.updates.push({ filter, update, options });
+      if (observed.updates.length === 1) {
+        throw targetVisitDuplicateError();
+      }
+
+      return chain(null, {});
+    },
+    findOne(filter) {
+      observed.fullFilter = filter;
+      return chain({ _id: "visit-1", photos: [photo, photo, photo] }, {});
     },
   });
 
@@ -80,6 +156,58 @@ test("append returns null only when an atomic full-group upsert collides", async
   });
 
   assert.equal(result, null);
+  assert.equal(observed.updates.length, 2);
+  assert.deepEqual(observed.fullFilter, {
+    userId: "user-1",
+    attractionId: "attraction-1",
+    visitDateKey: "2026-08-15",
+    "photos.2": { $exists: true },
+  });
+});
+
+test("append rethrows a target duplicate when the retry did not confirm a full group", async () => {
+  const duplicateKeyError = targetVisitDuplicateError();
+  const repository = createVerifiedVisitRepository({
+    findOneAndUpdate() {
+      throw duplicateKeyError;
+    },
+    findOne() {
+      return chain(null, {});
+    },
+  });
+
+  await assert.rejects(
+    repository.appendPhotoToDatedVisit({
+      userId: "user-1",
+      attractionId: "attraction-1",
+      visitDateKey: "2026-08-15",
+      photo,
+    }),
+    duplicateKeyError
+  );
+});
+
+test("append rethrows a non-target unique-index collision", async () => {
+  const duplicateKeyError = Object.assign(new Error("other unique collision"), {
+    code: 11000,
+    keyPattern: { cloudinaryPublicId: 1 },
+    keyValue: { cloudinaryPublicId: "verified-visits/photo-1" },
+  });
+  const repository = createVerifiedVisitRepository({
+    findOneAndUpdate() {
+      throw duplicateKeyError;
+    },
+  });
+
+  await assert.rejects(
+    repository.appendPhotoToDatedVisit({
+      userId: "user-1",
+      attractionId: "attraction-1",
+      visitDateKey: "2026-08-15",
+      photo,
+    }),
+    duplicateKeyError
+  );
 });
 
 test("append rethrows database errors other than a full-group duplicate collision", async () => {
@@ -120,16 +248,53 @@ test("distinct verified attraction IDs are stringified and deduplicated", async 
   ]);
 });
 
-test("public verified photos use newest-first ordering and a safe populated projection", async () => {
+test("public verified photos give only the owner a deletion flag without leaking internal user IDs", async () => {
   const observed = {};
+  const rawVisits = [{
+    _id: "visit-1",
+    visitDateKey: "2026-08-15",
+    createdAt: "2026-08-15T10:00:00.000Z",
+    userId: {
+      _id: "user-1",
+      displayName: "Owner",
+      name: "Owner Name",
+      profilePicture: "https://example.test/owner.jpg",
+      email: "owner@example.test",
+    },
+    photos: [{
+      _id: "photo-1",
+      photoUrl: "https://example.test/photo.jpg",
+      capturedAt: "2026-08-15T10:00:00.000Z",
+      cloudinaryPublicId: "verified-visits/photo-1",
+      latitude: 2.193,
+    }],
+  }];
   const repository = createVerifiedVisitRepository({
     find(filter) {
       observed.filter = filter;
-      return chain([{ _id: "visit-1" }], observed);
+      return chain(rawVisits, observed);
     },
   });
 
-  const result = await repository.findPublicVerifiedPhotos("attraction-1");
+  const ownerResult = await repository.findPublicVerifiedPhotos("attraction-1", "user-1");
+  const nonOwnerResult = await repository.findPublicVerifiedPhotos("attraction-1", "user-2");
+  const anonymousResult = await repository.findPublicVerifiedPhotos("attraction-1");
+
+  const publicRecord = {
+    _id: "visit-1",
+    visitDateKey: "2026-08-15",
+    createdAt: "2026-08-15T10:00:00.000Z",
+    user: {
+      displayName: "Owner",
+      name: "Owner Name",
+      profilePicture: "https://example.test/owner.jpg",
+    },
+    photos: [{
+      _id: "photo-1",
+      photoUrl: "https://example.test/photo.jpg",
+      capturedAt: "2026-08-15T10:00:00.000Z",
+    }],
+  };
 
   assert.deepEqual(observed.filter, { attractionId: "attraction-1" });
   assert.deepEqual(observed.sort, { visitDateKey: -1, createdAt: -1, _id: -1 });
@@ -139,14 +304,20 @@ test("public verified photos use newest-first ordering and a safe populated proj
   );
   assert.deepEqual(observed.populate, {
     path: "userId",
-    select: "displayName name profilePicture -_id",
+    select: "_id displayName name profilePicture",
   });
   assert.ok(!observed.select.includes("latitude"));
   assert.ok(!observed.select.includes("longitude"));
   assert.ok(!observed.select.includes("accuracyMeters"));
   assert.ok(!observed.select.includes("distanceMeters"));
   assert.ok(!observed.select.includes("cloudinaryPublicId"));
-  assert.deepEqual(result, [{ _id: "visit-1" }]);
+  assert.deepEqual(ownerResult, [{ ...publicRecord, canDelete: true }]);
+  assert.deepEqual(nonOwnerResult, [{ ...publicRecord, canDelete: false }]);
+  assert.deepEqual(anonymousResult, [{ ...publicRecord, canDelete: false }]);
+  assert.ok(!Object.hasOwn(ownerResult[0], "userId"));
+  assert.ok(!Object.hasOwn(ownerResult[0].user, "_id"));
+  assert.ok(!JSON.stringify(ownerResult).includes("owner@example.test"));
+  assert.ok(!JSON.stringify(ownerResult).includes("verified-visits/photo-1"));
 });
 
 test("owner-scoped removal returns the deleted private photo with the updated visit", async () => {
@@ -175,6 +346,10 @@ test("owner-scoped removal returns the deleted private photo with the updated vi
   assert.deepEqual(observed.updateFilter, ownerScope);
   assert.deepEqual(observed.update, { $pull: { photos: { _id: "photo-1" } } });
   assert.deepEqual(observed.options, { new: true });
+  assert.equal(
+    observed.select,
+    "+photos.cloudinaryPublicId +photos.latitude +photos.longitude +photos.accuracyMeters +photos.distanceMeters"
+  );
   assert.deepEqual(result, { visit: updatedVisit, removedPhoto: existingVisit.photos[0] });
 });
 
