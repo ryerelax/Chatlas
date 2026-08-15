@@ -105,6 +105,12 @@ export default function AttractionDetailsPage() {
                 {attraction.category || "Uncategorized"}
               </span>
 
+              {attraction.submittedBy && (
+                <span className="mb-3 ml-2 inline-block rounded-full bg-sky-100 px-3 py-1 text-[13px] font-semibold text-sky-700">
+                  Added by a Chatlas user
+                </span>
+              )}
+
               <h1 className="mb-3 text-2xl font-bold leading-tight tracking-tight text-attraction-ink md:text-3xl lg:text-4xl">
                 {attraction.name}
               </h1>
