@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import ReviewForm from "@/presentation/components/reviews/ReviewForm";
+import ReviewList from "@/presentation/components/reviews/ReviewList";
 import StarRating from "@/presentation/components/StarRating";
 import { BackArrowIcon, LocationPinIcon } from "@/presentation/components/AttractionIcons";
 import AttractionPhotoGallery from "@/presentation/components/AttractionPhotoGallery";
@@ -14,6 +16,7 @@ export default function AttractionDetailsPage() {
   const [attraction, setAttraction] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [reviewRefreshVersion, setReviewRefreshVersion] = useState(0);
 
   useEffect(() => {
     async function loadAttractionDetails() {
@@ -152,6 +155,31 @@ export default function AttractionDetailsPage() {
                 View reviews
               </button>
             </div>
+            {/* Review & Community Section */}
+            <section className="mt-8">
+              <div className="mb-5 flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-attraction-ink">
+                    Community Reviews
+                  </h2>
+
+                  <p className="mt-1 text-sm text-attraction-muted">
+                    See what other travellers say about this attraction.
+                  </p>
+                </div>
+              </div>
+
+              <ReviewForm
+                attractionId={attractionId}
+                onReviewSubmitted={() =>
+                  setReviewRefreshVersion((version) => version + 1)
+                }
+              />
+              <ReviewList
+                attractionId={attractionId}
+                refreshVersion={reviewRefreshVersion}
+              />
+            </section>
           </div>
 
           {/* Right column */}
