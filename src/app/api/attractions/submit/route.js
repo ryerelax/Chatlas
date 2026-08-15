@@ -22,8 +22,18 @@ export async function POST(request) {
       );
     }
 
-    const body = await request.json();
-    const { googlePlaceId, category, sessionToken } = body;
+    const formData = await request.formData();
+    const googlePlaceId = formData.get("googlePlaceId");
+    const category = formData.get("category");
+    const sessionToken = formData.get("sessionToken");
+    const photo = formData.get("photo");
+
+    let photoBuffer;
+    let photoMimeType;
+    if (photo && typeof photo === "object" && photo.size > 0) {
+      photoBuffer = Buffer.from(await photo.arrayBuffer());
+      photoMimeType = photo.type;
+    }
 
     await connectToDatabase();
 
@@ -33,6 +43,8 @@ export async function POST(request) {
       sessionToken,
       session,
       apiKey: process.env.GOOGLE_PLACES_API_KEY,
+      photoBuffer,
+      photoMimeType,
     });
 
     return NextResponse.json(
