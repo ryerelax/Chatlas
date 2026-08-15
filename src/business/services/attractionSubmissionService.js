@@ -13,6 +13,7 @@ import { classifyLocationArea } from "@/business/services/locationAreas";
 const MIN_SEARCH_INPUT_LENGTH = 2;
 const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024;
+const MAX_PHOTOS_PER_SUBMISSION = 6;
 
 export class InvalidSubmissionError extends Error {}
 export class DuplicateAttractionError extends Error {}
@@ -33,13 +34,13 @@ export async function searchPlaces(input, { sessionToken, apiKey } = {}) {
 
 // Decision 4: Registered-User self-service submission. Publishes immediately
 // on success — no admin review queue. Validation order: required fields,
-// category enum, optional photo (type/size), duplicate googlePlaceId, then
-// fetch authoritative place details, upload the photo if provided, and
-// create the record.
+// category enum, optional photos (count/type/size), duplicate googlePlaceId,
+// then fetch authoritative place details, upload any photos, and create the
+// record.
 //
-// The photo is entirely optional — submission must succeed with zero photos,
-// same as before this existed. When provided, it's uploaded directly (not
-// via a Places photo reference), so it lands in `photos` immediately rather
+// Photos are entirely optional — submission must succeed with zero photos,
+// same as before this existed. When provided, they're uploaded directly (not
+// via a Places photo reference), so they land in `photos` immediately rather
 // than waiting on the offline sync scripts. Once at least one photo exists,
 // sync:photos's own skip condition (an empty/missing `photos` array) already
 // leaves it alone on default runs — see the Decision 4 photo-upload
@@ -50,8 +51,7 @@ export async function submitAttraction({
   sessionToken,
   session,
   apiKey,
-  photoBuffer,
-  photoMimeType,
+  photos: photoFiles = [],
 } = {}) {
   const normalizedGooglePlaceId = String(googlePlaceId || "").trim();
 
@@ -63,12 +63,16 @@ export async function submitAttraction({
     throw new InvalidSubmissionError("Please choose a valid category.");
   }
 
-  if (photoBuffer) {
-    if (!ALLOWED_PHOTO_TYPES.includes(photoMimeType)) {
-      throw new InvalidSubmissionError("Photo must be a JPG, PNG, or WEBP image.");
+  if (photoFiles.length > MAX_PHOTOS_PER_SUBMISSION) {
+    throw new InvalidSubmissionError(`You can upload up to ${MAX_PHOTOS_PER_SUBMISSION} photos.`);
+  }
+
+  for (const photo of photoFiles) {
+    if (!ALLOWED_PHOTO_TYPES.includes(photo.mimeType)) {
+      throw new InvalidSubmissionError("Photos must be JPG, PNG, or WEBP images.");
     }
-    if (photoBuffer.length > MAX_PHOTO_SIZE_BYTES) {
-      throw new InvalidSubmissionError("Photo is too large. Maximum size is 5MB.");
+    if (photo.buffer.length > MAX_PHOTO_SIZE_BYTES) {
+      throw new InvalidSubmissionError("Each photo must be 5MB or smaller.");
     }
   }
 
@@ -85,10 +89,10 @@ export async function submitAttraction({
   const locationArea = classifyLocationArea(placeDetails.address, placeDetails.name);
 
   const photos = [];
-  if (photoBuffer) {
-    const photoUrl = await uploadImageFromBuffer(photoBuffer, photoMimeType, {
+  for (const [index, photo] of photoFiles.entries()) {
+    const photoUrl = await uploadImageFromBuffer(photo.buffer, photo.mimeType, {
       folder: `chatlas/attractions/${normalizedGooglePlaceId}`,
-      publicId: "photo-1",
+      publicId: `photo-${index + 1}`,
     });
     photos.push(photoUrl);
   }

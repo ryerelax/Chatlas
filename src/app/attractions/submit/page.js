@@ -10,6 +10,7 @@ const SEARCH_DEBOUNCE_MS = 400;
 const MIN_QUERY_LENGTH = 2;
 const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024;
+const MAX_PHOTOS = 6;
 
 export default function AddAttractionPage() {
   const { data: session, status } = useSession();
@@ -25,8 +26,8 @@ export default function AddAttractionPage() {
   const [category, setCategory] = useState("");
   const [categoryError, setCategoryError] = useState("");
 
-  const [photoFile, setPhotoFile] = useState(null);
-  const [photoPreviewUrl, setPhotoPreviewUrl] = useState("");
+  // Each item: { id, file, previewUrl }
+  const [photoItems, setPhotoItems] = useState([]);
   const [photoError, setPhotoError] = useState("");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -93,46 +94,64 @@ export default function AddAttractionPage() {
   }
 
   function handlePhotoChange(event) {
-    const file = event.target.files?.[0];
+    const newFiles = Array.from(event.target.files || []);
+    event.target.value = "";
     setPhotoError("");
 
-    if (photoPreviewUrl) {
-      URL.revokeObjectURL(photoPreviewUrl);
-    }
-
-    if (!file) {
-      setPhotoFile(null);
-      setPhotoPreviewUrl("");
+    if (newFiles.length === 0) {
       return;
     }
 
-    if (!ALLOWED_PHOTO_TYPES.includes(file.type)) {
-      setPhotoError("Photo must be a JPG, PNG, or WEBP image.");
-      setPhotoFile(null);
-      setPhotoPreviewUrl("");
-      event.target.value = "";
-      return;
-    }
+    setPhotoItems((current) => {
+      const accepted = [];
+      let rejectionReason = "";
 
-    if (file.size > MAX_PHOTO_SIZE_BYTES) {
-      setPhotoError("Photo is too large. Maximum size is 5MB.");
-      setPhotoFile(null);
-      setPhotoPreviewUrl("");
-      event.target.value = "";
-      return;
-    }
+      for (const file of newFiles) {
+        if (current.length + accepted.length >= MAX_PHOTOS) {
+          rejectionReason = `You can upload up to ${MAX_PHOTOS} photos.`;
+          break;
+        }
+        if (!ALLOWED_PHOTO_TYPES.includes(file.type)) {
+          rejectionReason = "Photos must be JPG, PNG, or WEBP images.";
+          continue;
+        }
+        if (file.size > MAX_PHOTO_SIZE_BYTES) {
+          rejectionReason = "Each photo must be 5MB or smaller.";
+          continue;
+        }
+        accepted.push({
+          id: crypto.randomUUID(),
+          file,
+          previewUrl: URL.createObjectURL(file),
+        });
+      }
 
-    setPhotoFile(file);
-    setPhotoPreviewUrl(URL.createObjectURL(file));
+      if (rejectionReason) {
+        setPhotoError(rejectionReason);
+      }
+
+      return [...current, ...accepted];
+    });
   }
 
-  function handleRemovePhoto() {
-    if (photoPreviewUrl) {
-      URL.revokeObjectURL(photoPreviewUrl);
-    }
-    setPhotoFile(null);
-    setPhotoPreviewUrl("");
+  function handleRemovePhoto(id) {
+    setPhotoItems((current) => {
+      const target = current.find((item) => item.id === id);
+      if (target) {
+        URL.revokeObjectURL(target.previewUrl);
+      }
+      return current.filter((item) => item.id !== id);
+    });
     setPhotoError("");
+  }
+
+  function clearAllPhotos() {
+    setPhotoItems((current) => {
+      for (const item of current) {
+        URL.revokeObjectURL(item.previewUrl);
+      }
+      return [];
+    });
   }
 
   async function handleSubmit(event) {
@@ -158,8 +177,8 @@ export default function AddAttractionPage() {
       formData.set("googlePlaceId", selectedPlace.placeId);
       formData.set("category", category);
       formData.set("sessionToken", sessionToken);
-      if (photoFile) {
-        formData.set("photo", photoFile);
+      for (const item of photoItems) {
+        formData.append("photos", item.file);
       }
 
       const response = await fetch("/api/attractions/submit", {
@@ -178,11 +197,7 @@ export default function AddAttractionPage() {
       setQuery("");
       setCategory("");
       setSessionToken(crypto.randomUUID());
-      if (photoPreviewUrl) {
-        URL.revokeObjectURL(photoPreviewUrl);
-      }
-      setPhotoFile(null);
-      setPhotoPreviewUrl("");
+      clearAllPhotos();
     } catch (error) {
       console.error("Failed to submit attraction:", error);
       setSubmitError(error.message);
@@ -348,29 +363,37 @@ export default function AddAttractionPage() {
             </div>
 
             <div className="mt-5">
-              <label htmlFor="photo" className="mb-2 block font-semibold text-attraction-ink">
-                Photo <span className="font-normal text-attraction-muted">(optional)</span>
+              <label htmlFor="photos" className="mb-2 block font-semibold text-attraction-ink">
+                Photos <span className="font-normal text-attraction-muted">(optional)</span>
               </label>
 
-              {photoPreviewUrl ? (
-                <div className="flex items-center gap-4">
-                  <img
-                    src={photoPreviewUrl}
-                    alt="Selected photo preview"
-                    className="h-20 w-20 rounded-lg object-cover"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleRemovePhoto}
-                    className="rounded-[10px] border border-attraction-border-strong bg-white px-4 py-2 text-sm font-semibold text-attraction-primary-dark transition hover:bg-attraction-primary-soft"
-                  >
-                    Remove photo
-                  </button>
+              {photoItems.length > 0 && (
+                <div className="mb-3 flex flex-wrap gap-3">
+                  {photoItems.map((item) => (
+                    <div key={item.id} className="relative">
+                      <img
+                        src={item.previewUrl}
+                        alt="Selected photo preview"
+                        className="h-20 w-20 rounded-lg object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleRemovePhoto(item.id)}
+                        aria-label="Remove photo"
+                        className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full border border-attraction-border-strong bg-white text-xs font-bold text-attraction-error shadow-sm transition hover:bg-red-50"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              ) : (
+              )}
+
+              {photoItems.length < MAX_PHOTOS && (
                 <input
-                  id="photo"
+                  id="photos"
                   type="file"
+                  multiple
                   accept="image/jpeg,image/png,image/webp"
                   onChange={handlePhotoChange}
                   className="w-full text-sm text-attraction-body file:mr-4 file:rounded-lg file:border-0 file:bg-attraction-primary-soft file:px-4 file:py-2 file:text-sm file:font-semibold file:text-attraction-primary"
@@ -378,7 +401,7 @@ export default function AddAttractionPage() {
               )}
 
               <p className="mt-2 text-xs text-attraction-muted">
-                JPG, PNG, or WEBP, up to 5MB. You can skip this — submission works with zero photos too.
+                JPG, PNG, or WEBP, up to 5MB each, up to {MAX_PHOTOS} photos. You can skip this — submission works with zero photos too.
               </p>
 
               {photoError && (
