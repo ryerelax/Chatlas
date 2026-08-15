@@ -52,9 +52,21 @@ Do not install packages only to make the dependency list appear more complete.
 
 ---
 
-## 3. Layered Project Structure
+## 3. Architecture and Layered Project Structure
 
+<<<<<<< HEAD
+Chatlas uses a Layered Architecture with three distinctive logical layers:
+
+1. Presentation Layer
+2. Business Logic Layer
+3. Data Access Layer
+
+All three logical layers are implemented inside one full-stack Next.js Progressive Web Application.
+
+The `infrastructure` folder contains supporting technical helpers. It is not a fourth logical business layer.
+=======
 Chatlas uses a Layered Architecture with three logical layers — Presentation, Business Logic, and Data Access — implemented inside one full-stack Next.js application. `infrastructure/` holds supporting technical helpers; it is not a fourth logical business layer.
+>>>>>>> development
 
 The dependency direction is:
 
@@ -68,6 +80,60 @@ Data Access Layer
 MongoDB Atlas
 ```
 
+<<<<<<< HEAD
+For HTTP-based interactions, the normal flow is:
+
+```text
+Page or Component
+        ↓
+Next.js Route Handler
+        ↓
+Service
+        ↓
+Repository
+        ↓
+Mongoose Model
+        ↓
+MongoDB Atlas
+```
+
+Use the following project structure:
+
+```text
+src/
+├── app/
+│   ├── api/
+│   │   └── attractions/
+│   │       ├── route.js
+│   │       └── [id]/
+│   │           └── route.js
+│   ├── attractions/
+│   │   └── [id]/
+│   │       └── page.js
+│   ├── layout.js
+│   ├── page.js
+│   └── globals.css
+│
+├── presentation/
+│   └── components/
+│       ├── Header.js
+│       ├── AttractionCard.js
+│       └── AttractionList.js
+│
+├── business/
+│   └── services/
+│       └── attractionService.js
+│
+├── data/
+│   ├── models/
+│   │   └── Attraction.js
+│   └── repositories/
+│       └── attractionRepository.js
+│
+└── infrastructure/
+    └── database/
+        └── mongodb.js
+=======
 Use the following structure:
 
 ```text
@@ -91,6 +157,7 @@ src/
 └── infrastructure/
     ├── database/                  # MongoDB connection helper
     └── external/                  # Third-party API clients (Cloudinary, Google Places API (New))
+>>>>>>> development
 ```
 
 `src/app/`, `src/auth.ts`, `src/auth.config.ts`, and `src/middleware.js` stay exactly where Next.js/Auth.js require them — do not move these into a nested layer folder even though they implement Presentation/Business-adjacent behaviour.
@@ -102,7 +169,10 @@ Locations:
 ```text
 src/app/
 src/presentation/components/
+<<<<<<< HEAD
+=======
 src/presentation/lib/
+>>>>>>> development
 ```
 
 Responsibilities:
@@ -121,17 +191,51 @@ Responsibilities:
 
 Rules:
 
+<<<<<<< HEAD
+- Keep route-specific pages and layouts inside `src/app/`.
+- Keep reusable UI components inside `src/presentation/components/`.
+- Do not query MongoDB directly from React components.
+- Do not import Mongoose models into pages or components.
+- Do not place repository logic inside pages.
+=======
 - Do not query MongoDB directly from React components.
 - Do not place Mongoose logic inside pages.
 - Keep reusable interface elements inside `src/presentation/components/`.
 - Keep route-specific pages and layouts inside `src/app/`.
 - A file only belongs in `src/presentation/lib/` if it has no meaning outside the browser (e.g. it touches `window`/`document`, or is only ever imported by a `"use client"` component). If it also gets used by a script or server code, it belongs in Business Logic or Infrastructure instead.
+>>>>>>> development
 
-### 3.2 Business Logic Layer
+### 3.2 Route Handlers / Application Entry Points
 
 Location:
 
 ```text
+<<<<<<< HEAD
+src/app/api/
+```
+
+Responsibilities:
+
+- Receive HTTP requests
+- Read route parameters and query parameters
+- Call Business Logic services
+- Return JSON responses
+- Apply suitable HTTP status codes
+
+Rules:
+
+- Route Handlers must call services.
+- Route Handlers must not call repositories or Mongoose models directly.
+- Route Handlers must not contain reusable business rules.
+- Route Handlers are application entry points, not a separate logical layer.
+
+### 3.3 Business Logic Layer
+
+Location:
+
+```text
+=======
+>>>>>>> development
 src/business/services/
 ```
 
@@ -140,56 +244,102 @@ Responsibilities:
 - Input normalization
 - Validation
 - Business rules
+- Authentication and authorization rules
 - Visibility rules
+<<<<<<< HEAD
+- Exploration progress calculation
+- Coordinating repository calls
+- Coordinating external-service operations
+- Preparing data for Route Handlers or pages
+=======
 - Classification / derivation rules (e.g. deriving a location zone from an address)
 - Calling repository functions
 - Preparing data for API routes or pages
 - Orchestrating external API calls into a repository update (e.g. the Places → Cloudinary photo/description sync services), even when only invoked from a maintenance script under `scripts/`, not from a live Route Handler
+>>>>>>> development
 
 Rules:
 
 - Keep business rules out of React components.
 - Keep business rules out of repositories.
-- Services may call repositories, but repositories must not call services.
+- Services may call repositories.
+- Repositories must not call services.
+- Services must not contain JSX or UI styling.
 
-### 3.3 Data Access Layer
+### 3.4 Data Access Layer
 
 Locations:
 
 ```text
+<<<<<<< HEAD
+src/data/models/
+src/data/repositories/
+=======
 src/data/repositories/
 src/data/models/
+>>>>>>> development
 ```
 
 Responsibilities:
 
 - Mongoose schemas and models
 - MongoDB queries
-- Database filtering
-- Database sorting
+- Data retrieval, creation, updating, and deletion
+- Database filtering and sorting
 - Returning database results to services
 
 Rules:
 
-- Pages and components must not call Mongoose models directly.
-- API routes should call services instead of repositories or models directly.
+- Keep Mongoose models inside `src/data/models/`.
+- Keep MongoDB queries inside `src/data/repositories/`.
+- Pages and components must not call repositories or models directly.
+- Route Handlers must not call repositories or models directly.
 - Repositories must not contain presentation logic.
+- Repositories must not contain reusable business-policy decisions.
 
-### 3.4 Shared Infrastructure
+### 3.5 Supporting Infrastructure
 
 Locations:
 
 ```text
+<<<<<<< HEAD
+src/infrastructure/
+```
+
+Current database helper:
+
+```text
+src/infrastructure/database/mongodb.js
+=======
 src/infrastructure/database/    # MongoDB connection helper
 src/infrastructure/external/    # Third-party API clients (Cloudinary, Google Places API (New))
+>>>>>>> development
 ```
 
 Responsibilities:
 
+<<<<<<< HEAD
+- MongoDB connection management
+- External API clients
+- Image-storage clients
+- Authentication-provider configuration
+- Shared technical configuration
+- Server-side integration helpers
+
+Rules:
+
+- Infrastructure supports the three logical layers.
+- Infrastructure must not contain page-specific UI.
+- Infrastructure must not contain module business rules.
+- Private credentials must come from environment variables.
+
+<!-- TODO: Add external-service infrastructure folders only when the related integrations are implemented. -->
+=======
 - MongoDB connection helper (`database/mongodb.js`)
 - External service clients (`external/cloudinary.js`, `external/googlePlaces.js`)
 - Shared configuration
 - Server-side infrastructure code
+>>>>>>> development
 
 Rules:
 
@@ -316,7 +466,14 @@ Use the configured `@/*` alias for project imports where practical.
 Preferred:
 
 ```js
+<<<<<<< HEAD
+import Header from "@/presentation/components/Header";
+import { getAttractions } from "@/business/services/attractionService";
 import Attraction from "@/data/models/Attraction";
+import { connectToDatabase } from "@/infrastructure/database/mongodb";
+=======
+import Attraction from "@/data/models/Attraction";
+>>>>>>> development
 ```
 
 Avoid unnecessarily long relative imports such as:
@@ -645,7 +802,11 @@ A task is considered done only when all relevant conditions below are satisfied:
 
 - The requested feature or change is implemented.
 - The feature works locally.
-- The code follows the layered architecture.
+- The code follows the three-layer architecture.
+- Pages and reusable UI remain in the Presentation Layer.
+- Reusable business rules remain in the Business Logic Layer.
+- MongoDB queries remain in the Data Access Layer.
+- Infrastructure helpers do not contain UI or module business rules.
 - React components do not query MongoDB directly.
 - API routes call services instead of Mongoose models directly.
 - Services contain validation and business rules.
@@ -779,6 +940,25 @@ The current attraction module supports:
 - Offline/PWA caching for previously-viewed attractions, images, and search results, with a dedicated offline fallback page
 - Shared site header and navigation
 
+<<<<<<< HEAD
+The current Attraction Explorer files are arranged as follows:
+
+```text
+Presentation Layer:
+- src/app/
+- src/presentation/components/
+
+Business Logic Layer:
+- src/business/services/attractionService.js
+
+Data Access Layer:
+- src/data/models/Attraction.js
+- src/data/repositories/attractionRepository.js
+
+Supporting Infrastructure:
+- src/infrastructure/database/mongodb.js
+```
+=======
 The user module (Tan Yi Jia, `feature/user-mgmt`) supports:
 
 - Google sign-in via Auth.js v5 (`next-auth` beta), configured in `src/auth.ts` / `src/auth.config.ts`
@@ -786,6 +966,7 @@ The user module (Tan Yi Jia, `feature/user-mgmt`) supports:
 - Profile view and edit pages
 
 Maintenance/data-quality scripts (`scripts/`, run via `npm run <script>`, not part of the live app) exist for one-time or re-runnable backfill and repair jobs: photo sync, description sync, location-area classification, and address repair. See `package.json` for the exact commands.
+>>>>>>> development
 
 <!-- TODO: Update this section whenever the implemented feature set changes. -->
 
