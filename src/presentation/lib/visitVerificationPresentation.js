@@ -42,23 +42,270 @@ export function getVerificationAuthenticationState(
   visitedDataStatus,
   { developmentPreviewActive = false } = {}
 ) {
+  if (developmentPreviewActive) {
+    return {
+      authenticationState: "unavailable",
+      authenticationConfirmed: false,
+      authenticationPending: false,
+      authenticationRequired: false,
+      authenticationUnavailable: true,
+    };
+  }
+
   const authenticationConfirmed =
-    visitedDataStatus === VISITED_DATA_STATUS.SUCCESS &&
-    !developmentPreviewActive;
+    visitedDataStatus === VISITED_DATA_STATUS.SUCCESS;
   const authenticationPending =
     visitedDataStatus === VISITED_DATA_STATUS.LOADING;
   const authenticationRequired =
     visitedDataStatus === VISITED_DATA_STATUS.AUTH_REQUIRED;
+  const authenticationUnavailable =
+    !authenticationConfirmed &&
+    !authenticationPending &&
+    !authenticationRequired;
+  const authenticationState = authenticationConfirmed
+    ? "confirmed"
+    : authenticationPending
+      ? "pending"
+      : authenticationRequired
+        ? "required"
+        : "unavailable";
 
   return {
+    authenticationState,
     authenticationConfirmed,
     authenticationPending,
     authenticationRequired,
-    authenticationUnavailable:
-      !authenticationConfirmed &&
-      !authenticationPending &&
-      !authenticationRequired,
+    authenticationUnavailable,
   };
+}
+
+export function createVisitVerificationOperationController({
+  authenticationConfirmed = false,
+  stopStream = stopMediaStream,
+  revokeUrl = revokeObjectUrl,
+} = {}) {
+  let isAuthenticationConfirmed = authenticationConfirmed === true;
+  let currentToken = 0;
+  let locationClaimed = false;
+  let cameraClaimed = false;
+  let activeStream = null;
+  let activePreviewUrl = "";
+  let activeSubmitController = null;
+
+  function releaseStream() {
+    const stream = activeStream;
+    activeStream = null;
+
+    if (stream) {
+      try {
+        stopStream(stream);
+      } catch {
+        // Continue releasing the remaining operation resources.
+      }
+    }
+  }
+
+  function clearPreview() {
+    const objectUrl = activePreviewUrl;
+    activePreviewUrl = "";
+
+    if (objectUrl) {
+      try {
+        revokeUrl(objectUrl);
+      } catch {
+        // Continue releasing the remaining operation resources.
+      }
+    }
+  }
+
+  function isActiveStream(stream) {
+    return Boolean(stream) && activeStream === stream;
+  }
+
+  function abortSubmission() {
+    const controller = activeSubmitController;
+    activeSubmitController = null;
+
+    if (controller) {
+      try {
+        controller.abort();
+      } catch {
+        // Continue releasing the remaining operation resources.
+      }
+    }
+  }
+
+  function invalidate() {
+    currentToken += 1;
+    locationClaimed = false;
+    cameraClaimed = false;
+    abortSubmission();
+    releaseStream();
+    clearPreview();
+    return currentToken;
+  }
+
+  function isCurrent(operationToken) {
+    return (
+      isAuthenticationConfirmed &&
+      Number.isInteger(operationToken) &&
+      operationToken === currentToken
+    );
+  }
+
+  function updateAuthentication(nextAuthenticationConfirmed) {
+    const wasAuthenticationConfirmed = isAuthenticationConfirmed;
+    isAuthenticationConfirmed = nextAuthenticationConfirmed === true;
+
+    if (isAuthenticationConfirmed) {
+      return {
+        authenticationConfirmed: true,
+        operationInvalidated: false,
+      };
+    }
+
+    const operationInvalidated =
+      wasAuthenticationConfirmed ||
+      locationClaimed ||
+      cameraClaimed ||
+      Boolean(activeStream || activePreviewUrl || activeSubmitController);
+
+    if (operationInvalidated) {
+      invalidate();
+    }
+
+    return {
+      authenticationConfirmed: false,
+      operationInvalidated,
+    };
+  }
+
+  function claimLocation() {
+    if (
+      !isAuthenticationConfirmed ||
+      locationClaimed ||
+      cameraClaimed ||
+      activeSubmitController
+    ) {
+      return null;
+    }
+
+    const operationToken = invalidate();
+    locationClaimed = true;
+    return operationToken;
+  }
+
+  function completeLocation(operationToken) {
+    if (!isCurrent(operationToken) || !locationClaimed) {
+      return false;
+    }
+
+    locationClaimed = false;
+    return true;
+  }
+
+  function claimCamera(operationToken) {
+    if (
+      !isCurrent(operationToken) ||
+      locationClaimed ||
+      cameraClaimed ||
+      activeSubmitController
+    ) {
+      return false;
+    }
+
+    cameraClaimed = true;
+    return true;
+  }
+
+  function resolveCamera(operationToken, stream) {
+    if (!isCurrent(operationToken) || !cameraClaimed) {
+      try {
+        stopStream(stream);
+      } catch {
+        // A stale stream must not interrupt the current operation.
+      }
+      return false;
+    }
+
+    cameraClaimed = false;
+    releaseStream();
+    activeStream = stream;
+    return true;
+  }
+
+  function setPreview(operationToken, objectUrl) {
+    if (!isCurrent(operationToken)) {
+      if (objectUrl) {
+        try {
+          revokeUrl(objectUrl);
+        } catch {
+          // A stale preview must not interrupt the current operation.
+        }
+      }
+      return false;
+    }
+
+    clearPreview();
+    activePreviewUrl = objectUrl;
+    return true;
+  }
+
+  function claimSubmission(operationToken, controller) {
+    if (
+      !isCurrent(operationToken) ||
+      locationClaimed ||
+      cameraClaimed ||
+      activeSubmitController
+    ) {
+      return false;
+    }
+
+    activeSubmitController = controller;
+    return true;
+  }
+
+  function completeSubmission(operationToken, controller) {
+    if (
+      !isCurrent(operationToken) ||
+      activeSubmitController !== controller
+    ) {
+      return false;
+    }
+
+    activeSubmitController = null;
+    return true;
+  }
+
+  function restartOperation() {
+    if (
+      !isAuthenticationConfirmed ||
+      locationClaimed ||
+      cameraClaimed ||
+      activeSubmitController
+    ) {
+      return null;
+    }
+
+    return invalidate();
+  }
+
+  return Object.freeze({
+    updateAuthentication,
+    claimLocation,
+    completeLocation,
+    claimCamera,
+    resolveCamera,
+    releaseStream,
+    isActiveStream,
+    setPreview,
+    clearPreview,
+    claimSubmission,
+    completeSubmission,
+    restartOperation,
+    isCurrent,
+    invalidate,
+  });
 }
 
 export function getNearbyCandidatePresentations(attractions, position) {

@@ -783,13 +783,7 @@ export default function ExplorationMap() {
       </div>
 
       <VisitVerificationFlow
-        key={
-          verificationAuthenticationState.authenticationRequired
-            ? "authentication-required"
-            : verificationAuthenticationState.authenticationUnavailable
-              ? "authentication-unavailable"
-              : "verification-available"
-        }
+        key={verificationAuthenticationState.authenticationState}
         attractions={mapAttractions}
         authenticationConfirmed={
           verificationAuthenticationState.authenticationConfirmed

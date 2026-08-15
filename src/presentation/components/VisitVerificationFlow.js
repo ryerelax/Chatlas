@@ -5,15 +5,14 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MAX_VISIT_DISTANCE_METRES } from "@/business/services/visitVerificationRules";
 import {
+  createVisitVerificationOperationController,
   createVerifiedVisitFormData,
   getCameraErrorMessage,
   getCandidateSelectionMode,
   getGeolocationErrorMessage,
   getNearbyCandidatePresentations,
   normaliseBrowserPosition,
-  revokeObjectUrl,
   selectSafeApiMessage,
-  stopMediaStream,
 } from "@/presentation/lib/visitVerificationPresentation";
 
 const FLOW_STATE = Object.freeze({
@@ -55,11 +54,12 @@ export default function VisitVerificationFlow({
   onVerified,
 }) {
   const videoRef = useRef(null);
-  const streamRef = useRef(null);
-  const previewUrlRef = useRef("");
-  const submitControllerRef = useRef(null);
-  const operationIdRef = useRef(0);
-  const mountedRef = useRef(false);
+  const operationTokenRef = useRef(null);
+  const [operationController] = useState(() =>
+    createVisitVerificationOperationController({
+      authenticationConfirmed,
+    })
+  );
   const [flowState, setFlowState] = useState(FLOW_STATE.IDLE);
   const [position, setPosition] = useState(null);
   const [candidates, setCandidates] = useState([]);
@@ -91,48 +91,27 @@ export default function VisitVerificationFlow({
     [candidates, selectedAttractionId]
   );
 
-  const isOperationActive = useCallback(
-    (operationId) =>
-      mountedRef.current && operationIdRef.current === operationId,
-    []
-  );
-
-  const abortSubmission = useCallback(() => {
-    submitControllerRef.current?.abort();
-    submitControllerRef.current = null;
-  }, []);
-
   const releaseActiveStream = useCallback(() => {
-    const stream = streamRef.current;
-    streamRef.current = null;
-    stopMediaStream(stream);
-
-    if (mountedRef.current) {
-      setCameraStream(null);
-      setCameraReady(false);
-    }
-  }, []);
-
-  const releasePreview = useCallback(() => {
-    const objectUrl = previewUrlRef.current;
-    previewUrlRef.current = "";
-    revokeObjectUrl(objectUrl);
-
-    if (mountedRef.current) {
-      setPreviewUrl("");
-    }
-  }, []);
+    operationController.releaseStream();
+    setCameraStream(null);
+    setCameraReady(false);
+  }, [operationController]);
 
   const failFlow = useCallback(
     (operationId, message, { requireSignIn = false } = {}) => {
-      if (!isOperationActive(operationId)) {
+      if (!operationController.isCurrent(operationId)) {
         return;
       }
 
-      operationIdRef.current += 1;
-      abortSubmission();
-      releaseActiveStream();
-      releasePreview();
+      if (requireSignIn) {
+        operationController.updateAuthentication(false);
+      } else {
+        operationController.invalidate("error");
+      }
+      operationTokenRef.current = null;
+      setCameraStream(null);
+      setCameraReady(false);
+      setPreviewUrl("");
       setPhotoBlob(null);
       setCapturePending(false);
       setErrorMessage(message);
@@ -141,12 +120,12 @@ export default function VisitVerificationFlow({
       setAuthenticationUnavailableVisible(false);
       setFlowState(FLOW_STATE.ERROR);
     },
-    [abortSubmission, isOperationActive, releaseActiveStream, releasePreview]
+    [operationController]
   );
 
   const openCamera = useCallback(
     async (operationId, attractionId) => {
-      if (!isOperationActive(operationId)) {
+      if (!operationController.claimCamera(operationId)) {
         return;
       }
 
@@ -171,21 +150,18 @@ export default function VisitVerificationFlow({
         return;
       }
 
-      if (!isOperationActive(operationId)) {
-        stopMediaStream(stream);
+      if (!operationController.resolveCamera(operationId, stream)) {
         return;
       }
 
-      releaseActiveStream();
-      streamRef.current = stream;
       setCameraStream(stream);
     },
-    [failFlow, isOperationActive, releaseActiveStream]
+    [failFlow, operationController]
   );
 
   const handleLocatedPosition = useCallback(
     (operationId, browserPosition) => {
-      if (!isOperationActive(operationId)) {
+      if (!operationController.completeLocation(operationId)) {
         return;
       }
 
@@ -230,7 +206,7 @@ export default function VisitVerificationFlow({
       setSelectedAttractionId("");
       setFlowState(FLOW_STATE.CHOOSING);
     },
-    [failFlow, isOperationActive, openCamera, supportedAttractions]
+    [failFlow, openCamera, operationController, supportedAttractions]
   );
 
   const startVerification = useCallback(() => {
@@ -251,11 +227,17 @@ export default function VisitVerificationFlow({
       return;
     }
 
-    abortSubmission();
-    releaseActiveStream();
-    releasePreview();
-    const operationId = operationIdRef.current + 1;
-    operationIdRef.current = operationId;
+    const operationId = operationController.claimLocation();
+
+    if (operationId === null) {
+      setAuthenticationUnavailableVisible(true);
+      return;
+    }
+
+    operationTokenRef.current = operationId;
+    setCameraStream(null);
+    setCameraReady(false);
+    setPreviewUrl("");
     setPosition(null);
     setCandidates([]);
     setSelectedAttractionId("");
@@ -280,23 +262,22 @@ export default function VisitVerificationFlow({
       GEOLOCATION_OPTIONS
     );
   }, [
-    abortSubmission,
     authenticationConfirmed,
     authenticationPending,
     authenticationRequired,
     authenticationUnavailable,
     failFlow,
     handleLocatedPosition,
-    releaseActiveStream,
-    releasePreview,
+    operationController,
     sessionAuthenticationRequired,
   ]);
 
   const closeFlow = useCallback(() => {
-    operationIdRef.current += 1;
-    abortSubmission();
-    releaseActiveStream();
-    releasePreview();
+    operationController.invalidate("close");
+    operationTokenRef.current = null;
+    setCameraStream(null);
+    setCameraReady(false);
+    setPreviewUrl("");
     setPosition(null);
     setCandidates([]);
     setSelectedAttractionId("");
@@ -307,14 +288,14 @@ export default function VisitVerificationFlow({
     setSessionAuthenticationRequired(false);
     setCapturePending(false);
     setFlowState(FLOW_STATE.IDLE);
-  }, [abortSubmission, releaseActiveStream, releasePreview]);
+  }, [operationController]);
 
   const continueWithSelectedAttraction = useCallback(() => {
     if (!selectedAttractionId) {
       return;
     }
 
-    void openCamera(operationIdRef.current, selectedAttractionId);
+    void openCamera(operationTokenRef.current, selectedAttractionId);
   }, [openCamera, selectedAttractionId]);
 
   const capturePhoto = useCallback(() => {
@@ -326,8 +307,13 @@ export default function VisitVerificationFlow({
       return;
     }
 
-    const operationId = operationIdRef.current;
+    const operationId = operationTokenRef.current;
     const video = videoRef.current;
+
+    if (!operationController.isCurrent(operationId)) {
+      return;
+    }
+
     setCapturePending(true);
 
     try {
@@ -347,7 +333,7 @@ export default function VisitVerificationFlow({
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
       canvas.toBlob(
         (blob) => {
-          if (!isOperationActive(operationId)) {
+          if (!operationController.isCurrent(operationId)) {
             return;
           }
 
@@ -370,13 +356,10 @@ export default function VisitVerificationFlow({
             return;
           }
 
-          if (!isOperationActive(operationId)) {
-            revokeObjectUrl(objectUrl);
+          if (!operationController.setPreview(operationId, objectUrl)) {
             return;
           }
 
-          releasePreview();
-          previewUrlRef.current = objectUrl;
           setPreviewUrl(objectUrl);
           setPhotoBlob(blob);
           setCapturePending(false);
@@ -400,33 +383,48 @@ export default function VisitVerificationFlow({
     capturePending,
     failFlow,
     flowState,
-    isOperationActive,
+    operationController,
     releaseActiveStream,
-    releasePreview,
   ]);
 
   const retakePhoto = useCallback(() => {
-    releasePreview();
+    const operationId = operationController.restartOperation("retake");
+
+    if (operationId === null) {
+      setAuthenticationUnavailableVisible(true);
+      return;
+    }
+
+    operationTokenRef.current = operationId;
+    setCameraStream(null);
+    setCameraReady(false);
+    setPreviewUrl("");
     setPhotoBlob(null);
-    const operationId = operationIdRef.current + 1;
-    operationIdRef.current = operationId;
     void openCamera(operationId, selectedAttractionId);
-  }, [openCamera, releasePreview, selectedAttractionId]);
+  }, [openCamera, operationController, selectedAttractionId]);
 
   const submitPhoto = useCallback(async () => {
     if (
       flowState !== FLOW_STATE.PREVIEW ||
       !photoBlob ||
       !position ||
-      !selectedAttractionId ||
-      submitControllerRef.current
+      !selectedAttractionId
     ) {
       return;
     }
 
-    const operationId = operationIdRef.current;
-    const controller = new AbortController();
-    submitControllerRef.current = controller;
+    const operationId = operationTokenRef.current;
+    const requestController = new AbortController();
+
+    if (
+      !operationController.claimSubmission(
+        operationId,
+        requestController
+      )
+    ) {
+      return;
+    }
+
     setFlowState(FLOW_STATE.SUBMITTING);
 
     let response;
@@ -438,10 +436,13 @@ export default function VisitVerificationFlow({
           attractionId: selectedAttractionId,
           position,
         }),
-        signal: controller.signal,
+        signal: requestController.signal,
       });
     } catch (error) {
-      if (error?.name === "AbortError" || !isOperationActive(operationId)) {
+      if (
+        error?.name === "AbortError" ||
+        !operationController.isCurrent(operationId)
+      ) {
         return;
       }
 
@@ -456,11 +457,14 @@ export default function VisitVerificationFlow({
       result = null;
     }
 
-    if (!isOperationActive(operationId)) {
+    if (
+      !operationController.completeSubmission(
+        operationId,
+        requestController
+      )
+    ) {
       return;
     }
-
-    submitControllerRef.current = null;
 
     if (!response.ok) {
       const requireSignIn = response.status === 401;
@@ -477,8 +481,11 @@ export default function VisitVerificationFlow({
       return;
     }
 
-    releaseActiveStream();
-    releasePreview();
+    operationController.invalidate("success");
+    operationTokenRef.current = null;
+    setCameraStream(null);
+    setCameraReady(false);
+    setPreviewUrl("");
     setPhotoBlob(null);
     setCapturePending(false);
     setErrorMessage("");
@@ -492,29 +499,23 @@ export default function VisitVerificationFlow({
   }, [
     failFlow,
     flowState,
-    isOperationActive,
     onVerified,
+    operationController,
     photoBlob,
     position,
-    releaseActiveStream,
-    releasePreview,
     selectedAttractionId,
   ]);
 
   useEffect(() => {
-    mountedRef.current = true;
+    operationController.updateAuthentication(authenticationConfirmed);
+  }, [authenticationConfirmed, operationController]);
 
+  useEffect(() => {
     return () => {
-      mountedRef.current = false;
-      operationIdRef.current += 1;
-      submitControllerRef.current?.abort();
-      submitControllerRef.current = null;
-      stopMediaStream(streamRef.current);
-      streamRef.current = null;
-      revokeObjectUrl(previewUrlRef.current);
-      previewUrlRef.current = "";
+      operationController.invalidate("unmount");
+      operationTokenRef.current = null;
     };
-  }, []);
+  }, [operationController]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -524,13 +525,13 @@ export default function VisitVerificationFlow({
     }
 
     video.srcObject = cameraStream;
-    const operationId = operationIdRef.current;
+    const operationId = operationTokenRef.current;
     const playback = video.play();
 
     playback?.catch((error) => {
       if (
-        streamRef.current === cameraStream &&
-        isOperationActive(operationId)
+        operationController.isActiveStream(cameraStream) &&
+        operationController.isCurrent(operationId)
       ) {
         failFlow(operationId, getCameraErrorMessage(error));
       }
@@ -541,7 +542,7 @@ export default function VisitVerificationFlow({
         video.srcObject = null;
       }
     };
-  }, [cameraStream, failFlow, isOperationActive]);
+  }, [cameraStream, failFlow, operationController]);
 
   return (
     <section
@@ -648,6 +649,13 @@ export default function VisitVerificationFlow({
           <p className="mt-1 text-sm text-[#65748A]">
             Keep this page open while your device finds a fresh GPS position.
           </p>
+          <button
+            type="button"
+            onClick={closeFlow}
+            className={`${BUTTON_CLASS} mt-4 w-full border border-[#BBC8D0] bg-white text-[#405066] hover:bg-[#F1F4F6] sm:w-auto`}
+          >
+            Cancel
+          </button>
         </div>
       )}
 
@@ -733,7 +741,7 @@ export default function VisitVerificationFlow({
                   : ""
               }`}
               onCanPlay={() => {
-                if (streamRef.current) {
+                if (operationController.isActiveStream(cameraStream)) {
                   setCameraReady(true);
                 }
               }}
@@ -793,6 +801,13 @@ export default function VisitVerificationFlow({
               This photo will be publicly visible. Avoid capturing faces or private information.
             </p>
             <div className="mt-4 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={closeFlow}
+                className={`${BUTTON_CLASS} border border-[#BBC8D0] bg-white text-[#405066] hover:bg-[#F1F4F6]`}
+              >
+                Cancel
+              </button>
               <button
                 type="button"
                 onClick={retakePhoto}
