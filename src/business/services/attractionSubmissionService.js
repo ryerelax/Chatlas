@@ -10,6 +10,7 @@ import {
 import { isValidAttractionCategory } from "@/business/services/attractionCategories";
 import { classifyLocationArea } from "@/business/services/locationAreas";
 import { isValidPhotoType, isValidPhotoSize } from "@/business/services/photoValidation";
+import { MAX_DESCRIPTION_LENGTH, isValidDescriptionLength } from "@/business/services/descriptionValidation";
 
 const MIN_SEARCH_INPUT_LENGTH = 2;
 const MAX_PHOTOS_PER_SUBMISSION = 6;
@@ -33,9 +34,9 @@ export async function searchPlaces(input, { sessionToken, apiKey } = {}) {
 
 // Decision 4: Registered-User self-service submission. Publishes immediately
 // on success — no admin review queue. Validation order: required fields,
-// category enum, optional photos (count/type/size), duplicate googlePlaceId,
-// then fetch authoritative place details, upload any photos, and create the
-// record.
+// category enum, optional description (length), optional photos
+// (count/type/size), duplicate googlePlaceId, then fetch authoritative
+// place details, upload any photos, and create the record.
 //
 // Photos are entirely optional — submission must succeed with zero photos,
 // same as before this existed. When provided, they're uploaded directly (not
@@ -44,9 +45,18 @@ export async function searchPlaces(input, { sessionToken, apiKey } = {}) {
 // sync:photos's own skip condition (an empty/missing `photos` array) already
 // leaves it alone on default runs — see the Decision 4 photo-upload
 // investigation for the one narrow exception (--force).
+//
+// Description is also entirely optional, and NOT Melaka-gated — unlike the
+// wiki-style community editing of existing attractions, writing a
+// description at submission time is part of the same "logged-in only, no
+// location requirement" rule as submitting the attraction itself.
+// descriptionLastEditedBy is deliberately not set here — that field is
+// reserved for the post-hoc community-editing feature; submittedBy already
+// covers full attribution of the initial submission.
 export async function submitAttraction({
   googlePlaceId,
   category,
+  description = "",
   sessionToken,
   session,
   apiKey,
@@ -60,6 +70,14 @@ export async function submitAttraction({
 
   if (!isValidAttractionCategory(category)) {
     throw new InvalidSubmissionError("Please choose a valid category.");
+  }
+
+  const normalizedDescription = typeof description === "string" ? description.trim() : "";
+
+  if (!isValidDescriptionLength(normalizedDescription)) {
+    throw new InvalidSubmissionError(
+      `Description must be ${MAX_DESCRIPTION_LENGTH} characters or fewer.`
+    );
   }
 
   if (photoFiles.length > MAX_PHOTOS_PER_SUBMISSION) {
@@ -99,6 +117,7 @@ export async function submitAttraction({
   return createAttraction({
     ...placeDetails,
     category,
+    description: normalizedDescription,
     locationArea,
     photos,
     submittedBy: {

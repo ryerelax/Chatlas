@@ -11,6 +11,7 @@ const MIN_QUERY_LENGTH = 2;
 const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024;
 const MAX_PHOTOS = 6;
+const MAX_DESCRIPTION_LENGTH = 2000;
 
 export default function AddAttractionPage() {
   const { data: session, status } = useSession();
@@ -25,6 +26,9 @@ export default function AddAttractionPage() {
   const [selectedPlace, setSelectedPlace] = useState(null);
   const [category, setCategory] = useState("");
   const [categoryError, setCategoryError] = useState("");
+
+  const [description, setDescription] = useState("");
+  const [descriptionError, setDescriptionError] = useState("");
 
   // Each item: { id, file, previewUrl }
   const [photoItems, setPhotoItems] = useState([]);
@@ -158,6 +162,7 @@ export default function AddAttractionPage() {
     event.preventDefault();
 
     setCategoryError("");
+    setDescriptionError("");
     setSubmitError("");
 
     if (!selectedPlace) {
@@ -170,12 +175,18 @@ export default function AddAttractionPage() {
       return;
     }
 
+    if (description.length > MAX_DESCRIPTION_LENGTH) {
+      setDescriptionError(`Description must be ${MAX_DESCRIPTION_LENGTH} characters or fewer.`);
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
       const formData = new FormData();
       formData.set("googlePlaceId", selectedPlace.placeId);
       formData.set("category", category);
+      formData.set("description", description);
       formData.set("sessionToken", sessionToken);
       for (const item of photoItems) {
         formData.append("photos", item.file);
@@ -196,6 +207,7 @@ export default function AddAttractionPage() {
       setSelectedPlace(null);
       setQuery("");
       setCategory("");
+      setDescription("");
       setSessionToken(crypto.randomUUID());
       clearAllPhotos();
     } catch (error) {
@@ -359,6 +371,30 @@ export default function AddAttractionPage() {
               </select>
               {categoryError && (
                 <p className="mt-2 text-sm text-attraction-error">{categoryError}</p>
+              )}
+            </div>
+
+            <div className="mt-5">
+              <label htmlFor="description" className="mb-2 block font-semibold text-attraction-ink">
+                Description <span className="font-normal text-attraction-muted">(optional)</span>
+              </label>
+              <textarea
+                id="description"
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                rows={4}
+                maxLength={MAX_DESCRIPTION_LENGTH}
+                placeholder="Share what makes this attraction worth visiting…"
+                className="w-full rounded-lg border border-attraction-border px-4 py-3 text-attraction-ink outline-none focus:border-attraction-primary"
+              />
+              <p className="mt-1 text-right text-xs text-attraction-muted">
+                {description.length} / {MAX_DESCRIPTION_LENGTH}
+              </p>
+              <p className="text-xs text-attraction-muted">
+                You can skip this — a placeholder will show until someone adds one.
+              </p>
+              {descriptionError && (
+                <p className="mt-2 text-sm text-attraction-error">{descriptionError}</p>
               )}
             </div>
 

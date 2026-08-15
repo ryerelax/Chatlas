@@ -25,6 +25,7 @@ export async function POST(request) {
     const formData = await request.formData();
     const googlePlaceId = formData.get("googlePlaceId");
     const category = formData.get("category");
+    const description = formData.get("description") || "";
     const sessionToken = formData.get("sessionToken");
     const photoEntries = formData
       .getAll("photos")
@@ -42,6 +43,7 @@ export async function POST(request) {
     const attraction = await submitAttraction({
       googlePlaceId,
       category,
+      description,
       sessionToken,
       session,
       apiKey: process.env.GOOGLE_PLACES_API_KEY,

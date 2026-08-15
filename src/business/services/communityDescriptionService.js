@@ -1,8 +1,7 @@
 import mongoose from "mongoose";
 import { updateAttractionDescriptionByUser } from "@/data/repositories/attractionRepository";
 import { isMelakaBasedUser } from "@/business/services/locationGate";
-
-const MAX_DESCRIPTION_LENGTH = 2000;
+import { MAX_DESCRIPTION_LENGTH, isValidDescriptionLength } from "@/business/services/descriptionValidation";
 
 // Any Melaka-based logged-in user can edit the "About this attraction" text
 // for any existing active attraction — direct edit, published immediately,
@@ -26,7 +25,7 @@ export async function updateCommunityDescription({ attractionId, session, descri
 
   const normalizedDescription = description.trim();
 
-  if (normalizedDescription.length > MAX_DESCRIPTION_LENGTH) {
+  if (!isValidDescriptionLength(normalizedDescription)) {
     throw new InvalidDescriptionError(
       `Description must be ${MAX_DESCRIPTION_LENGTH} characters or fewer.`
     );
