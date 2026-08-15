@@ -269,7 +269,7 @@ export function createExplorationPageState({
 }
 
 const PUBLIC_ATTRACTION_PAGE_PATTERN =
-  /^\/attractions\/[a-f\d]{24}(?:\/location)?\/?$/i;
+  /^\/attractions\/[A-Fa-f0-9]{24}(?:\/location)?\/?$/;
 
 export function isPublicPagePathname(pathname) {
   if (typeof pathname !== "string") {

@@ -21,6 +21,10 @@ const DEVELOPMENT_MAP_PREVIEW_MODES = new Set([
   "unavailable",
 ]);
 
+function isAbortError(error) {
+  return error?.name === "AbortError";
+}
+
 export function getDevelopmentVisitedPreviewMode(
   queryString,
   runtimeEnvironment
@@ -79,6 +83,7 @@ export function isDevelopmentVisitedPreviewEnabled(
  *   signal?: AbortSignal,
  *   fetchImpl?: typeof fetch,
  *   developmentPreview?: boolean,
+ *   developmentPreviewStatus?: "success" | "loading",
  *   previewAttractionIds?: unknown[],
  * }} options
  * @returns {Promise<{
@@ -91,16 +96,26 @@ export async function loadVisitedAttractionIds({
   signal,
   fetchImpl = globalThis.fetch,
   developmentPreview = false,
+  developmentPreviewStatus = VISITED_DATA_STATUS.SUCCESS,
   previewAttractionIds = [],
 } = {}) {
   if (
     process.env.NODE_ENV === "development" &&
     developmentPreview === true
   ) {
+    const isLoadingPreview =
+      developmentPreviewStatus === VISITED_DATA_STATUS.LOADING;
+
     return {
-      status: VISITED_DATA_STATUS.SUCCESS,
-      data: normaliseVisitedAttractionIds(previewAttractionIds),
-      message: DEVELOPMENT_PREVIEW_MESSAGE,
+      status: isLoadingPreview
+        ? VISITED_DATA_STATUS.LOADING
+        : VISITED_DATA_STATUS.SUCCESS,
+      data: isLoadingPreview
+        ? []
+        : normaliseVisitedAttractionIds(previewAttractionIds),
+      message: isLoadingPreview
+        ? DEVELOPMENT_LOADING_PREVIEW_MESSAGE
+        : DEVELOPMENT_PREVIEW_MESSAGE,
     };
   }
 
@@ -111,7 +126,7 @@ export async function loadVisitedAttractionIds({
       cache: "no-store",
     });
   } catch (error) {
-    if (error?.name === "AbortError") {
+    if (isAbortError(error)) {
       throw error;
     }
 
@@ -129,7 +144,11 @@ export async function loadVisitedAttractionIds({
   let result;
   try {
     result = await response?.json();
-  } catch {
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
+
     throw new Error(LOAD_ERROR_MESSAGE);
   }
 
@@ -152,6 +171,8 @@ export async function loadVisitedAttractionIds({
 export function createDevelopmentVisitedPreviewAdapter({
   supportedAttractions = [],
   mode = "visited",
+  fetchImpl = globalThis.fetch,
+  loadVisitedAttractionIdsImpl = loadVisitedAttractionIds,
 } = {}) {
   if (process.env.NODE_ENV !== "development") {
     return null;
@@ -173,17 +194,14 @@ export function createDevelopmentVisitedPreviewAdapter({
     );
 
   function createResult(signal) {
-    if (resolvedMode === "loading") {
-      return Promise.resolve({
-        status: VISITED_DATA_STATUS.LOADING,
-        data: [],
-        message: DEVELOPMENT_LOADING_PREVIEW_MESSAGE,
-      });
-    }
-
-    return loadVisitedAttractionIds({
+    return loadVisitedAttractionIdsImpl({
       signal,
+      fetchImpl,
       developmentPreview: true,
+      developmentPreviewStatus:
+        resolvedMode === "loading"
+          ? VISITED_DATA_STATUS.LOADING
+          : VISITED_DATA_STATUS.SUCCESS,
       previewAttractionIds: visitedAttractionCollection.getAttractionIds(),
     });
   }

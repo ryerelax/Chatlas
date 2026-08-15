@@ -445,6 +445,23 @@ test("production adapter preserves abort failures for the component boundary", a
   );
 });
 
+test("production adapter preserves AbortError from response JSON parsing", async () => {
+  const abortError = { name: "AbortError" };
+
+  await assert.rejects(
+    loadVisitedAttractionIds({
+      fetchImpl: async () => ({
+        status: 200,
+        ok: true,
+        json: async () => {
+          throw abortError;
+        },
+      }),
+    }),
+    (error) => error === abortError
+  );
+});
+
 test("the adapter returns mock visited IDs only while running in development", async () => {
   const originalNodeEnvironment = process.env.NODE_ENV;
 
@@ -645,13 +662,18 @@ test("production mode cannot create development preview controls", () => {
 
   try {
     process.env.NODE_ENV = "production";
+    let loaderCalls = 0;
 
     assert.equal(
       createDevelopmentVisitedPreviewAdapter({
         supportedAttractions: developmentPreviewAttractionFixtures,
+        loadVisitedAttractionIdsImpl: async () => {
+          loaderCalls += 1;
+        },
       }),
       null
     );
+    assert.equal(loaderCalls, 0);
   } finally {
     if (originalNodeEnvironment === undefined) {
       delete process.env.NODE_ENV;
@@ -765,19 +787,27 @@ test("development visited query previews never call the production fetch", async
         queryString,
         process.env.NODE_ENV
       );
+      let fetchCalls = 0;
+      let loaderCalls = 0;
+      let receivedFetchImpl;
+      const fetchImpl = async () => {
+        fetchCalls += 1;
+        throw new Error("Production fetch must not run for previews.");
+      };
       const previewAdapter = createDevelopmentVisitedPreviewAdapter({
         supportedAttractions: developmentPreviewAttractionFixtures,
         mode,
-      });
-      let fetchCalls = 0;
-
-      const result = await previewAdapter.load({
-        fetchImpl: async () => {
-          fetchCalls += 1;
-          throw new Error("Production fetch must not run for previews.");
+        fetchImpl,
+        loadVisitedAttractionIdsImpl: async (options) => {
+          loaderCalls += 1;
+          receivedFetchImpl = options.fetchImpl;
+          return loadVisitedAttractionIds(options);
         },
       });
+      const result = await previewAdapter.load();
 
+      assert.equal(loaderCalls, 1);
+      assert.equal(receivedFetchImpl, fetchImpl);
       assert.equal(fetchCalls, 0);
       assert.equal(
         result.status,
@@ -900,6 +930,9 @@ test("only exploration and concrete attraction detail pages are public", () => {
     "/attractions/add",
     "/attractions/507f1f77bcf86cd799439011/edit",
     "/attractions/not-an-object-id",
+    "/Attractions/507f1f77bcf86cd799439011",
+    "/attractions/507f1f77bcf86cd799439011/LOCATION",
+    "/attractions/507f1f77bcf86cd799439011/location/photos",
     "/exploration-map/manage",
     "/api/exploration-map/verified-visits",
   ]) {
