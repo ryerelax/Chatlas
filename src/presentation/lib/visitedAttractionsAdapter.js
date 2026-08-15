@@ -1,12 +1,12 @@
 import {
   createDevelopmentVisitedAttractionCollection,
-  normaliseReviewedAttractionIds,
-  selectDevelopmentPreviewReviewedAttractionIds,
+  normaliseVisitedAttractionIds,
+  selectDevelopmentPreviewVisitedAttractionIds,
   VISITED_DATA_STATUS,
 } from "@/business/services/explorationMapService";
 
-const INTEGRATION_PENDING_MESSAGE =
-  "Visited attractions are unavailable until Review integration is complete.";
+const AUTH_REQUIRED_MESSAGE = "Sign in to view your verified visits.";
+const LOAD_ERROR_MESSAGE = "Verified visits could not be loaded.";
 const DEVELOPMENT_PREVIEW_MESSAGE =
   "Development preview \u2014 mock visited data";
 const DEVELOPMENT_LOADING_PREVIEW_MESSAGE =
@@ -69,53 +69,83 @@ export function isDevelopmentVisitedPreviewEnabled(
 }
 
 /**
- * Loads the attraction IDs reviewed by the signed-in user.
+ * Loads the attraction IDs verified as visited by the signed-in user.
  *
- * The adapter keeps visited-data access separate from the map UI so its
- * implementation can later be replaced without changing map or list logic.
- * Callers may pass an AbortSignal even though the pending implementation does
- * not perform a request yet. User identity is intentionally not accepted here.
+ * The adapter keeps private visited-data access separate from the public map UI.
+ * User identity is intentionally not accepted here because the route resolves
+ * it from the server-side session.
  *
  * @param {{
  *   signal?: AbortSignal,
+ *   fetchImpl?: typeof fetch,
  *   developmentPreview?: boolean,
  *   previewAttractionIds?: unknown[],
  * }} options
  * @returns {Promise<{
- *   status: "success" | "unavailable",
+ *   status: "success" | "auth-required" | "error",
  *   data: string[],
  *   message: string,
  * }>}
  */
 export async function loadVisitedAttractionIds({
   signal,
+  fetchImpl = globalThis.fetch,
   developmentPreview = false,
   previewAttractionIds = [],
 } = {}) {
-  void signal;
-
   if (
     process.env.NODE_ENV === "development" &&
     developmentPreview === true
   ) {
     return {
       status: VISITED_DATA_STATUS.SUCCESS,
-      data: normaliseReviewedAttractionIds(previewAttractionIds),
+      data: normaliseVisitedAttractionIds(previewAttractionIds),
       message: DEVELOPMENT_PREVIEW_MESSAGE,
     };
   }
 
-  // TODO: Connect this adapter only after the Review integration contract provides:
-  // - the canonical internal user ID used by review records;
-  // - the Review service for querying the signed-in user's reviews;
-  // - the valid review statuses that count an attraction as visited;
-  // - the review deletion rules that remove an attraction from visited data; and
-  // - an authenticated private /api/exploration-map/visited-attractions endpoint;
-  // - the refresh/cache-invalidation contract after review create, edit, or delete.
+  let response;
+  try {
+    response = await fetchImpl("/api/exploration-map/verified-visits", {
+      signal,
+      cache: "no-store",
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw error;
+    }
+
+    throw new Error(LOAD_ERROR_MESSAGE);
+  }
+
+  if (response?.status === 401) {
+    return {
+      status: VISITED_DATA_STATUS.AUTH_REQUIRED,
+      data: [],
+      message: AUTH_REQUIRED_MESSAGE,
+    };
+  }
+
+  let result;
+  try {
+    result = await response?.json();
+  } catch {
+    throw new Error(LOAD_ERROR_MESSAGE);
+  }
+
+  if (
+    !response?.ok ||
+    result?.success === false ||
+    !Array.isArray(result?.data)
+  ) {
+    throw new Error(LOAD_ERROR_MESSAGE);
+  }
+
+  // TODO: Refresh this adapter after Verified Visit create or delete actions are added to the map.
   return {
-    status: VISITED_DATA_STATUS.UNAVAILABLE,
-    data: [],
-    message: INTEGRATION_PENDING_MESSAGE,
+    status: VISITED_DATA_STATUS.SUCCESS,
+    data: normaliseVisitedAttractionIds(result.data),
+    message: "",
   };
 }
 
@@ -132,7 +162,7 @@ export function createDevelopmentVisitedPreviewAdapter({
     : "visited";
   const initialAttractionIds =
     resolvedMode === "visited"
-      ? selectDevelopmentPreviewReviewedAttractionIds(
+      ? selectDevelopmentPreviewVisitedAttractionIds(
           supportedAttractions
         )
       : [];

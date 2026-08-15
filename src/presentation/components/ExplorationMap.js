@@ -114,6 +114,8 @@ function MarkerLegend({ visitedDataStatus }) {
   const statusLabel =
     visitedDataStatus === VISITED_DATA_STATUS.LOADING
       ? "Checking visited history"
+      : visitedDataStatus === VISITED_DATA_STATUS.AUTH_REQUIRED
+        ? "Sign in for visited status"
       : "Visited status unavailable";
 
   return (
@@ -121,15 +123,17 @@ function MarkerLegend({ visitedDataStatus }) {
       className="mt-4 flex flex-wrap items-center gap-3 text-xs font-semibold text-[#405066]"
       aria-label="Map marker legend"
     >
-      <span className="inline-flex items-center gap-2 rounded-full border border-[#B7E5D2] bg-white px-3 py-1.5">
-        <span
-          className="flex h-6 w-6 items-center justify-center rounded-full bg-[#006C56] text-sm font-bold text-white"
-          aria-hidden="true"
-        >
-          {"\u2713"}
+      {visitStatusResolved && (
+        <span className="inline-flex items-center gap-2 rounded-full border border-[#B7E5D2] bg-white px-3 py-1.5">
+          <span
+            className="flex h-6 w-6 items-center justify-center rounded-full bg-[#006C56] text-sm font-bold text-white"
+            aria-hidden="true"
+          >
+            {"\u2713"}
+          </span>
+          Visited
         </span>
-        Visited
-      </span>
+      )}
       <span className="inline-flex items-center gap-2 rounded-full border border-[#D8E1E7] bg-white px-3 py-1.5">
         <span
           className="flex h-6 w-6 items-center justify-center rounded-full border border-[#768780] bg-[#E3EAE7] text-[10px] font-bold text-[#31463F]"
@@ -373,7 +377,7 @@ export default function ExplorationMap() {
     () =>
       createExplorationPageState({
         supportedAttractions: attractions,
-        reviewedAttractionIds: visitedData.attractionIds,
+        visitedAttractionIds: visitedData.attractionIds,
         attractionDataStatus: dataStatus,
         visitedDataStatus: visitedData.status,
         mapStatus,
@@ -714,7 +718,7 @@ export default function ExplorationMap() {
                   }
                   className="min-h-11 rounded-xl bg-[#704A00] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#5D3E00] focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#704A00] disabled:cursor-not-allowed disabled:bg-[#C5AD7B]"
                 >
-                  Add mock review
+                  Add mock visited place
                 </button>
                 <button
                   type="button"
@@ -727,7 +731,7 @@ export default function ExplorationMap() {
                   }
                   className="min-h-11 rounded-xl border border-[#B88924] bg-white px-4 py-2 text-sm font-semibold text-[#704A00] transition hover:bg-[#FFF1C2] focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#704A00] disabled:cursor-not-allowed disabled:border-[#D8CAB0] disabled:text-[#9B8968]"
                 >
-                  Remove mock review
+                  Remove mock visited place
                 </button>
                 <button
                   type="button"

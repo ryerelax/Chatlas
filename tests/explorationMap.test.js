@@ -1,15 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import * as explorationMapService from "../src/business/services/explorationMapService.js";
 import {
   createExplorationMapViewModel,
   createExplorationPageState,
   createExplorationProgressSummary,
   normaliseAttractionId,
   normaliseMapAttractions,
-  normaliseReviewedAttractionIds,
-  selectDevelopmentPreviewReviewedAttractionIds,
+  normaliseVisitedAttractionIds,
+  selectDevelopmentPreviewVisitedAttractionIds,
   VISITED_DATA_STATUS,
 } from "../src/business/services/explorationMapService.js";
+import * as explorationMapPresentation from "../src/presentation/lib/explorationMapPresentation.js";
 import {
   getAttractionDetailsHref,
   getMapMarkerPresentation,
@@ -110,9 +112,9 @@ test("normaliseAttractionId trims string-like identifiers and rejects invalid va
   assert.equal(normaliseAttractionId(null), null);
 });
 
-test("normaliseReviewedAttractionIds removes duplicates and invalid identifiers", () => {
+test("normaliseVisitedAttractionIds removes duplicates and invalid identifiers", () => {
   assert.deepEqual(
-    normaliseReviewedAttractionIds([
+    normaliseVisitedAttractionIds([
       "melaka-1",
       " melaka-1 ",
       "melaka-2",
@@ -124,21 +126,21 @@ test("normaliseReviewedAttractionIds removes duplicates and invalid identifiers"
 });
 
 test("development preview selects three IDs only from the loaded supported attractions", () => {
-  const reviewedAttractionIds =
-    selectDevelopmentPreviewReviewedAttractionIds(
+  const visitedAttractionIds =
+    selectDevelopmentPreviewVisitedAttractionIds(
       developmentPreviewAttractionFixtures
     );
 
-  assert.deepEqual(reviewedAttractionIds, [
+  assert.deepEqual(visitedAttractionIds, [
     "preview-fixture-1",
     "preview-fixture-3",
     "preview-fixture-5",
   ]);
-  assert.equal(reviewedAttractionIds.length, 3);
+  assert.equal(visitedAttractionIds.length, 3);
   assert.equal(
-    reviewedAttractionIds.every((reviewedAttractionId) =>
+    visitedAttractionIds.every((visitedAttractionId) =>
       developmentPreviewAttractionFixtures.some(
-        (attraction) => attraction.id === reviewedAttractionId
+        (attraction) => attraction.id === visitedAttractionId
       )
     ),
     true
@@ -169,7 +171,7 @@ test("development preview query is enabled only by the exact development flag", 
   );
 });
 
-test("createExplorationMapViewModel marks supported reviewed attractions as visited", () => {
+test("createExplorationMapViewModel marks supported visited attractions as visited", () => {
   const viewModel = createExplorationMapViewModel(
     supportedAttractionFixtures,
     ["melaka-2", "melaka-2", "stale-attraction-id"],
@@ -292,6 +294,7 @@ test("unresolved visited states do not expose a misleading zero percent", async 
 
   for (const status of [
     VISITED_DATA_STATUS.LOADING,
+    VISITED_DATA_STATUS.AUTH_REQUIRED,
     VISITED_DATA_STATUS.ERROR,
     VISITED_DATA_STATUS.UNAVAILABLE,
   ]) {
@@ -311,7 +314,7 @@ test("unresolved visited states do not expose a misleading zero percent", async 
   }
 });
 
-test("createExplorationMapViewModel does not treat missing reviewed IDs as a successful empty result", () => {
+test("createExplorationMapViewModel does not treat missing visited IDs as a successful empty result", () => {
   const viewModel = createExplorationMapViewModel(
     supportedAttractionFixtures,
     undefined,
@@ -333,6 +336,7 @@ test("createExplorationMapViewModel does not treat missing reviewed IDs as a suc
 test("createExplorationMapViewModel keeps visited state unknown when data is unavailable or failed", async (context) => {
   for (const status of [
     VISITED_DATA_STATUS.LOADING,
+    VISITED_DATA_STATUS.AUTH_REQUIRED,
     VISITED_DATA_STATUS.UNAVAILABLE,
     VISITED_DATA_STATUS.ERROR,
   ]) {
@@ -354,16 +358,94 @@ test("createExplorationMapViewModel keeps visited state unknown when data is una
   }
 });
 
-test("the production adapter reports integration pending without fake visited IDs", async () => {
-  const result = await loadVisitedAttractionIds();
+test("production adapter loads and normalises verified attraction IDs", async () => {
+  const controller = new AbortController();
+  let request;
+  const result = await loadVisitedAttractionIds({
+    signal: controller.signal,
+    fetchImpl: async (url, options) => {
+      request = { url, options };
+      return new Response(
+        JSON.stringify({
+          success: true,
+          data: ["a", " a ", "b", "", null],
+        }),
+        { status: 200 }
+      );
+    },
+  });
 
-  assert.equal(result.status, VISITED_DATA_STATUS.UNAVAILABLE);
-  assert.deepEqual(result.data, []);
-  assert.match(result.message, /Review integration/);
-  assert.doesNotMatch(result.message, /Authentication/);
+  assert.deepEqual(result, {
+    status: VISITED_DATA_STATUS.SUCCESS,
+    data: ["a", "b"],
+    message: "",
+  });
+  assert.equal(request.url, "/api/exploration-map/verified-visits");
+  assert.deepEqual(request.options, {
+    signal: controller.signal,
+    cache: "no-store",
+  });
 });
 
-test("the adapter returns mock reviewed IDs only while running in development", async () => {
+test("production adapter keeps authentication-required distinct", async () => {
+  const result = await loadVisitedAttractionIds({
+    fetchImpl: async () =>
+      new Response(JSON.stringify({ success: false }), { status: 401 }),
+  });
+
+  assert.deepEqual(result, {
+    status: VISITED_DATA_STATUS.AUTH_REQUIRED,
+    data: [],
+    message: "Sign in to view your verified visits.",
+  });
+});
+
+test("production adapter rejects malformed, unsuccessful, and invalid JSON responses", async (context) => {
+  const responseFactories = {
+    "malformed data": () =>
+      new Response(JSON.stringify({ success: true, data: {} }), {
+        status: 200,
+      }),
+    "unsuccessful payload": () =>
+      new Response(JSON.stringify({ success: false, data: [] }), {
+        status: 200,
+      }),
+    "non-ok response": () =>
+      new Response(JSON.stringify({ success: true, data: [] }), {
+        status: 503,
+      }),
+    "invalid JSON": () => new Response("not-json", { status: 200 }),
+  };
+
+  for (const [name, createResponse] of Object.entries(responseFactories)) {
+    await context.test(name, async () => {
+      await assert.rejects(
+        loadVisitedAttractionIds({
+          fetchImpl: async () => createResponse(),
+        }),
+        {
+          name: "Error",
+          message: "Verified visits could not be loaded.",
+        }
+      );
+    });
+  }
+});
+
+test("production adapter preserves abort failures for the component boundary", async () => {
+  const abortError = new DOMException("The request was aborted.", "AbortError");
+
+  await assert.rejects(
+    loadVisitedAttractionIds({
+      fetchImpl: async () => {
+        throw abortError;
+      },
+    }),
+    (error) => error === abortError
+  );
+});
+
+test("the adapter returns mock visited IDs only while running in development", async () => {
   const originalNodeEnvironment = process.env.NODE_ENV;
 
   try {
@@ -394,10 +476,15 @@ test("the adapter returns mock reviewed IDs only while running in development", 
         "preview-fixture-3",
         "preview-fixture-5",
       ],
+      fetchImpl: async () =>
+        new Response(
+          JSON.stringify({ success: true, data: ["production-visit"] }),
+          { status: 200 }
+        ),
     });
 
-    assert.equal(productionResult.status, VISITED_DATA_STATUS.UNAVAILABLE);
-    assert.deepEqual(productionResult.data, []);
+    assert.equal(productionResult.status, VISITED_DATA_STATUS.SUCCESS);
+    assert.deepEqual(productionResult.data, ["production-visit"]);
   } finally {
     if (originalNodeEnvironment === undefined) {
       delete process.env.NODE_ENV;
@@ -408,7 +495,7 @@ test("the adapter returns mock reviewed IDs only while running in development", 
 });
 
 test("development preview markers and visited list use the same three supported IDs", () => {
-  const selectedIds = selectDevelopmentPreviewReviewedAttractionIds(
+  const selectedIds = selectDevelopmentPreviewVisitedAttractionIds(
     developmentPreviewAttractionFixtures
   );
   const viewModel = createExplorationMapViewModel(
@@ -608,10 +695,21 @@ test("getAttractionDetailsHref safely encodes the attraction identifier", () => 
   );
 });
 
+test("visited helpers expose generic visited terminology", () => {
+  assert.equal(
+    typeof explorationMapService.normaliseVisitedAttractionIds,
+    "function"
+  );
+  assert.equal(
+    typeof explorationMapService.selectDevelopmentPreviewVisitedAttractionIds,
+    "function"
+  );
+});
+
 test("no-visit is exposed only after attractions and visited data both succeed", async (context) => {
   const emptyState = createExplorationPageState({
     supportedAttractions: supportedAttractionFixtures,
-    reviewedAttractionIds: [],
+    visitedAttractionIds: [],
     attractionDataStatus: "success",
     visitedDataStatus: VISITED_DATA_STATUS.SUCCESS,
     mapStatus: "ready",
@@ -632,13 +730,14 @@ test("no-visit is exposed only after attractions and visited data both succeed",
 
   for (const visitedDataStatus of [
     VISITED_DATA_STATUS.LOADING,
+    VISITED_DATA_STATUS.AUTH_REQUIRED,
     VISITED_DATA_STATUS.ERROR,
     VISITED_DATA_STATUS.UNAVAILABLE,
   ]) {
     await context.test(visitedDataStatus, () => {
       const unresolvedState = createExplorationPageState({
           supportedAttractions: supportedAttractionFixtures,
-          reviewedAttractionIds: [],
+          visitedAttractionIds: [],
           attractionDataStatus: "success",
           visitedDataStatus,
           mapStatus: "ready",
@@ -651,11 +750,172 @@ test("no-visit is exposed only after attractions and visited data both succeed",
   }
 });
 
+test("development visited query previews never call the production fetch", async () => {
+  const originalNodeEnvironment = process.env.NODE_ENV;
+
+  try {
+    process.env.NODE_ENV = "development";
+
+    for (const queryString of [
+      "?previewVisited=1",
+      "?previewVisited=empty",
+      "?previewVisited=loading",
+    ]) {
+      const mode = getDevelopmentVisitedPreviewMode(
+        queryString,
+        process.env.NODE_ENV
+      );
+      const previewAdapter = createDevelopmentVisitedPreviewAdapter({
+        supportedAttractions: developmentPreviewAttractionFixtures,
+        mode,
+      });
+      let fetchCalls = 0;
+
+      const result = await previewAdapter.load({
+        fetchImpl: async () => {
+          fetchCalls += 1;
+          throw new Error("Production fetch must not run for previews.");
+        },
+      });
+
+      assert.equal(fetchCalls, 0);
+      assert.equal(
+        result.status,
+        mode === "loading"
+          ? VISITED_DATA_STATUS.LOADING
+          : VISITED_DATA_STATUS.SUCCESS
+      );
+    }
+  } finally {
+    if (originalNodeEnvironment === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = originalNodeEnvironment;
+    }
+  }
+});
+
+test("production query strings cannot enable visited mock data", async () => {
+  const originalNodeEnvironment = process.env.NODE_ENV;
+
+  try {
+    process.env.NODE_ENV = "production";
+    const fetchImpl = async () =>
+      new Response(
+        JSON.stringify({ success: true, data: ["production-visit"] }),
+        { status: 200 }
+      );
+
+    for (const queryString of [
+      "?previewVisited=1",
+      "?previewVisited=empty",
+      "?previewVisited=loading",
+    ]) {
+      assert.equal(
+        getDevelopmentVisitedPreviewMode(queryString, process.env.NODE_ENV),
+        null
+      );
+      const result = await loadVisitedAttractionIds({
+        developmentPreview: true,
+        previewAttractionIds: ["mock-visit"],
+        fetchImpl,
+      });
+
+      assert.deepEqual(result.data, ["production-visit"]);
+    }
+  } finally {
+    if (originalNodeEnvironment === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = originalNodeEnvironment;
+    }
+  }
+});
+
+test("authentication-required keeps visit markers and progress unresolved", () => {
+  const viewModel = createExplorationMapViewModel(
+    supportedAttractionFixtures,
+    ["melaka-1"],
+    VISITED_DATA_STATUS.AUTH_REQUIRED
+  );
+
+  assert.equal(
+    viewModel.visitedDataStatus,
+    VISITED_DATA_STATUS.AUTH_REQUIRED
+  );
+  assert.deepEqual(
+    viewModel.attractions.map((attraction) => attraction.isVisited),
+    [null, null]
+  );
+  assert.deepEqual(viewModel.visitedAttractions, []);
+  assert.equal(viewModel.progress.visitedCount, null);
+  assert.equal(viewModel.progress.percentage, null);
+});
+
+test("authentication-required presentation points to the accessible sign-in route", () => {
+  assert.equal(
+    typeof explorationMapPresentation.getVisitedAuthenticationPresentation,
+    "function"
+  );
+
+  const presentation =
+    explorationMapPresentation.getVisitedAuthenticationPresentation(
+      VISITED_DATA_STATUS.AUTH_REQUIRED
+    );
+
+  assert.deepEqual(presentation, {
+    message: "Sign in to view your verified visits.",
+    signInHref: "/login",
+    signInLabel: "Sign in",
+  });
+  assert.equal(
+    explorationMapPresentation.getVisitedAuthenticationPresentation("error"),
+    null
+  );
+});
+
+test("only exploration and concrete attraction detail pages are public", () => {
+  assert.equal(typeof explorationMapService.isPublicPagePathname, "function");
+
+  for (const pathname of [
+    "/exploration-map",
+    "/exploration-map/",
+    "/attractions/507f1f77bcf86cd799439011",
+    "/attractions/507F1F77BCF86CD799439011/",
+    "/attractions/507f1f77bcf86cd799439011/location",
+    "/attractions/507f1f77bcf86cd799439011/location/",
+  ]) {
+    assert.equal(
+      explorationMapService.isPublicPagePathname(pathname),
+      true,
+      pathname
+    );
+  }
+
+  for (const pathname of [
+    "/",
+    "/profile",
+    "/test",
+    "/attractions",
+    "/attractions/add",
+    "/attractions/507f1f77bcf86cd799439011/edit",
+    "/attractions/not-an-object-id",
+    "/exploration-map/manage",
+    "/api/exploration-map/verified-visits",
+  ]) {
+    assert.equal(
+      explorationMapService.isPublicPagePathname(pathname),
+      false,
+      pathname
+    );
+  }
+});
+
 test("attractions loading suppresses empty counts while visited loading keeps supported places", async (context) => {
   await context.test("attractions loading", () => {
     const pageState = createExplorationPageState({
       supportedAttractions: supportedAttractionFixtures,
-      reviewedAttractionIds: [],
+      visitedAttractionIds: [],
       attractionDataStatus: "loading",
       visitedDataStatus: VISITED_DATA_STATUS.SUCCESS,
       mapStatus: "idle",
@@ -671,7 +931,7 @@ test("attractions loading suppresses empty counts while visited loading keeps su
   await context.test("visited data loading", () => {
     const pageState = createExplorationPageState({
       supportedAttractions: supportedAttractionFixtures,
-      reviewedAttractionIds: [],
+      visitedAttractionIds: [],
       attractionDataStatus: "success",
       visitedDataStatus: VISITED_DATA_STATUS.LOADING,
       mapStatus: "loading",
@@ -694,7 +954,7 @@ test("attractions loading suppresses empty counts while visited loading keeps su
 test("map unavailable preserves canonical marker, list, progress, and details data", () => {
   const pageState = createExplorationPageState({
     supportedAttractions: supportedAttractionFixtures,
-    reviewedAttractionIds: ["melaka-2"],
+    visitedAttractionIds: ["melaka-2"],
     attractionDataStatus: "success",
     visitedDataStatus: VISITED_DATA_STATUS.SUCCESS,
     mapStatus: "unavailable",
@@ -727,14 +987,14 @@ test("loading completion synchronises dynamic marker, list, and progress totals"
   const attractions = createProgressAttractionFixtures(7);
   const loadingState = createExplorationPageState({
     supportedAttractions: attractions,
-    reviewedAttractionIds: [],
+    visitedAttractionIds: [],
     attractionDataStatus: "success",
     visitedDataStatus: VISITED_DATA_STATUS.LOADING,
     mapStatus: "ready",
   });
   const successState = createExplorationPageState({
     supportedAttractions: attractions,
-    reviewedAttractionIds: [
+    visitedAttractionIds: [
       "progress-fixture-2",
       "progress-fixture-5",
       "progress-fixture-5",

@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { getAttractionDetailsHref } from "@/presentation/lib/explorationMapPresentation";
+import {
+  getAttractionDetailsHref,
+  getVisitedAuthenticationPresentation,
+} from "@/presentation/lib/explorationMapPresentation";
 
 function LoadingState() {
   return (
@@ -30,7 +33,14 @@ function LoadingState() {
   );
 }
 
-function StateMessage({ title, description, tone = "neutral", onRetry }) {
+function StateMessage({
+  title,
+  description,
+  tone = "neutral",
+  actionHref,
+  actionLabel,
+  onRetry,
+}) {
   const isError = tone === "error";
 
   return (
@@ -55,6 +65,14 @@ function StateMessage({ title, description, tone = "neutral", onRetry }) {
       <p className="mx-auto mt-1 max-w-xl text-sm leading-6 text-[#65748A]">
         {description}
       </p>
+      {actionHref && actionLabel && (
+        <Link
+          href={actionHref}
+          className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-[#006C56] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#005E4B] focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#006C56]"
+        >
+          {actionLabel}
+        </Link>
+      )}
       {typeof onRetry === "function" && (
         <button
           type="button"
@@ -75,6 +93,10 @@ function getLiveAnnouncement(status, attractions, message) {
 
   if (status === "error") {
     return message || "Visited attractions could not be loaded.";
+  }
+
+  if (status === "auth-required") {
+    return message || "Sign in to view your verified visits.";
   }
 
   if (status === "unavailable") {
@@ -113,6 +135,8 @@ export default function VisitedAttractionsList({
     visitedAttractions,
     message
   );
+  const authenticationPresentation =
+    getVisitedAuthenticationPresentation(displayStatus);
 
   return (
     <section
@@ -141,7 +165,7 @@ export default function VisitedAttractionsList({
             Visited attractions
           </h3>
           <p className="mt-1 text-sm leading-6 text-[#65748A]">
-            Places recognised from your reviews.
+            Places confirmed by your verified visits.
           </p>
         </div>
 
@@ -154,12 +178,21 @@ export default function VisitedAttractionsList({
 
       {displayStatus === "loading" && <LoadingState />}
 
+      {authenticationPresentation && (
+        <StateMessage
+          title="Sign in to view visited attractions"
+          description={message || authenticationPresentation.message}
+          actionHref={authenticationPresentation.signInHref}
+          actionLabel={authenticationPresentation.signInLabel}
+        />
+      )}
+
       {displayStatus === "unavailable" && (
         <StateMessage
           title="Visited data unavailable"
           description={
             message ||
-            "Your visited attractions will appear here when review integration is available."
+            "Your visited attractions are not available right now."
           }
           onRetry={onRetry}
         />
@@ -180,7 +213,7 @@ export default function VisitedAttractionsList({
       {displayStatus === "success" && visitedAttractions.length === 0 && (
         <StateMessage
           title="No visited attractions yet"
-          description="Attractions you review will appear in this list."
+          description="Attractions confirmed through a verified visit will appear in this list."
         />
       )}
 
@@ -251,7 +284,7 @@ export default function VisitedAttractionsList({
         </ul>
       )}
 
-      {!["loading", "unavailable", "error", "success"].includes(
+      {!["loading", "auth-required", "unavailable", "error", "success"].includes(
         displayStatus
       ) && (
         <StateMessage
