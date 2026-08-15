@@ -136,25 +136,6 @@ export default function AttractionDetailsPage() {
               </p>
             </div>
 
-            {/* TODO: Link to the Review & Community module once that route ships. */}
-            <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-[14px] bg-attraction-surface-soft p-5">
-              <div>
-                <p className="mb-0.5 text-sm font-semibold text-attraction-ink">
-                  Community reviews
-                </p>
-                <p className="text-[13px] text-attraction-muted">
-                  Read what travellers say about this attraction
-                </p>
-              </div>
-              <button
-                type="button"
-                disabled
-                title="Coming soon"
-                className="h-9 shrink-0 whitespace-nowrap rounded-[10px] border border-attraction-border-strong bg-white px-4 text-[13px] font-semibold text-attraction-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                View reviews
-              </button>
-            </div>
             {/* Review & Community Section */}
             <section className="mt-8">
               <div className="mb-5 flex items-center justify-between">
