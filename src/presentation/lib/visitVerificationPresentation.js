@@ -79,6 +79,65 @@ export function getVerificationAuthenticationState(
   };
 }
 
+export function getVisitVerificationAuthenticationTransition(
+  flowState,
+  authenticationState
+) {
+  const effectiveAuthenticationState = [
+    "confirmed",
+    "pending",
+    "required",
+    "unavailable",
+  ].includes(authenticationState)
+    ? authenticationState
+    : "unavailable";
+  const preserveSuccess =
+    flowState === "success" && effectiveAuthenticationState === "pending";
+
+  if (effectiveAuthenticationState === "confirmed" || preserveSuccess) {
+    return {
+      nextFlowState: flowState,
+      resetFlowData: false,
+      authenticationPromptVisible: false,
+      authenticationUnavailableVisible: false,
+    };
+  }
+
+  return {
+    nextFlowState: "idle",
+    resetFlowData: flowState !== "idle",
+    authenticationPromptVisible:
+      effectiveAuthenticationState === "required",
+    authenticationUnavailableVisible:
+      effectiveAuthenticationState === "unavailable",
+  };
+}
+
+export function getVisitVerificationResponseDecision(
+  response,
+  result,
+  fallbackMessages = {}
+) {
+  if (response?.ok === true) {
+    return {
+      type: "success",
+      message: "",
+      authenticationRequired: false,
+    };
+  }
+
+  const authenticationRequired = response?.status === 401;
+  const fallbackMessage = authenticationRequired
+    ? fallbackMessages.authentication
+    : fallbackMessages.verification;
+
+  return {
+    type: authenticationRequired ? "authentication-required" : "error",
+    message: selectSafeApiMessage(result, fallbackMessage),
+    authenticationRequired,
+  };
+}
+
 export function createVisitVerificationOperationController({
   authenticationConfirmed = false,
   stopStream = stopMediaStream,

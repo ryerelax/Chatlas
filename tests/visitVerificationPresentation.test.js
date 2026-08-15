@@ -30,6 +30,33 @@ function createOperationController(options) {
   );
 }
 
+function getAuthenticationTransition(flowState, authenticationState) {
+  assert.equal(
+    typeof visitVerificationPresentation.getVisitVerificationAuthenticationTransition,
+    "function",
+    "the authentication transition helper must be exported"
+  );
+
+  return visitVerificationPresentation.getVisitVerificationAuthenticationTransition(
+    flowState,
+    authenticationState
+  );
+}
+
+function getResponseDecision(response, result, fallbackMessages) {
+  assert.equal(
+    typeof visitVerificationPresentation.getVisitVerificationResponseDecision,
+    "function",
+    "the response decision helper must be exported"
+  );
+
+  return visitVerificationPresentation.getVisitVerificationResponseDecision(
+    response,
+    result,
+    fallbackMessages
+  );
+}
+
 function createLifecycleResources() {
   const stopped = [];
   const revoked = [];
@@ -181,6 +208,135 @@ test("browser permissions require positively confirmed canonical authentication"
       authenticationPending: false,
       authenticationRequired: false,
       authenticationUnavailable: true,
+    }
+  );
+});
+
+test("success acknowledgement survives the canonical loading and success refresh", () => {
+  const whileRefreshing = getAuthenticationTransition("success", "pending");
+  assert.deepEqual(whileRefreshing, {
+    nextFlowState: "success",
+    resetFlowData: false,
+    authenticationPromptVisible: false,
+    authenticationUnavailableVisible: false,
+  });
+
+  assert.deepEqual(
+    getAuthenticationTransition(
+      whileRefreshing.nextFlowState,
+      "confirmed"
+    ),
+    {
+      nextFlowState: "success",
+      resetFlowData: false,
+      authenticationPromptVisible: false,
+      authenticationUnavailableVisible: false,
+    }
+  );
+});
+
+test("authentication loss resets active states to a blocked idle presentation", () => {
+  assert.deepEqual(getAuthenticationTransition("locating", "pending"), {
+    nextFlowState: "idle",
+    resetFlowData: true,
+    authenticationPromptVisible: false,
+    authenticationUnavailableVisible: false,
+  });
+  assert.deepEqual(getAuthenticationTransition("submitting", "required"), {
+    nextFlowState: "idle",
+    resetFlowData: true,
+    authenticationPromptVisible: true,
+    authenticationUnavailableVisible: false,
+  });
+  assert.deepEqual(getAuthenticationTransition("preview", "unavailable"), {
+    nextFlowState: "idle",
+    resetFlowData: true,
+    authenticationPromptVisible: false,
+    authenticationUnavailableVisible: true,
+  });
+});
+
+test("a 401 response requires authentication and blocks new operations until real auth returns", () => {
+  const controller = createOperationController({
+    authenticationConfirmed: true,
+  });
+  const activeToken = controller.claimLocation();
+  const decision = getResponseDecision(
+    { ok: false, status: 401 },
+    { message: "Sign in again to continue." },
+    {
+      authentication: "Your session has expired.",
+      verification: "Verification failed.",
+    }
+  );
+
+  assert.deepEqual(decision, {
+    type: "authentication-required",
+    message: "Sign in again to continue.",
+    authenticationRequired: true,
+  });
+
+  controller.updateAuthentication(!decision.authenticationRequired);
+  assert.equal(controller.isCurrent(activeToken), false);
+  assert.equal(controller.restartOperation("retry"), null);
+  assert.equal(controller.claimLocation(), null);
+
+  controller.updateAuthentication(true);
+  assert.equal(typeof controller.claimLocation(), "number");
+});
+
+test("response decisions keep non-401 failures ordinary and preserve safe-message rules", () => {
+  const fallbackMessages = {
+    authentication: "Your session has expired.",
+    verification: "Verification failed.",
+  };
+
+  assert.deepEqual(
+    getResponseDecision(
+      { ok: false, status: 409 },
+      { message: "This visit already has enough photos." },
+      fallbackMessages
+    ),
+    {
+      type: "error",
+      message: "This visit already has enough photos.",
+      authenticationRequired: false,
+    }
+  );
+  assert.deepEqual(
+    getResponseDecision(
+      { ok: false, status: 500 },
+      { message: "internal\u0000detail" },
+      fallbackMessages
+    ),
+    {
+      type: "error",
+      message: "Verification failed.",
+      authenticationRequired: false,
+    }
+  );
+  assert.deepEqual(
+    getResponseDecision(
+      { ok: false, status: 401 },
+      { message: "internal\u0000detail" },
+      fallbackMessages
+    ),
+    {
+      type: "authentication-required",
+      message: "Your session has expired.",
+      authenticationRequired: true,
+    }
+  );
+  assert.deepEqual(
+    getResponseDecision(
+      { ok: true, status: 201 },
+      { message: "ignored" },
+      fallbackMessages
+    ),
+    {
+      type: "success",
+      message: "",
+      authenticationRequired: false,
     }
   );
 });

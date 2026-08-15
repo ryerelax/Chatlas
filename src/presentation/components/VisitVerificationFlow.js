@@ -2,7 +2,14 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { MAX_VISIT_DISTANCE_METRES } from "@/business/services/visitVerificationRules";
 import {
   createVisitVerificationOperationController,
@@ -11,8 +18,9 @@ import {
   getCandidateSelectionMode,
   getGeolocationErrorMessage,
   getNearbyCandidatePresentations,
+  getVisitVerificationAuthenticationTransition,
+  getVisitVerificationResponseDecision,
   normaliseBrowserPosition,
-  selectSafeApiMessage,
 } from "@/presentation/lib/visitVerificationPresentation";
 
 const FLOW_STATE = Object.freeze({
@@ -50,11 +58,13 @@ export default function VisitVerificationFlow({
   authenticationRequired = false,
   authenticationPending = false,
   authenticationUnavailable = false,
+  authenticationState = "unavailable",
   onAuthenticationRetry,
   onVerified,
 }) {
   const videoRef = useRef(null);
   const operationTokenRef = useRef(null);
+  const flowStateRef = useRef(FLOW_STATE.IDLE);
   const [operationController] = useState(() =>
     createVisitVerificationOperationController({
       authenticationConfirmed,
@@ -76,6 +86,11 @@ export default function VisitVerificationFlow({
     useState(false);
   const [sessionAuthenticationRequired, setSessionAuthenticationRequired] =
     useState(false);
+
+  const transitionToFlowState = useCallback((nextFlowState) => {
+    flowStateRef.current = nextFlowState;
+    setFlowState(nextFlowState);
+  }, []);
 
   const supportedAttractions = useMemo(
     () => (Array.isArray(attractions) ? attractions : []),
@@ -118,9 +133,9 @@ export default function VisitVerificationFlow({
       setSessionAuthenticationRequired(requireSignIn);
       setAuthenticationPromptVisible(requireSignIn);
       setAuthenticationUnavailableVisible(false);
-      setFlowState(FLOW_STATE.ERROR);
+      transitionToFlowState(FLOW_STATE.ERROR);
     },
-    [operationController]
+    [operationController, transitionToFlowState]
   );
 
   const openCamera = useCallback(
@@ -140,7 +155,7 @@ export default function VisitVerificationFlow({
       setSelectedAttractionId(attractionId);
       setCameraReady(false);
       setCapturePending(false);
-      setFlowState(FLOW_STATE.CAMERA);
+      transitionToFlowState(FLOW_STATE.CAMERA);
 
       let stream;
       try {
@@ -156,7 +171,7 @@ export default function VisitVerificationFlow({
 
       setCameraStream(stream);
     },
-    [failFlow, operationController]
+    [failFlow, operationController, transitionToFlowState]
   );
 
   const handleLocatedPosition = useCallback(
@@ -204,9 +219,15 @@ export default function VisitVerificationFlow({
       }
 
       setSelectedAttractionId("");
-      setFlowState(FLOW_STATE.CHOOSING);
+      transitionToFlowState(FLOW_STATE.CHOOSING);
     },
-    [failFlow, openCamera, operationController, supportedAttractions]
+    [
+      failFlow,
+      openCamera,
+      operationController,
+      supportedAttractions,
+      transitionToFlowState,
+    ]
   );
 
   const startVerification = useCallback(() => {
@@ -245,7 +266,7 @@ export default function VisitVerificationFlow({
     setErrorMessage("");
     setSessionAuthenticationRequired(false);
     setCapturePending(false);
-    setFlowState(FLOW_STATE.LOCATING);
+    transitionToFlowState(FLOW_STATE.LOCATING);
 
     if (typeof navigator.geolocation?.getCurrentPosition !== "function") {
       failFlow(
@@ -270,6 +291,7 @@ export default function VisitVerificationFlow({
     handleLocatedPosition,
     operationController,
     sessionAuthenticationRequired,
+    transitionToFlowState,
   ]);
 
   const closeFlow = useCallback(() => {
@@ -287,8 +309,8 @@ export default function VisitVerificationFlow({
     setAuthenticationUnavailableVisible(false);
     setSessionAuthenticationRequired(false);
     setCapturePending(false);
-    setFlowState(FLOW_STATE.IDLE);
-  }, [operationController]);
+    transitionToFlowState(FLOW_STATE.IDLE);
+  }, [operationController, transitionToFlowState]);
 
   const continueWithSelectedAttraction = useCallback(() => {
     if (!selectedAttractionId) {
@@ -363,7 +385,7 @@ export default function VisitVerificationFlow({
           setPreviewUrl(objectUrl);
           setPhotoBlob(blob);
           setCapturePending(false);
-          setFlowState(FLOW_STATE.PREVIEW);
+          transitionToFlowState(FLOW_STATE.PREVIEW);
         },
         "image/jpeg",
         0.85
@@ -385,6 +407,7 @@ export default function VisitVerificationFlow({
     flowState,
     operationController,
     releaseActiveStream,
+    transitionToFlowState,
   ]);
 
   const retakePhoto = useCallback(() => {
@@ -425,7 +448,7 @@ export default function VisitVerificationFlow({
       return;
     }
 
-    setFlowState(FLOW_STATE.SUBMITTING);
+    transitionToFlowState(FLOW_STATE.SUBMITTING);
 
     let response;
     try {
@@ -466,17 +489,20 @@ export default function VisitVerificationFlow({
       return;
     }
 
-    if (!response.ok) {
-      const requireSignIn = response.status === 401;
+    const responseDecision = getVisitVerificationResponseDecision(
+      response,
+      result,
+      {
+        authentication: AUTHENTICATION_ERROR_MESSAGE,
+        verification: VERIFY_ERROR_MESSAGE,
+      }
+    );
+
+    if (responseDecision.type !== "success") {
       failFlow(
         operationId,
-        selectSafeApiMessage(
-          result,
-          requireSignIn
-            ? AUTHENTICATION_ERROR_MESSAGE
-            : VERIFY_ERROR_MESSAGE
-        ),
-        { requireSignIn }
+        responseDecision.message,
+        { requireSignIn: responseDecision.authenticationRequired }
       );
       return;
     }
@@ -489,7 +515,7 @@ export default function VisitVerificationFlow({
     setPhotoBlob(null);
     setCapturePending(false);
     setErrorMessage("");
-    setFlowState(FLOW_STATE.SUCCESS);
+    transitionToFlowState(FLOW_STATE.SUCCESS);
 
     try {
       await onVerified?.();
@@ -504,11 +530,50 @@ export default function VisitVerificationFlow({
     photoBlob,
     position,
     selectedAttractionId,
+    transitionToFlowState,
   ]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    const transition = getVisitVerificationAuthenticationTransition(
+      flowStateRef.current,
+      authenticationState
+    );
     operationController.updateAuthentication(authenticationConfirmed);
-  }, [authenticationConfirmed, operationController]);
+
+    setAuthenticationPromptVisible(
+      transition.authenticationPromptVisible
+    );
+    setAuthenticationUnavailableVisible(
+      transition.authenticationUnavailableVisible
+    );
+
+    if (authenticationConfirmed) {
+      setSessionAuthenticationRequired(false);
+      return;
+    }
+
+    operationTokenRef.current = null;
+
+    if (transition.resetFlowData) {
+      setCameraStream(null);
+      setCameraReady(false);
+      setPreviewUrl("");
+      setPosition(null);
+      setCandidates([]);
+      setSelectedAttractionId("");
+      setPhotoBlob(null);
+      setErrorMessage("");
+      setCapturePending(false);
+      setSessionAuthenticationRequired(false);
+    }
+
+    transitionToFlowState(transition.nextFlowState);
+  }, [
+    authenticationConfirmed,
+    authenticationState,
+    operationController,
+    transitionToFlowState,
+  ]);
 
   useEffect(() => {
     return () => {
