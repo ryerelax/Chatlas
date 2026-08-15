@@ -106,7 +106,10 @@ export function createVerifiedVisitRepository(VerifiedVisitModel) {
     },
 
     async findDistinctVerifiedAttractionIds(userId) {
-      const attractionIds = await VerifiedVisitModel.distinct("attractionId", { userId });
+      const attractionIds = await VerifiedVisitModel.distinct("attractionId", {
+        userId,
+        "photos.0": { $exists: true },
+      });
       return [...new Set(attractionIds.map((attractionId) => attractionId.toString()))];
     },
 
@@ -123,7 +126,7 @@ export function createVerifiedVisitRepository(VerifiedVisitModel) {
       return visits.map((visit) => toPublicVerifiedVisit(visit, viewerId));
     },
 
-    async removeOwnedPhoto({ userId, visitId, photoId }) {
+    async findOwnedPhotoForDeletion({ userId, visitId, photoId }) {
       const ownershipFilter = { _id: visitId, userId, "photos._id": photoId };
       const existingVisit = await VerifiedVisitModel.findOne(ownershipFilter)
         .select(PRIVATE_REMOVAL_FIELDS)
@@ -136,17 +139,19 @@ export function createVerifiedVisitRepository(VerifiedVisitModel) {
       const removedPhoto = existingVisit.photos.find(
         (photo) => photo._id.toString() === photoId.toString()
       );
-      const visit = await VerifiedVisitModel.findOneAndUpdate(
-        ownershipFilter,
-        { $pull: { photos: { _id: photoId } } },
-        { new: true }
-      ).lean();
-
-      if (!visit || !removedPhoto) {
+      if (!removedPhoto?.cloudinaryPublicId) {
         return null;
       }
 
-      return { visit, removedPhoto };
+      return { cloudinaryPublicId: removedPhoto.cloudinaryPublicId };
+    },
+
+    async removeOwnedPhoto({ userId, visitId, photoId }) {
+      return VerifiedVisitModel.findOneAndUpdate(
+        { _id: visitId, userId, "photos._id": photoId },
+        { $pull: { photos: { _id: photoId } } },
+        { new: true }
+      ).lean();
     },
 
     async deleteVisitWhenEmpty(visitId) {
@@ -167,6 +172,10 @@ export async function findDistinctVerifiedAttractionIds(userId) {
 
 export async function findPublicVerifiedPhotos(attractionId, viewerId) {
   return verifiedVisitRepository.findPublicVerifiedPhotos(attractionId, viewerId);
+}
+
+export async function findOwnedPhotoForDeletion(input) {
+  return verifiedVisitRepository.findOwnedPhotoForDeletion(input);
 }
 
 export async function removeOwnedPhoto(input) {

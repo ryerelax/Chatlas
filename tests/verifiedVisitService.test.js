@@ -25,6 +25,7 @@ function createHarness(overrides = {}) {
     uploads: [],
     deletes: [],
     appends: [],
+    ownershipLookups: [],
     removals: [],
     emptyDeletes: [],
   };
@@ -79,12 +80,13 @@ function createHarness(overrides = {}) {
     },
     findDistinctVerifiedAttractionIds: async () => [ATTRACTION_ID],
     findPublicVerifiedPhotos: async () => [],
+    findOwnedPhotoForDeletion: async (input) => {
+      calls.ownershipLookups.push(input);
+      return { cloudinaryPublicId: CLOUDINARY_PUBLIC_ID };
+    },
     removeOwnedPhoto: async (input) => {
       calls.removals.push(input);
-      return {
-        visit: { _id: VISIT_ID, photos: [] },
-        removedPhoto: { _id: PHOTO_ID, cloudinaryPublicId: CLOUDINARY_PUBLIC_ID },
-      };
+      return { _id: VISIT_ID, photos: [] };
     },
     deleteVisitWhenEmpty: async (visitId) => {
       calls.emptyDeletes.push(visitId);
@@ -274,6 +276,58 @@ test("verify rejects non-finite and out-of-range location evidence before upload
   }
 });
 
+test("verify rejects coercible non-numeric evidence before lookup or upload", async (t) => {
+  const invalidValues = [null, "", "   ", true, false];
+
+  for (const field of ["latitude", "longitude", "accuracyMeters"]) {
+    for (const value of invalidValues) {
+      await t.test(`${field}: ${JSON.stringify(value)}`, async () => {
+        let userLookups = 0;
+        const { service, calls } = createHarness({
+          findUserByGoogleId: async () => {
+            userLookups += 1;
+            return { _id: USER_ID };
+          },
+        });
+
+        await assert.rejects(
+          () => service.verifyVisitPhoto(validVerifyInput({ [field]: value })),
+          (error) => error instanceof VerifiedVisitServiceError && error.statusCode === 400
+        );
+        assert.equal(userLookups, 0);
+        assert.equal(calls.uploads.length, 0);
+      });
+    }
+  }
+});
+
+test("verify preserves legitimate numeric zero and non-empty numeric strings", async () => {
+  const { service, calls } = createHarness({
+    findAttractionById: async () => ({
+      _id: ATTRACTION_ID,
+      latitude: 0,
+      longitude: 0,
+      state: "Melaka",
+      isActive: true,
+    }),
+  });
+
+  await service.verifyVisitPhoto(validVerifyInput({
+    latitude: "0",
+    longitude: 0,
+    accuracyMeters: "0",
+  }));
+
+  assert.deepEqual(
+    {
+      latitude: calls.appends[0].photo.latitude,
+      longitude: calls.appends[0].photo.longitude,
+      accuracyMeters: calls.appends[0].photo.accuracyMeters,
+    },
+    { latitude: 0, longitude: 0, accuracyMeters: 0 }
+  );
+});
+
 test("verify creates a new dated photo with server evidence and safe output", async () => {
   const { service, calls } = createHarness();
 
@@ -311,21 +365,81 @@ test("verify creates a new dated photo with server evidence and safe output", as
   assert.ok(!JSON.stringify(result).includes("latitude"));
 });
 
-test("verify builds collision-resistant private upload IDs and never returns them", async () => {
-  const { service, calls } = createHarness();
+test("verify uses opaque collision-resistant upload IDs that cannot leak through delivery URLs", async () => {
+  const { service, calls } = createHarness({
+    uploadVerifiedVisitImage: async (dataUri, { publicId }) => {
+      calls.uploads.push({ dataUri, options: { publicId } });
+      return {
+        photoUrl: `https://res.cloudinary.com/demo/image/upload/v1/chatlas/verified-visits/${publicId}.jpg`,
+        cloudinaryPublicId: `chatlas/verified-visits/${publicId}`,
+      };
+    },
+    appendPhotoToDatedVisit: async (input) => {
+      calls.appends.push(input);
+      return {
+        _id: VISIT_ID,
+        photos: [{ _id: PHOTO_ID, photoUrl: input.photo.photoUrl, capturedAt: NOW }],
+      };
+    },
+  });
 
   const first = await service.verifyVisitPhoto(validVerifyInput());
   const second = await service.verifyVisitPhoto(validVerifyInput());
   const publicIds = calls.uploads.map((call) => call.options.publicId);
 
   assert.equal(new Set(publicIds).size, 2);
-  assert.equal(
-    publicIds[0],
-    `${USER_ID}-${ATTRACTION_ID}-2026-08-16-1786811400000-11111111-1111-4111-8111-111111111111`
+  assert.deepEqual(publicIds, [
+    "11111111-1111-4111-8111-111111111111",
+    "22222222-2222-4222-8222-222222222222",
+  ]);
+  for (const publicId of publicIds) {
+    assert.ok(!publicId.includes(USER_ID));
+    assert.ok(!publicId.includes(ATTRACTION_ID));
+    assert.ok(!publicId.includes("2026-08-16"));
+    assert.ok(!publicId.includes("1786811400000"));
+  }
+  assert.ok(!first.photoUrl.includes(USER_ID));
+  assert.ok(!first.photoUrl.includes(ATTRACTION_ID));
+  assert.ok(!JSON.stringify([first, second]).includes(USER_ID));
+  assert.ok(!JSON.stringify([first, second]).includes("cloudinaryPublicId"));
+});
+
+test("verify cleans a malformed upload result containing only a private asset ID exactly once", async () => {
+  const { service, calls } = createHarness({
+    uploadVerifiedVisitImage: async (dataUri, options) => {
+      calls.uploads.push({ dataUri, options });
+      return { cloudinaryPublicId: CLOUDINARY_PUBLIC_ID };
+    },
+  });
+
+  await expectServiceError(
+    () => service.verifyVisitPhoto(validVerifyInput()),
+    { statusCode: 500, message: "Unable to save the verified visit photo." }
   );
-  assert.match(publicIds[1], /22222222-2222-4222-8222-222222222222$/);
-  assert.ok(!JSON.stringify([first, second]).includes(publicIds[0]));
-  assert.ok(!JSON.stringify([first, second]).includes(CLOUDINARY_PUBLIC_ID));
+  assert.deepEqual(calls.deletes, [CLOUDINARY_PUBLIC_ID]);
+  assert.equal(calls.appends.length, 0);
+});
+
+test("verify rejects a grossly oversized encoded payload before lookup or upload", async () => {
+  const maximumEncodedLength = 4 * Math.ceil((5 * 1024 * 1024) / 3);
+  const photoDataUri = `data:image/webp;base64,${"A".repeat(maximumEncodedLength + 4)}`;
+  let userLookups = 0;
+  const { service, calls } = createHarness({
+    findUserByGoogleId: async () => {
+      userLookups += 1;
+      return { _id: USER_ID };
+    },
+  });
+
+  await expectServiceError(
+    () => service.verifyVisitPhoto(validVerifyInput({ photoDataUri })),
+    {
+      statusCode: 400,
+      message: "A JPEG, PNG, or WebP image up to 5 MiB is required.",
+    }
+  );
+  assert.equal(userLookups, 0);
+  assert.equal(calls.uploads.length, 0);
 });
 
 test("verify removes the uploaded image exactly once when persistence fails", async () => {
@@ -394,7 +508,7 @@ test("visited IDs are distinct across dates and photos", async () => {
   ]);
 });
 
-test("visited IDs safely return an empty list when the persisted user is missing", async () => {
+test("visited IDs fail safely instead of reporting a truthful empty list when the user is missing", async () => {
   let distinctQueries = 0;
   const { service } = createHarness({
     findUserByGoogleId: async () => null,
@@ -404,7 +518,10 @@ test("visited IDs safely return an empty list when the persisted user is missing
     },
   });
 
-  assert.deepEqual(await service.getVerifiedAttractionIdsForUser(GOOGLE_ID), []);
+  await expectServiceError(
+    () => service.getVerifiedAttractionIdsForUser(GOOGLE_ID),
+    { statusCode: 401, message: "A signed-in user account is required." }
+  );
   assert.equal(distinctQueries, 0);
 });
 
@@ -551,7 +668,7 @@ test("public lookup rejects an invalid attraction ObjectId before repository acc
 });
 
 test("delete requires photo ownership and does not touch Cloudinary for a non-owner", async () => {
-  const { service, calls } = createHarness({ removeOwnedPhoto: async () => null });
+  const { service, calls } = createHarness({ findOwnedPhotoForDeletion: async () => null });
 
   await expectServiceError(
     () => service.deleteOwnedVerifiedPhoto({
@@ -562,6 +679,7 @@ test("delete requires photo ownership and does not touch Cloudinary for a non-ow
     { statusCode: 403, message: "You can only delete your own verified photos." }
   );
   assert.deepEqual(calls.deletes, []);
+  assert.deepEqual(calls.removals, []);
   assert.deepEqual(calls.emptyDeletes, []);
 });
 
@@ -576,6 +694,7 @@ test("delete rejects invalid visit and photo ObjectIds before repository access"
         () => service.deleteOwnedVerifiedPhoto({ googleId: GOOGLE_ID, ...invalidInput }),
         (error) => error instanceof VerifiedVisitServiceError && error.statusCode === 400
       );
+      assert.deepEqual(calls.ownershipLookups, []);
       assert.deepEqual(calls.removals, []);
     });
   }
@@ -592,19 +711,22 @@ test("delete safely rejects a missing persisted user", async () => {
     }),
     { statusCode: 403, message: "You can only delete your own verified photos." }
   );
+  assert.deepEqual(calls.ownershipLookups, []);
   assert.deepEqual(calls.removals, []);
 });
 
-test("owner deletion follows repository, Cloudinary, then empty-group cleanup and returns no body", async () => {
+test("owner deletion follows ownership lookup, Cloudinary, atomic pull, then empty cleanup", async () => {
   const order = [];
   const { service, calls } = createHarness({
+    findOwnedPhotoForDeletion: async (input) => {
+      order.push("ownership");
+      calls.ownershipLookups.push(input);
+      return { cloudinaryPublicId: CLOUDINARY_PUBLIC_ID };
+    },
     removeOwnedPhoto: async (input) => {
       order.push("repository");
       calls.removals.push(input);
-      return {
-        visit: { _id: VISIT_ID, photos: [] },
-        removedPhoto: { _id: PHOTO_ID, cloudinaryPublicId: CLOUDINARY_PUBLIC_ID },
-      };
+      return { _id: VISIT_ID, photos: [] };
     },
     deleteCloudinaryImage: async (publicId) => {
       order.push("cloudinary");
@@ -623,7 +745,8 @@ test("owner deletion follows repository, Cloudinary, then empty-group cleanup an
   });
 
   assert.equal(result, undefined);
-  assert.deepEqual(order, ["repository", "cloudinary", "empty-group"]);
+  assert.deepEqual(order, ["ownership", "cloudinary", "repository", "empty-group"]);
+  assert.deepEqual(calls.ownershipLookups, [{ userId: USER_ID, visitId: VISIT_ID, photoId: PHOTO_ID }]);
   assert.deepEqual(calls.removals, [{ userId: USER_ID, visitId: VISIT_ID, photoId: PHOTO_ID }]);
   assert.deepEqual(calls.deletes, [CLOUDINARY_PUBLIC_ID]);
   assert.deepEqual(calls.emptyDeletes, [VISIT_ID]);
@@ -632,8 +755,8 @@ test("owner deletion follows repository, Cloudinary, then empty-group cleanup an
 test("owner deletion keeps a non-empty visit group after deleting its Cloudinary asset", async () => {
   const { service, calls } = createHarness({
     removeOwnedPhoto: async () => ({
-      visit: { _id: VISIT_ID, photos: [{ _id: "64b000000000000000000009" }] },
-      removedPhoto: { _id: PHOTO_ID, cloudinaryPublicId: CLOUDINARY_PUBLIC_ID },
+      _id: VISIT_ID,
+      photos: [{ _id: "64b000000000000000000009" }],
     }),
   });
 
@@ -642,8 +765,18 @@ test("owner deletion keeps a non-empty visit group after deleting its Cloudinary
   assert.deepEqual(calls.emptyDeletes, []);
 });
 
-test("owner deletion reports Cloudinary failure and does not claim empty-group cleanup", async () => {
+test("Cloudinary deletion failure preserves database evidence so the operation can be retried", async () => {
+  let evidencePresent = true;
   const { service, calls } = createHarness({
+    findOwnedPhotoForDeletion: async (input) => {
+      calls.ownershipLookups.push(input);
+      return evidencePresent ? { cloudinaryPublicId: CLOUDINARY_PUBLIC_ID } : null;
+    },
+    removeOwnedPhoto: async (input) => {
+      evidencePresent = false;
+      calls.removals.push(input);
+      return { _id: VISIT_ID, photos: [] };
+    },
     deleteCloudinaryImage: async (publicId) => {
       calls.deletes.push(publicId);
       throw new Error("Cloudinary private failure");
@@ -654,12 +787,28 @@ test("owner deletion reports Cloudinary failure and does not claim empty-group c
     () => service.deleteOwnedVerifiedPhoto({ googleId: GOOGLE_ID, visitId: VISIT_ID, photoId: PHOTO_ID }),
     { statusCode: 500, message: "Unable to delete the verified visit photo." }
   );
+  assert.equal(evidencePresent, true);
   assert.deepEqual(calls.deletes, [CLOUDINARY_PUBLIC_ID]);
+  assert.deepEqual(calls.removals, []);
   assert.deepEqual(calls.emptyDeletes, []);
 });
 
-test("owner deletion reports repository and empty-group cleanup errors safely", async (t) => {
-  await t.test("repository failure", async () => {
+test("owner deletion safely handles ownership lookup and post-Cloudinary pull failures", async (t) => {
+  await t.test("ownership lookup failure", async () => {
+    const { service, calls } = createHarness({
+      findOwnedPhotoForDeletion: async () => {
+        throw new Error("database private failure");
+      },
+    });
+    await expectServiceError(
+      () => service.deleteOwnedVerifiedPhoto({ googleId: GOOGLE_ID, visitId: VISIT_ID, photoId: PHOTO_ID }),
+      { statusCode: 500, message: "Unable to delete the verified visit photo." }
+    );
+    assert.deepEqual(calls.deletes, []);
+    assert.deepEqual(calls.removals, []);
+  });
+
+  await t.test("atomic pull failure after an idempotent asset deletion", async () => {
     const { service, calls } = createHarness({
       removeOwnedPhoto: async () => {
         throw new Error("database private failure");
@@ -669,19 +818,27 @@ test("owner deletion reports repository and empty-group cleanup errors safely", 
       () => service.deleteOwnedVerifiedPhoto({ googleId: GOOGLE_ID, visitId: VISIT_ID, photoId: PHOTO_ID }),
       { statusCode: 500, message: "Unable to delete the verified visit photo." }
     );
-    assert.deepEqual(calls.deletes, []);
+    assert.deepEqual(calls.deletes, [CLOUDINARY_PUBLIC_ID]);
+    assert.deepEqual(calls.emptyDeletes, []);
+  });
+});
+
+test("empty-group cleanup failure does not make a completed photo deletion untruthful", async () => {
+  const { service, calls } = createHarness({
+    deleteVisitWhenEmpty: async (visitId) => {
+      calls.emptyDeletes.push(visitId);
+      throw new Error("database private failure");
+    },
   });
 
-  await t.test("empty-group failure", async () => {
-    const { service, calls } = createHarness({
-      deleteVisitWhenEmpty: async () => {
-        throw new Error("database private failure");
-      },
-    });
-    await expectServiceError(
-      () => service.deleteOwnedVerifiedPhoto({ googleId: GOOGLE_ID, visitId: VISIT_ID, photoId: PHOTO_ID }),
-      { statusCode: 500, message: "Unable to delete the verified visit photo." }
-    );
-    assert.deepEqual(calls.deletes, [CLOUDINARY_PUBLIC_ID]);
+  const result = await service.deleteOwnedVerifiedPhoto({
+    googleId: GOOGLE_ID,
+    visitId: VISIT_ID,
+    photoId: PHOTO_ID,
   });
+
+  assert.equal(result, undefined);
+  assert.deepEqual(calls.deletes, [CLOUDINARY_PUBLIC_ID]);
+  assert.equal(calls.removals.length, 1);
+  assert.deepEqual(calls.emptyDeletes, [VISIT_ID]);
 });

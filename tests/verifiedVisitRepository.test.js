@@ -233,7 +233,10 @@ test("distinct verified attraction IDs are stringified and deduplicated", async 
   const repository = createVerifiedVisitRepository({
     distinct(field, filter) {
       assert.equal(field, "attractionId");
-      assert.deepEqual(filter, { userId: "user-1" });
+      assert.deepEqual(filter, {
+        userId: "user-1",
+        "photos.0": { $exists: true },
+      });
       return Promise.resolve([
         { toString: () => "attraction-1" },
         { toString: () => "attraction-1" },
@@ -320,17 +323,60 @@ test("public verified photos give only the owner a deletion flag without leaking
   assert.ok(!JSON.stringify(ownerResult).includes("verified-visits/photo-1"));
 });
 
-test("owner-scoped removal returns the deleted private photo with the updated visit", async () => {
+test("owner-scoped private evidence lookup does not mutate the visit", async () => {
   const observed = {};
   const existingVisit = { _id: "visit-1", photos: [{ _id: "photo-1", ...photo }] };
-  const updatedVisit = { _id: "visit-1", photos: [] };
+  let updates = 0;
   const repository = createVerifiedVisitRepository({
     findOne(filter) {
       observed.lookupFilter = filter;
       return chain(existingVisit, observed);
     },
+    findOneAndUpdate() {
+      updates += 1;
+      return chain(null, observed);
+    },
+  });
+
+  const result = await repository.findOwnedPhotoForDeletion({
+    userId: "user-1",
+    visitId: "visit-1",
+    photoId: "photo-1",
+  });
+
+  const ownerScope = { _id: "visit-1", userId: "user-1", "photos._id": "photo-1" };
+  assert.deepEqual(observed.lookupFilter, ownerScope);
+  assert.equal(
+    observed.select,
+    "+photos.cloudinaryPublicId +photos.latitude +photos.longitude +photos.accuracyMeters +photos.distanceMeters"
+  );
+  assert.deepEqual(result, { cloudinaryPublicId: photo.cloudinaryPublicId });
+  assert.equal(updates, 0);
+});
+
+test("owner-scoped private evidence lookup returns null for a non-owner", async () => {
+  const repository = createVerifiedVisitRepository({
+    findOne() {
+      return chain(null, {});
+    },
+  });
+
+  assert.equal(
+    await repository.findOwnedPhotoForDeletion({
+      userId: "user-1",
+      visitId: "visit-1",
+      photoId: "photo-1",
+    }),
+    null
+  );
+});
+
+test("owner-scoped removal atomically pulls only the owned photo after external deletion", async () => {
+  const observed = {};
+  const updatedVisit = { _id: "visit-1", photos: [] };
+  const repository = createVerifiedVisitRepository({
     findOneAndUpdate(filter, update, options) {
-      Object.assign(observed, { updateFilter: filter, update, options });
+      Object.assign(observed, { filter, update, options });
       return chain(updatedVisit, observed);
     },
   });
@@ -341,29 +387,14 @@ test("owner-scoped removal returns the deleted private photo with the updated vi
     photoId: "photo-1",
   });
 
-  const ownerScope = { _id: "visit-1", userId: "user-1", "photos._id": "photo-1" };
-  assert.deepEqual(observed.lookupFilter, ownerScope);
-  assert.deepEqual(observed.updateFilter, ownerScope);
+  assert.deepEqual(observed.filter, {
+    _id: "visit-1",
+    userId: "user-1",
+    "photos._id": "photo-1",
+  });
   assert.deepEqual(observed.update, { $pull: { photos: { _id: "photo-1" } } });
   assert.deepEqual(observed.options, { new: true });
-  assert.equal(
-    observed.select,
-    "+photos.cloudinaryPublicId +photos.latitude +photos.longitude +photos.accuracyMeters +photos.distanceMeters"
-  );
-  assert.deepEqual(result, { visit: updatedVisit, removedPhoto: existingVisit.photos[0] });
-});
-
-test("owner-scoped removal returns null when no matching owned photo exists", async () => {
-  const repository = createVerifiedVisitRepository({
-    findOne() {
-      return chain(null, {});
-    },
-  });
-
-  assert.equal(
-    await repository.removeOwnedPhoto({ userId: "user-1", visitId: "visit-1", photoId: "photo-1" }),
-    null
-  );
+  assert.deepEqual(result, updatedVisit);
 });
 
 test("empty-visit cleanup only deletes a visit whose photos array is empty", async () => {

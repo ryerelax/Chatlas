@@ -12,6 +12,7 @@ import {
   appendPhotoToDatedVisit,
   deleteVisitWhenEmpty,
   findDistinctVerifiedAttractionIds,
+  findOwnedPhotoForDeletion,
   findPublicVerifiedPhotos as findPublicVerifiedPhotosRepository,
   removeOwnedPhoto,
 } from "@/data/repositories/verifiedVisitRepository";
@@ -30,6 +31,7 @@ export class VerifiedVisitServiceError extends Error {
 
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_ENCODED_IMAGE_CHARS = 4 * Math.ceil(MAX_IMAGE_BYTES / 3);
 const AUTH_REQUIRED_MESSAGE = "A signed-in user account is required.";
 const INVALID_IMAGE_MESSAGE = "A JPEG, PNG, or WebP image up to 5 MiB is required.";
 const SAVE_ERROR_MESSAGE = "Unable to save the verified visit photo.";
@@ -62,7 +64,7 @@ function validateImageDataUri(photoDataUri) {
   }
 
   const encoded = match[2];
-  if (encoded.length % 4 !== 0) {
+  if (encoded.length > MAX_ENCODED_IMAGE_CHARS || encoded.length % 4 !== 0) {
     throw new VerifiedVisitServiceError(INVALID_IMAGE_MESSAGE, 400);
   }
 
@@ -81,8 +83,30 @@ function validateImageDataUri(photoDataUri) {
 }
 
 function validateEvidence(input) {
+  const normaliseNumber = (value, message) => {
+    const isNumber = typeof value === "number" && Number.isFinite(value);
+    const isNumericString = typeof value === "string"
+      && value.trim().length > 0
+      && Number.isFinite(Number(value));
+
+    if (!isNumber && !isNumericString) {
+      throw new VerifiedVisitServiceError(message, 400);
+    }
+
+    return Number(value);
+  };
+
+  const evidence = {
+    latitude: normaliseNumber(input.latitude, "A valid current location is required."),
+    longitude: normaliseNumber(input.longitude, "A valid current location is required."),
+    accuracyMeters: normaliseNumber(
+      input.accuracyMeters,
+      "Location accuracy must be 100 metres or better."
+    ),
+  };
+
   try {
-    return validateGeolocationEvidence(input);
+    return validateGeolocationEvidence(evidence);
   } catch (error) {
     throw new VerifiedVisitServiceError(error.message, 400);
   }
@@ -148,6 +172,7 @@ export function createVerifiedVisitService(dependencies) {
     appendPhotoToDatedVisit: appendPhoto,
     findDistinctVerifiedAttractionIds: findDistinctIds,
     findPublicVerifiedPhotos: findPublicPhotos,
+    findOwnedPhotoForDeletion: findOwnedPhoto,
     removeOwnedPhoto,
     deleteVisitWhenEmpty: deleteEmptyVisit,
   } = dependencies;
@@ -195,13 +220,7 @@ export function createVerifiedVisitService(dependencies) {
 
     const capturedAt = now();
     const visitDateKey = createMalaysiaVisitDateKey(capturedAt);
-    const publicId = [
-      safeString(user._id),
-      safeString(attraction._id),
-      visitDateKey,
-      capturedAt.getTime(),
-      createUuid(),
-    ].join("-");
+    const publicId = createUuid();
 
     let uploaded;
     try {
@@ -210,16 +229,21 @@ export function createVerifiedVisitService(dependencies) {
       throw asSafeInternalError(SAVE_ERROR_MESSAGE);
     }
 
-    if (!uploaded?.photoUrl || !uploaded?.cloudinaryPublicId) {
-      throw asSafeInternalError(SAVE_ERROR_MESSAGE);
-    }
-
     let cleanupAttempted = false;
     const cleanupUpload = async () => {
-      if (cleanupAttempted) return;
+      if (cleanupAttempted || !uploaded?.cloudinaryPublicId) return;
       cleanupAttempted = true;
       await deleteImage(uploaded.cloudinaryPublicId);
     };
+
+    if (!uploaded?.photoUrl || !uploaded?.cloudinaryPublicId) {
+      try {
+        await cleanupUpload();
+      } catch {
+        // The malformed upload response still produces only a safe service error.
+      }
+      throw asSafeInternalError(SAVE_ERROR_MESSAGE);
+    }
 
     try {
       const visit = await appendPhoto({
@@ -263,7 +287,9 @@ export function createVerifiedVisitService(dependencies) {
   async function getVerifiedAttractionIdsForUser(providerSubject) {
     const googleId = requireProviderSubject(providerSubject);
     const user = await findPersistedUser(googleId, "Unable to load verified visits.");
-    if (!user?._id) return [];
+    if (!user?._id) {
+      throw new VerifiedVisitServiceError(AUTH_REQUIRED_MESSAGE, 401);
+    }
 
     try {
       const ids = await findDistinctIds(user._id);
@@ -305,32 +331,49 @@ export function createVerifiedVisitService(dependencies) {
       );
     }
 
-    let removal;
+    const ownershipInput = { userId: user._id, visitId, photoId };
+    let ownedPhoto;
     try {
-      removal = await removeOwnedPhoto({ userId: user._id, visitId, photoId });
+      ownedPhoto = await findOwnedPhoto(ownershipInput);
     } catch {
       throw asSafeInternalError(DELETE_ERROR_MESSAGE);
     }
 
-    if (!removal) {
+    if (!ownedPhoto) {
       throw new VerifiedVisitServiceError(
         "You can only delete your own verified photos.",
         403
       );
     }
 
-    const cloudinaryPublicId = removal.removedPhoto?.cloudinaryPublicId;
+    const cloudinaryPublicId = ownedPhoto.cloudinaryPublicId;
     if (!cloudinaryPublicId) {
       throw asSafeInternalError(DELETE_ERROR_MESSAGE);
     }
 
     try {
       await deleteImage(cloudinaryPublicId);
-      if (removal.visit?.photos?.length === 0) {
-        await deleteEmptyVisit(visitId);
-      }
     } catch {
       throw asSafeInternalError(DELETE_ERROR_MESSAGE);
+    }
+
+    let visit;
+    try {
+      visit = await removeOwnedPhoto(ownershipInput);
+    } catch {
+      throw asSafeInternalError(DELETE_ERROR_MESSAGE);
+    }
+
+    if (!visit) {
+      throw asSafeInternalError(DELETE_ERROR_MESSAGE);
+    }
+
+    if (visit.photos?.length === 0) {
+      try {
+        await deleteEmptyVisit(visitId);
+      } catch {
+        // The photo and its external asset are gone; an empty group is safe to retain.
+      }
     }
   }
 
@@ -353,6 +396,7 @@ const verifiedVisitService = createVerifiedVisitService({
   appendPhotoToDatedVisit,
   findDistinctVerifiedAttractionIds,
   findPublicVerifiedPhotos: findPublicVerifiedPhotosRepository,
+  findOwnedPhotoForDeletion,
   removeOwnedPhoto,
   deleteVisitWhenEmpty,
 });
