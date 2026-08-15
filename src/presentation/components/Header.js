@@ -25,6 +25,9 @@ export default function Header() {
         <nav className="hidden items-center gap-2 md:flex" aria-label="Main navigation">
           <Link href="/" className="rounded-lg px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-emerald-50 hover:text-emerald-700">Home</Link>
           <Link href="/#attractions" className="rounded-lg px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-emerald-50 hover:text-emerald-700">Attractions</Link>
+          {isLoggedIn && (
+            <Link href="/attractions/submit" className="rounded-lg px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-emerald-50 hover:text-emerald-700">+ Add Attraction</Link>
+          )}
           <span className="cursor-not-allowed rounded-lg px-4 py-2 text-sm font-semibold text-gray-400" title="Coming later">Map</span>
           <span className="cursor-not-allowed rounded-lg px-4 py-2 text-sm font-semibold text-gray-400" title="Coming later">Community</span>
         </nav>
@@ -84,6 +87,9 @@ export default function Header() {
           <nav className="absolute right-0 mt-3 w-56 rounded-xl border border-gray-200 bg-white p-3 shadow-lg" aria-label="Mobile navigation">
             <Link href="/" className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700">Home</Link>
             <Link href="/#attractions" className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700">Attractions</Link>
+            {isLoggedIn && (
+              <Link href="/attractions/submit" className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700">+ Add Attraction</Link>
+            )}
             <span className="block cursor-not-allowed rounded-lg px-4 py-3 text-sm font-semibold text-gray-400">Map</span>
             <span className="block cursor-not-allowed rounded-lg px-4 py-3 text-sm font-semibold text-gray-400">Community</span>
             <div className="my-2 border-t border-gray-200" />

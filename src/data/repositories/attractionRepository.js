@@ -5,6 +5,7 @@ export async function findAttractions({
   category = "",
   locationArea = "",
   minRating = 0,
+  communitySubmitted = false,
   page = 1,
   limit = 15,
 }) {
@@ -28,6 +29,10 @@ export async function findAttractions({
 
   if (locationArea && locationArea !== "All") {
     query.locationArea = locationArea;
+  }
+
+  if (communitySubmitted) {
+    query.submittedBy = { $exists: true };
   }
 
   const skip = (page - 1) * limit;
@@ -123,6 +128,38 @@ export async function updateAttractionDescription(attractionId, description) {
   return Attraction.findByIdAndUpdate(
     attractionId,
     { $set: { description } },
+    { returnDocument: "after" }
+  ).lean();
+}
+
+export async function findActiveAttractionByGooglePlaceId(googlePlaceId) {
+  return Attraction.findOne({
+    googlePlaceId,
+    isActive: true,
+  }).lean();
+}
+
+export async function createAttraction(data) {
+  const attraction = await Attraction.create(data);
+  return attraction.toObject();
+}
+
+export async function addAttractionPhoto(attractionId, photoUrl) {
+  return Attraction.findOneAndUpdate(
+    { _id: attractionId, isActive: true },
+    { $push: { photos: photoUrl } },
+    { returnDocument: "after" }
+  ).lean();
+}
+
+// Community description edit (Melaka-gated, distinct from
+// updateAttractionDescription above, which is the sync:descriptions
+// script's own automated Places-backfill path and must not carry an
+// editor snapshot).
+export async function updateAttractionDescriptionByUser(attractionId, description, editedBy) {
+  return Attraction.findOneAndUpdate(
+    { _id: attractionId, isActive: true },
+    { $set: { description, descriptionLastEditedBy: editedBy } },
     { returnDocument: "after" }
   ).lean();
 }

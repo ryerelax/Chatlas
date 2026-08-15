@@ -3,6 +3,9 @@ import Link from "next/link";
 
 export default function AttractionCard({ attraction }) {
   const coverPhoto = attraction.photos?.[0];
+  const combinedRating = attraction.combinedRating ?? attraction.rating ?? 0;
+  const chatlasReviewCount = attraction.chatlasReviewCount ?? 0;
+  const googleReviewCount = attraction.googleReviewCount ?? attraction.totalReviews ?? 0;
 
   return (
     // TODO: Refine the card colors, spacing, and visual style based on the final Chatlas branding.
@@ -34,6 +37,12 @@ export default function AttractionCard({ attraction }) {
           {attraction.category || "Uncategorized"}
         </span>
 
+        {attraction.submittedBy && (
+          <span className="ml-2 inline-block rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-700">
+            Added by a Chatlas user
+          </span>
+        )}
+
         <h2 className="mt-3 text-xl font-bold text-gray-900">
           {attraction.name}
         </h2>
@@ -44,12 +53,12 @@ export default function AttractionCard({ attraction }) {
 
         <div className="mt-4">
           <span className="font-semibold text-amber-500">
-            ★ {attraction.rating || 0}
+            ★ {combinedRating.toFixed(1)}
           </span>
 
-          <span className="ml-2 text-sm text-gray-500">
-            ({attraction.totalReviews || 0} reviews)
-          </span>
+          <p className="mt-1 text-xs text-gray-500">
+            {chatlasReviewCount.toLocaleString()} on Chatlas, {googleReviewCount.toLocaleString()} on Google Maps
+          </p>
         </div>
       </div>
     </Link>

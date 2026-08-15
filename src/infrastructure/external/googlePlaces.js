@@ -99,3 +99,92 @@ export async function fetchPlaceEditorialSummary(placeId, apiKey) {
   const data = await response.json();
   return data.editorialSummary?.text || "";
 }
+
+// Melaka town center, used to bias (not restrict) Autocomplete results toward
+// the app's Melaka-only scope.
+const MELAKA_LOCATION_BIAS = {
+  circle: {
+    center: { latitude: 2.1896, longitude: 102.2501 },
+    radius: 20000,
+  },
+};
+
+// Places Autocomplete (New) for Decision 4's "Add Attraction" search. The
+// sessionToken must be the same value across every keystroke of one search,
+// and again on the following fetchPlaceDetailsForSubmission call, so Google
+// bills the whole search-to-selection journey as a single session.
+export async function searchPlacesAutocomplete(input, { apiKey, sessionToken } = {}) {
+  if (!apiKey) {
+    throw new Error("Google Places API key is not configured.");
+  }
+
+  const response = await fetch(`${PLACES_API_BASE}/places:autocomplete`, {
+    method: "POST",
+    headers: {
+      "X-Goog-Api-Key": apiKey,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      input,
+      sessionToken,
+      locationBias: MELAKA_LOCATION_BIAS,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Places Autocomplete request failed with status ${response.status}`);
+  }
+
+  const data = await response.json();
+
+  return (data.suggestions || [])
+    .map((suggestion) => suggestion.placePrediction)
+    .filter(Boolean)
+    .map((prediction) => ({
+      placeId: prediction.placeId,
+      text: prediction.text?.text || "",
+    }));
+}
+
+// Fetches full place details for a place the user selected from Autocomplete
+// results, closing the Autocomplete session by reusing the same sessionToken.
+// Used only by the Add Attraction submission flow (Decision 4) — distinct
+// from fetchPlaceFormattedAddress/fetchPlaceEditorialSummary, which serve the
+// offline sync scripts and only fetch one field at a time.
+export async function fetchPlaceDetailsForSubmission(placeId, { apiKey, sessionToken } = {}) {
+  if (!apiKey) {
+    throw new Error("Google Places API key is not configured.");
+  }
+
+  const url = new URL(`${PLACES_API_BASE}/places/${placeId}`);
+  if (sessionToken) {
+    url.searchParams.set("sessionToken", sessionToken);
+  }
+
+  const response = await fetch(url, {
+    headers: {
+      "X-Goog-Api-Key": apiKey,
+      "X-Goog-FieldMask":
+        "id,displayName,formattedAddress,location,types,rating,userRatingCount,businessStatus,googleMapsUri",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Place Details request failed with status ${response.status}`);
+  }
+
+  const data = await response.json();
+
+  return {
+    googlePlaceId: data.id,
+    name: data.displayName?.text || "",
+    address: data.formattedAddress || "",
+    latitude: data.location?.latitude,
+    longitude: data.location?.longitude,
+    types: data.types || [],
+    rating: data.rating || 0,
+    totalReviews: data.userRatingCount || 0,
+    businessStatus: data.businessStatus || "OPERATIONAL",
+    googleMapsUrl: data.googleMapsUri || "",
+  };
+}

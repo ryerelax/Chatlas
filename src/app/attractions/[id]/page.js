@@ -8,6 +8,8 @@ import ReviewList from "@/presentation/components/reviews/ReviewList";
 import StarRating from "@/presentation/components/StarRating";
 import { BackArrowIcon, LocationPinIcon } from "@/presentation/components/AttractionIcons";
 import AttractionPhotoGallery from "@/presentation/components/AttractionPhotoGallery";
+import CommunityPhotoUpload from "@/presentation/components/CommunityPhotoUpload";
+import CommunityDescriptionEdit from "@/presentation/components/CommunityDescriptionEdit";
 
 export default function AttractionDetailsPage() {
   const params = useParams();
@@ -84,8 +86,6 @@ export default function AttractionDetailsPage() {
     );
   }
 
-  const hasDescription = attraction.description && attraction.description.trim().length > 0;
-
   return (
     <main className="min-h-screen bg-attraction-page-bg">
       <div className="mx-auto max-w-[1120px] px-4 py-8 pb-16 md:px-6 lg:px-[38px]">
@@ -105,56 +105,45 @@ export default function AttractionDetailsPage() {
                 {attraction.category || "Uncategorized"}
               </span>
 
+              {attraction.submittedBy && (
+                <span className="mb-3 ml-2 inline-block rounded-full bg-sky-100 px-3 py-1 text-[13px] font-semibold text-sky-700">
+                  Added by a Chatlas user
+                </span>
+              )}
+
               <h1 className="mb-3 text-2xl font-bold leading-tight tracking-tight text-attraction-ink md:text-3xl lg:text-4xl">
                 {attraction.name}
               </h1>
 
-              <div className="flex flex-wrap items-center gap-4">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
                 <StarRating
-                  rating={attraction.rating || 0}
-                  reviewCount={attraction.totalReviews || 0}
+                  rating={attraction.combinedRating ?? attraction.rating ?? 0}
                   size={16}
                 />
+                <p className="text-[13px] text-attraction-muted">
+                  {(attraction.chatlasReviewCount ?? 0).toLocaleString()} on Chatlas, {(attraction.googleReviewCount ?? attraction.totalReviews ?? 0).toLocaleString()} on Google Maps
+                </p>
                 {/* TODO: Show a Location Area pin once the schema/data supports a district field. */}
               </div>
             </div>
 
             <AttractionPhotoGallery attraction={attraction} />
 
-            <div className="mt-7 rounded-[18px] border border-attraction-border bg-white p-6">
-              <h2 className="mb-3.5 text-lg font-bold text-attraction-ink">
-                About this attraction
-              </h2>
-              <p
-                className={
-                  hasDescription
-                    ? "text-base leading-relaxed text-attraction-body"
-                    : "text-base italic leading-relaxed text-attraction-muted"
-                }
-              >
-                {hasDescription ? attraction.description : "No description available for this attraction yet."}
-              </p>
-            </div>
+            <CommunityPhotoUpload
+              attractionId={attractionId}
+              onPhotoAdded={(updatedAttraction) =>
+                setAttraction((current) => ({ ...current, photos: updatedAttraction.photos }))
+              }
+            />
 
-            {/* TODO: Link to the Review & Community module once that route ships. */}
-            <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-[14px] bg-attraction-surface-soft p-5">
-              <div>
-                <p className="mb-0.5 text-sm font-semibold text-attraction-ink">
-                  Community reviews
-                </p>
-                <p className="text-[13px] text-attraction-muted">
-                  Read what travellers say about this attraction
-                </p>
-              </div>
-              <button
-                type="button"
-                disabled
-                title="Coming soon"
-                className="h-9 shrink-0 whitespace-nowrap rounded-[10px] border border-attraction-border-strong bg-white px-4 text-[13px] font-semibold text-attraction-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                View reviews
-              </button>
-            </div>
+            <CommunityDescriptionEdit
+              attractionId={attractionId}
+              description={attraction.description}
+              onDescriptionUpdated={(newDescription) =>
+                setAttraction((current) => ({ ...current, description: newDescription }))
+              }
+            />
+
             {/* Review & Community Section */}
             <section className="mt-8">
               <div className="mb-5 flex items-center justify-between">
@@ -204,7 +193,8 @@ export default function AttractionDetailsPage() {
               <InfoRow
                 icon={<StarIcon />}
                 label="Rating"
-                value={`${(attraction.rating || 0).toFixed(1)} out of 5 (${(attraction.totalReviews || 0).toLocaleString()} reviews)`}
+                value={`${(attraction.combinedRating ?? attraction.rating ?? 0).toFixed(1)} out of 5`}
+                subValue={`${(attraction.chatlasReviewCount ?? 0).toLocaleString()} on Chatlas, ${(attraction.googleReviewCount ?? attraction.totalReviews ?? 0).toLocaleString()} on Google Maps`}
               />
             </div>
 
@@ -226,7 +216,7 @@ function Divider() {
   return <div className="my-3.5 border-t border-attraction-divider" />;
 }
 
-function InfoRow({ icon, label, value }) {
+function InfoRow({ icon, label, value, subValue }) {
   return (
     <div className="flex items-start gap-3">
       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-attraction-primary-soft text-attraction-primary">
@@ -237,6 +227,9 @@ function InfoRow({ icon, label, value }) {
           {label}
         </p>
         <p className="text-sm leading-relaxed text-attraction-body">{value}</p>
+        {subValue && (
+          <p className="text-xs leading-relaxed text-attraction-muted">{subValue}</p>
+        )}
       </div>
     </div>
   );
