@@ -40,3 +40,22 @@ export async function uploadImageFromUrl(imageUrl, { folder, publicId } = {}) {
 
   return result.secure_url;
 }
+
+// Uploads a browser-submitted file (already read into a Buffer server-side) and
+// returns the resulting stable, permanent secure URL. Used for direct user
+// uploads (e.g. Decision 4's optional Add Attraction photo), as opposed to
+// uploadImageFromUrl's fetch-a-Places-photo-then-upload flow.
+export async function uploadImageFromBuffer(buffer, mimeType, { folder, publicId } = {}) {
+  const client = getConfiguredClient();
+
+  const dataUri = `data:${mimeType};base64,${buffer.toString("base64")}`;
+
+  const result = await client.uploader.upload(dataUri, {
+    folder,
+    public_id: publicId,
+    overwrite: true,
+    resource_type: "image",
+  });
+
+  return result.secure_url;
+}
