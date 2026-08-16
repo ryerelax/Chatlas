@@ -22,10 +22,10 @@ export const addToFavourites = async (attractionId) => {
   }
 };
 
-// Remove from favourites
+// Remove from favourites - use query parameter
 export const removeFromFavourites = async (attractionId) => {
   try {
-    const response = await api.delete(`/api/collection/favourites/${attractionId}`);
+    const response = await api.delete(`/api/collection/favourites?attractionId=${attractionId}`);
     return response.data;
   } catch (error) {
     console.error("Error removing from favourites:", error);

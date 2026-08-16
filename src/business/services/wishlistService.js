@@ -22,10 +22,10 @@ export const addToWishlist = async (attractionId) => {
   }
 };
 
-// Remove from wishlist
+// Remove from wishlist - use query parameter
 export const removeFromWishlist = async (attractionId) => {
   try {
-    const response = await api.delete(`/api/collection/wishlist/${attractionId}`);
+    const response = await api.delete(`/api/collection/wishlist?attractionId=${attractionId}`);
     return response.data;
   } catch (error) {
     console.error("Error removing from wishlist:", error);
