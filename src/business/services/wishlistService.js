@@ -1,5 +1,6 @@
 import api from "./api";
 
+// Get user's wishlist
 export const getWishlist = async () => {
   try {
     const response = await api.get("/api/collection/wishlist");
@@ -10,6 +11,7 @@ export const getWishlist = async () => {
   }
 };
 
+// Add to wishlist
 export const addToWishlist = async (attractionId) => {
   try {
     const response = await api.post("/api/collection/wishlist", { attractionId });
@@ -20,6 +22,7 @@ export const addToWishlist = async (attractionId) => {
   }
 };
 
+// Remove from wishlist
 export const removeFromWishlist = async (attractionId) => {
   try {
     const response = await api.delete(`/api/collection/wishlist/${attractionId}`);
@@ -30,9 +33,10 @@ export const removeFromWishlist = async (attractionId) => {
   }
 };
 
+// Check if attraction is in wishlist
 export const checkWishlistStatus = async (attractionId) => {
   try {
-    const response = await api.get(`/api/collection/wishlist/check/${attractionId}`);
+    const response = await api.get(`/api/collection/wishlist?attractionId=${attractionId}`);
     return response.data;
   } catch (error) {
     console.error("Error checking wishlist:", error);

@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-const wishlistItemSchema = new mongoose.Schema(
+const favouriteSchema = new mongoose.Schema(
   {
     userId: {
       type: String,
@@ -22,10 +22,10 @@ const wishlistItemSchema = new mongoose.Schema(
   }
 );
 
-// Prevent duplicate wishlist entries
-wishlistItemSchema.index({ userId: 1, attractionId: 1 }, { unique: true });
+// Prevent duplicate favourites
+favouriteSchema.index({ userId: 1, attractionId: 1 }, { unique: true });
 
 // Compound index for faster queries
-wishlistItemSchema.index({ userId: 1, addedAt: -1 });
+favouriteSchema.index({ userId: 1, addedAt: -1 });
 
-export default mongoose.models.WishlistItem || mongoose.model("WishlistItem", wishlistItemSchema);
+export default mongoose.models.Favourite || mongoose.model("Favourite", favouriteSchema);

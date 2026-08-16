@@ -1,9 +1,10 @@
 "use client";
-//hi
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import ReviewForm from "@/presentation/components/reviews/ReviewForm";
 import ReviewList from "@/presentation/components/reviews/ReviewList";
 import StarRating from "@/presentation/components/StarRating";
@@ -11,15 +12,30 @@ import { BackArrowIcon, LocationPinIcon } from "@/presentation/components/Attrac
 import AttractionPhotoGallery from "@/presentation/components/AttractionPhotoGallery";
 import CommunityPhotoUpload from "@/presentation/components/CommunityPhotoUpload";
 import CommunityDescriptionEdit from "@/presentation/components/CommunityDescriptionEdit";
+import {
+  addToFavourites,
+  removeFromFavourites,
+  checkFavouritesStatus,
+} from "@/business/services/favouritesService";
 
 export default function AttractionDetailsPage() {
   const params = useParams();
   const attractionId = params.id;
+  const { data: session } = useSession();
+  const router = useRouter();
 
   const [attraction, setAttraction] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [reviewRefreshVersion, setReviewRefreshVersion] = useState(0);
+  const [isInFavourites, setIsInFavourites] = useState(false);
+  const [isFavouriteLoading, setIsFavouriteLoading] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  const showToast = (message, type = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   useEffect(() => {
     async function loadAttractionDetails() {
@@ -53,6 +69,42 @@ export default function AttractionDetailsPage() {
       loadAttractionDetails();
     }
   }, [attractionId]);
+
+  // Check favourites status on mount
+  useEffect(() => {
+    if (session && attractionId) {
+      checkFavouritesStatus(attractionId)
+        .then((res) => setIsInFavourites(res.inFavourites || false))
+        .catch(() => {});
+    }
+  }, [session, attractionId]);
+
+  // Handle favourites toggle
+  const handleFavouritesToggle = async () => {
+    if (!session) {
+      router.push("/login");
+      return;
+    }
+
+    setIsFavouriteLoading(true);
+    try {
+      if (isInFavourites) {
+        await removeFromFavourites(attractionId);
+        setIsInFavourites(false);
+        showToast("Removed from favourites", "info");
+      } else {
+        await addToFavourites(attractionId);
+        setIsInFavourites(true);
+        showToast("Added to favourites! ⭐", "success");
+      }
+    } catch (error) {
+      console.error("Error toggling favourites:", error);
+      const errorMsg = error.response?.data?.message || "Unable to update favourites.";
+      showToast(errorMsg, "error");
+    } finally {
+      setIsFavouriteLoading(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -124,7 +176,6 @@ export default function AttractionDetailsPage() {
                 <p className="text-[13px] text-attraction-muted">
                   {(attraction.chatlasReviewCount ?? 0).toLocaleString()} on Chatlas, {(attraction.googleReviewCount ?? attraction.totalReviews ?? 0).toLocaleString()} on Google Maps
                 </p>
-                {/* TODO: Show a Location Area pin once the schema/data supports a district field. */}
               </div>
             </div>
 
@@ -175,9 +226,33 @@ export default function AttractionDetailsPage() {
           {/* Right column */}
           <div className="flex flex-col gap-4">
             <div className="rounded-[18px] border border-attraction-border bg-white p-6 shadow-sm">
-              <h2 className="mb-4 text-base font-bold text-attraction-ink">
-                Attraction details
-              </h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-base font-bold text-attraction-ink">
+                  Attraction details
+                </h2>
+
+                {/* Favourites Button */}
+                <button
+                  onClick={handleFavouritesToggle}
+                  disabled={isFavouriteLoading}
+                  className="w-10 h-10 rounded-full bg-white border border-attraction-border shadow-sm hover:shadow-md flex items-center justify-center transition-all duration-200 hover:scale-110 disabled:opacity-50"
+                  title={isInFavourites ? "Remove from favourites" : "Add to favourites"}
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill={isInFavourites ? "#FFAB00" : "none"}
+                    stroke={isInFavourites ? "#FFAB00" : "#65748A"}
+                    viewBox="0 0 24 24"
+                    strokeWidth={2}
+                  >
+                    <polygon
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
+                    />
+                  </svg>
+                </button>
+              </div>
 
               <InfoRow
                 icon={<CategoryIcon />}
@@ -209,6 +284,17 @@ export default function AttractionDetailsPage() {
           </div>
         </div>
       </div>
+
+      {/* Toast Notification */}
+      {toast && (
+        <div className={`fixed bottom-6 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg z-50 transition-all duration-300 ${
+          toast.type === "success" ? "bg-[#16845B] text-white" :
+          toast.type === "error" ? "bg-[#C2413B] text-white" :
+          "bg-[#2F6DA1] text-white"
+        }`}>
+          {toast.message}
+        </div>
+      )}
     </main>
   );
 }
