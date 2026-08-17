@@ -2,73 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-
-// Mock data for testing (replace with API call later)
-const MOCK_ACTIVITIES = [
-  {
-    id: "1",
-    type: "visited",
-    attractionName: "A Famosa",
-    attractionCategory: "Historical",
-    date: "15 June 2026",
-  },
-  {
-    id: "2",
-    type: "reviewed",
-    attractionName: "A Famosa",
-    attractionCategory: "Historical",
-    date: "15 June 2026",
-    rating: 4.5,
-    reviewExcerpt: "One of the oldest surviving European architectural remains in Asia.",
-  },
-  {
-    id: "3",
-    type: "visited",
-    attractionName: "Jonker Street Night Market",
-    attractionCategory: "Entertainment",
-    date: "14 June 2026",
-  },
-  {
-    id: "4",
-    type: "reviewed",
-    attractionName: "Jonker Street Night Market",
-    attractionCategory: "Entertainment",
-    date: "14 June 2026",
-    rating: 4.2,
-    reviewExcerpt: "A vibrant mix of food, culture, and shopping.",
-  },
-  {
-    id: "5",
-    type: "photo",
-    attractionName: "Jonker Street Night Market",
-    attractionCategory: "Entertainment",
-    date: "14 June 2026",
-    photoUrl: "",
-  },
-  {
-    id: "6",
-    type: "visited",
-    attractionName: "Melaka Straits Mosque",
-    attractionCategory: "Religious",
-    date: "13 June 2026",
-  },
-  {
-    id: "7",
-    type: "reviewed",
-    attractionName: "Melaka Straits Mosque",
-    attractionCategory: "Religious",
-    date: "13 June 2026",
-    rating: 4.7,
-    reviewExcerpt: "Beautiful golden dome mosque on the edge of the Melaka Strait.",
-  },
-];
-
-const STATS = [
-  { label: "Attractions visited", value: "6" },
-  { label: "Reviews written", value: "12" },
-  { label: "Photos uploaded", value: "8" },
-  { label: "Total activities", value: "26" },
-];
+import { useSession } from "next-auth/react";
+import { useReviews } from "@/presentation/contexts/ReviewsContext";
 
 const ACTIVITY_BADGES = {
   visited: { label: "Visited", bg: "#E6F7F0", color: "#004638" },
@@ -85,17 +20,58 @@ const FILTER_OPTIONS = [
 
 export default function TravelHistoryPage() {
   const router = useRouter();
-  const [activities, setActivities] = useState([]);
+  const { data: session, status } = useSession();
+  const { reviews } = useReviews();
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState("All");
   const [sortNewest, setSortNewest] = useState(true);
+  const [activities, setActivities] = useState([]);
 
   useEffect(() => {
-    setTimeout(() => {
-      setActivities(MOCK_ACTIVITIES);
+    if (status === "unauthenticated") {
+      router.push("/login?redirect=/travel-history");
+      return;
+    }
+    
+    if (status === "authenticated") {
+      loadActivities();
+    }
+  }, [status, router, reviews]);
+
+  const loadActivities = async () => {
+    setIsLoading(true);
+    try {
+      // Build activities from reviews
+      const reviewActivities = reviews.map((review) => ({
+        id: review._id,
+        type: "reviewed",
+        attractionName: review.attractionId?.name || "Unknown attraction",
+        attractionCategory: review.attractionId?.category || "Uncategorized",
+        date: new Date(review.createdAt).toLocaleDateString("en-US", {
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        }),
+        rating: review.rating,
+        reviewExcerpt: review.reviewText?.substring(0, 120) + (review.reviewText?.length > 120 ? "..." : ""),
+      }));
+
+      // TODO: Add visited activities when API is ready
+      // TODO: Add photo activities when API is ready
+      
+      // Sort by date (newest first)
+      const sorted = reviewActivities.sort((a, b) => {
+        return new Date(b.date) - new Date(a.date);
+      });
+
+      setActivities(sorted);
+    } catch (error) {
+      console.error("Error loading activities:", error);
+      setActivities([]);
+    } finally {
       setIsLoading(false);
-    }, 500);
-  }, []);
+    }
+  };
 
   const filtered = activities.filter((a) => {
     if (filter === "Visited") return a.type === "visited";
@@ -106,12 +82,24 @@ export default function TravelHistoryPage() {
 
   const sorted = sortNewest ? filtered : [...filtered].reverse();
 
-  if (isLoading) {
+  // Stats
+  const stats = [
+    { label: "Attractions visited", value: "0" }, // TODO: Add real count
+    { label: "Reviews written", value: reviews.length.toString() },
+    { label: "Photos uploaded", value: "0" }, // TODO: Add real count
+    { label: "Total activities", value: activities.length.toString() },
+  ];
+
+  if (status === "loading" || isLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <p className="text-[#65748A]">Loading your travel history...</p>
       </div>
     );
+  }
+
+  if (!session) {
+    return null;
   }
 
   return (
@@ -120,10 +108,10 @@ export default function TravelHistoryPage() {
       <div className="bg-[#006C56] text-white py-12 px-4">
         <div className="max-w-[1200px] mx-auto">
           <button
-            onClick={() => router.push("/collection")}
+            onClick={() => router.push("/profile")}
             className="text-white/80 hover:text-white mb-4 flex items-center gap-2 transition-colors"
           >
-            ← Back to Collection
+            ← Back to Profile
           </button>
           <h1 className="text-3xl md:text-4xl font-bold">My Travel History</h1>
           <p className="text-white/80 mt-2">Explore your journey across Melaka</p>
@@ -134,7 +122,7 @@ export default function TravelHistoryPage() {
       <div className="max-w-[1200px] mx-auto px-4 py-8">
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          {STATS.map((stat) => (
+          {stats.map((stat) => (
             <div key={stat.label} className="bg-white border border-[#D8E1E7] rounded-[14px] p-5">
               <p className="text-[#10213B] font-bold text-3xl tracking-tight">{stat.value}</p>
               <p className="text-[#65748A] text-sm mt-1">{stat.label}</p>
@@ -195,7 +183,7 @@ export default function TravelHistoryPage() {
               return (
                 <div
                   key={activity.id}
-                  className="bg-white border border-[#D8E1E7] flex items-start gap-4 p-4 rounded-[14px] hover:shadow-lg transition-shadow cursor-pointer"
+                  className="bg-white border border-[#D8E1E7] flex items-start gap-4 p-4 rounded-[14px] hover:shadow-lg transition-shadow"
                 >
                   <div
                     className="w-10 h-10 flex items-center justify-center flex-shrink-0 rounded-lg"

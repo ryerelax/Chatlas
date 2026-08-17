@@ -3,34 +3,13 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-
-// Mock data for testing (replace with API call later)
-const MOCK_PHOTOS = [
-  {
-    id: "1",
-    url: "",
-    attractionName: "A Famosa",
-    uploadedAt: "15 June 2026",
-    isProfilePicture: true,
-  },
-  {
-    id: "2",
-    url: "",
-    attractionName: "Jonker Street Night Market",
-    uploadedAt: "14 June 2026",
-    isProfilePicture: false,
-  },
-  {
-    id: "3",
-    url: "",
-    attractionName: "Melaka Straits Mosque",
-    uploadedAt: "13 June 2026",
-    isProfilePicture: false,
-  },
-];
+import { useSession } from "next-auth/react";
+import { useReviews } from "@/presentation/contexts/ReviewsContext";
 
 export default function MyPhotosPage() {
   const router = useRouter();
+  const { data: session, status } = useSession();
+  const { reviews } = useReviews();
   const [photos, setPhotos] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [lightboxPhoto, setLightboxPhoto] = useState(null);
@@ -38,11 +17,54 @@ export default function MyPhotosPage() {
   const [toast, setToast] = useState("");
 
   useEffect(() => {
-    setTimeout(() => {
-      setPhotos(MOCK_PHOTOS);
+    if (status === "unauthenticated") {
+      router.push("/login?redirect=/photos");
+      return;
+    }
+    
+    if (status === "authenticated") {
+      loadPhotos();
+    }
+  }, [status, router, reviews]);
+
+  const loadPhotos = async () => {
+    setIsLoading(true);
+    try {
+      // Extract photos from reviews
+      const photoList = [];
+      
+      reviews.forEach((review) => {
+        if (review.photos && review.photos.length > 0) {
+          review.photos.forEach((photoUrl, index) => {
+            photoList.push({
+              id: `${review._id}-${index}`,
+              url: photoUrl,
+              attractionName: review.attractionId?.name || "Unknown attraction",
+              uploadedAt: new Date(review.createdAt).toLocaleDateString("en-US", {
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+              }),
+              isProfilePicture: false, // TODO: Add profile picture logic
+            });
+          });
+        }
+      });
+
+      // TODO: Add user profile picture to photos list
+      // For now, just set the first photo as profile if exists
+      if (photoList.length > 0) {
+        photoList[0].isProfilePicture = true;
+      }
+
+      setPhotos(photoList);
+    } catch (error) {
+      console.error("Error loading photos:", error);
+      setPhotos([]);
+    } finally {
       setIsLoading(false);
-    }, 500);
-  }, []);
+    }
+  };
 
   const showToast = (msg) => {
     setToast(msg);
@@ -52,6 +74,7 @@ export default function MyPhotosPage() {
   const handleSetProfile = (id) => {
     setPhotos(photos.map((p) => ({ ...p, isProfilePicture: p.id === id })));
     showToast("Profile picture updated successfully");
+    // TODO: Call API to update user profile picture
   };
 
   const handleDelete = () => {
@@ -59,14 +82,19 @@ export default function MyPhotosPage() {
     setPhotos(photos.filter((p) => p.id !== deleteTarget.id));
     setDeleteTarget(null);
     showToast("Photo deleted successfully");
+    // TODO: Call API to delete photo
   };
 
-  if (isLoading) {
+  if (status === "loading" || isLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <p className="text-[#65748A]">Loading your photos...</p>
       </div>
     );
+  }
+
+  if (!session) {
+    return null;
   }
 
   const profilePic = photos.find((p) => p.isProfilePicture);
@@ -77,10 +105,10 @@ export default function MyPhotosPage() {
       <div className="bg-[#006C56] text-white py-12 px-4">
         <div className="max-w-[1200px] mx-auto">
           <button
-            onClick={() => router.push("/collection")}
+            onClick={() => router.push("/profile")}
             className="text-white/80 hover:text-white mb-4 flex items-center gap-2 transition-colors"
           >
-            ← Back to Collection
+            ← Back to Profile
           </button>
           <h1 className="text-3xl md:text-4xl font-bold">My Photos</h1>
           <p className="text-white/80 mt-2">Showing {photos.length} photo{photos.length !== 1 ? "s" : ""}</p>

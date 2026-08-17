@@ -1,13 +1,56 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useReviews } from "@/presentation/contexts/ReviewsContext";
 import ReviewCard from "./ReviewCard";
 
 export default function ReviewList({ attractionId, refreshVersion = 0 }) {
+  const { refreshAttractionReviews } = useReviews();
   const [reviews, setReviews] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [localRefreshVersion, setLocalRefreshVersion] = useState(refreshVersion);
 
+  // Listen for reviewAdded flag to auto-refresh
+  useEffect(() => {
+    const handleReviewAdded = () => {
+      if (localStorage.getItem('reviewAdded') === 'true') {
+        localStorage.removeItem('reviewAdded');
+        console.log("ReviewList: Auto-refreshing after review added");
+        // Increment refresh version to trigger reload
+        setLocalRefreshVersion(prev => prev + 1);
+        // Also refresh context
+        refreshAttractionReviews(attractionId);
+      }
+    };
+
+    // Check immediately on mount
+    handleReviewAdded();
+
+    // Listen for focus and visibility changes
+    const refreshIfNeeded = () => {
+      if (localStorage.getItem('reviewAdded') === 'true') {
+        localStorage.removeItem('reviewAdded');
+        console.log("ReviewList: Auto-refreshing after focus/visibility");
+        setLocalRefreshVersion(prev => prev + 1);
+        refreshAttractionReviews(attractionId);
+      }
+    };
+
+    window.addEventListener("focus", refreshIfNeeded);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        refreshIfNeeded();
+      }
+    });
+
+    return () => {
+      window.removeEventListener("focus", refreshIfNeeded);
+      document.removeEventListener('visibilitychange', refreshIfNeeded);
+    };
+  }, [attractionId, refreshAttractionReviews]);
+
+  // Load reviews from API
   useEffect(() => {
     const controller = new AbortController();
 
@@ -43,7 +86,7 @@ export default function ReviewList({ attractionId, refreshVersion = 0 }) {
     }
 
     return () => controller.abort();
-  }, [attractionId, refreshVersion]);
+  }, [attractionId, localRefreshVersion]);
 
   if (isLoading) {
     return <ReviewListSkeleton />;

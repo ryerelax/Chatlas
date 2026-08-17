@@ -4,15 +4,17 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useReviews } from "@/presentation/contexts/ReviewsContext";
 
 export default function ProfilePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const { reviews, loadReviews, refreshReviews } = useReviews();
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [statsLoading, setStatsLoading] = useState(true);
   const [stats, setStats] = useState({
     placesVisited: 0,
-    reviewsWritten: 0,
     photosUploaded: 0,
     savedPlaces: 0,
     wishlistCount: 0,
@@ -26,9 +28,42 @@ export default function ProfilePage() {
     }
     if (status === "authenticated") {
       fetchUserData();
-      fetchStats();
+      loadReviews(true);
+      fetchCollectionStats();
     }
-  }, [status, router]);
+  }, [status, router, loadReviews]);
+
+  // Auto-refresh when coming back to the page
+  useEffect(() => {
+    if (status === "authenticated") {
+      const refreshIfNeeded = () => {
+        if (localStorage.getItem('reviewDeleted') === 'true') {
+          localStorage.removeItem('reviewDeleted');
+          console.log("Refreshing profile after delete...");
+          refreshReviews();
+          fetchCollectionStats();
+        }
+        if (localStorage.getItem('reviewAdded') === 'true') {
+          localStorage.removeItem('reviewAdded');
+          console.log("Refreshing profile after add...");
+          refreshReviews();
+          fetchCollectionStats();
+        }
+      };
+
+      window.addEventListener("focus", refreshIfNeeded);
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+          refreshIfNeeded();
+        }
+      });
+
+      return () => {
+        window.removeEventListener("focus", refreshIfNeeded);
+        document.removeEventListener('visibilitychange', refreshIfNeeded);
+      };
+    }
+  }, [status, refreshReviews]);
 
   const fetchUserData = async () => {
     try {
@@ -44,30 +79,34 @@ export default function ProfilePage() {
     }
   };
 
-  const fetchStats = async () => {
+  const fetchCollectionStats = async () => {
+    setStatsLoading(true);
     try {
-      const wishlistRes = await fetch("/api/collection/wishlist");
-      const wishlistData = await wishlistRes.json();
-      const wishlistItems = wishlistData?.data || [];
+      const [wishlistRes, favouritesRes] = await Promise.all([
+        fetch("/api/collection/wishlist").catch(() => ({ json: () => ({ data: [] }) })),
+        fetch("/api/collection/favourites").catch(() => ({ json: () => ({ data: [] }) })),
+      ]);
 
-      const favouritesRes = await fetch("/api/collection/favourites");
+      const wishlistData = await wishlistRes.json();
       const favouritesData = await favouritesRes.json();
+
+      const wishlistItems = wishlistData?.data || [];
       const favouritesItems = favouritesData?.data || [];
 
       const wishlistIds = new Set(wishlistItems.map(item => item.attractionId?._id || item.attractionId));
       const favouritesIds = new Set(favouritesItems.map(item => item.attractionId?._id || item.attractionId));
       const allSavedIds = new Set([...wishlistIds, ...favouritesIds]);
 
-      setStats({
-        placesVisited: 0,
-        reviewsWritten: 0,
-        photosUploaded: 0,
+      setStats((prev) => ({
+        ...prev,
         savedPlaces: allSavedIds.size,
         wishlistCount: wishlistItems.length,
         favouritesCount: favouritesItems.length,
-      });
+      }));
     } catch (error) {
       console.error("Error fetching stats:", error);
+    } finally {
+      setStatsLoading(false);
     }
   };
 
@@ -88,6 +127,7 @@ export default function ProfilePage() {
   const profilePicture = userData?.profilePicture || session.user.image;
   const bio = userData?.bio || session.user.bio || "";
   const location = userData?.location || session.user.location || "";
+  const reviewsWritten = reviews.length;
 
   return (
     <div className="min-h-screen bg-[#F7F9FB] py-10 px-4">
@@ -125,19 +165,27 @@ export default function ProfilePage() {
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-white rounded-lg shadow-md p-4 text-center">
-            <p className="text-2xl font-bold text-[#006C56]">{stats.placesVisited}</p>
+            <p className="text-2xl font-bold text-[#006C56]">
+              {statsLoading ? "..." : stats.placesVisited}
+            </p>
             <p className="text-sm text-[#65748A]">Places visited</p>
           </div>
           <div className="bg-white rounded-lg shadow-md p-4 text-center">
-            <p className="text-2xl font-bold text-[#006C56]">{stats.reviewsWritten}</p>
+            <p className="text-2xl font-bold text-[#006C56]">
+              {statsLoading ? "..." : reviewsWritten}
+            </p>
             <p className="text-sm text-[#65748A]">Reviews written</p>
           </div>
           <div className="bg-white rounded-lg shadow-md p-4 text-center">
-            <p className="text-2xl font-bold text-[#006C56]">{stats.photosUploaded}</p>
+            <p className="text-2xl font-bold text-[#006C56]">
+              {statsLoading ? "..." : stats.photosUploaded}
+            </p>
             <p className="text-sm text-[#65748A]">Photos uploaded</p>
           </div>
           <div className="bg-white rounded-lg shadow-md p-4 text-center">
-            <p className="text-2xl font-bold text-[#006C56]">{stats.savedPlaces}</p>
+            <p className="text-2xl font-bold text-[#006C56]">
+              {statsLoading ? "..." : stats.savedPlaces}
+            </p>
             <p className="text-sm text-[#65748A]">Saved places</p>
           </div>
         </div>
@@ -163,7 +211,7 @@ export default function ProfilePage() {
                 </svg>
               </div>
               <p className="font-bold text-[#10213B] text-base mt-3">Wishlist</p>
-              <p className="text-[#65748A] text-sm">{stats.wishlistCount || 0} items saved</p>
+              <p className="text-[#65748A] text-sm">{statsLoading ? "..." : `${stats.wishlistCount || 0} items saved`}</p>
               <div className="mt-3 text-[#C2413B] text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                 View →
               </div>
@@ -180,7 +228,7 @@ export default function ProfilePage() {
                 </svg>
               </div>
               <p className="font-bold text-[#10213B] text-base mt-3">Favourites</p>
-              <p className="text-[#65748A] text-sm">{stats.favouritesCount || 0} items saved</p>
+              <p className="text-[#65748A] text-sm">{statsLoading ? "..." : `${stats.favouritesCount || 0} items saved`}</p>
               <div className="mt-3 text-[#FFAB00] text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                 View →
               </div>
@@ -197,7 +245,7 @@ export default function ProfilePage() {
                 </svg>
               </div>
               <p className="font-bold text-[#10213B] text-base mt-3">My Reviews</p>
-              <p className="text-[#65748A] text-sm">0 reviews written</p>
+              <p className="text-[#65748A] text-sm">{statsLoading ? "..." : `${reviewsWritten || 0} reviews written`}</p>
               <div className="mt-3 text-[#2F6DA1] text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                 View →
               </div>
@@ -214,7 +262,7 @@ export default function ProfilePage() {
                 </svg>
               </div>
               <p className="font-bold text-[#10213B] text-base mt-3">My Photos</p>
-              <p className="text-[#65748A] text-sm">0 photos uploaded</p>
+              <p className="text-[#65748A] text-sm">{statsLoading ? "..." : `${stats.photosUploaded || 0} photos uploaded`}</p>
               <div className="mt-3 text-[#7C3AED] text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                 View →
               </div>
@@ -242,7 +290,13 @@ export default function ProfilePage() {
         {/* Recent Reviews */}
         <div className="bg-white rounded-lg shadow-md p-8">
           <h2 className="text-xl font-bold text-[#10213B] mb-4">Recent Reviews</h2>
-          <p className="text-[#65748A]">You haven't written any reviews yet.</p>
+          {statsLoading ? (
+            <p className="text-[#65748A]">Loading reviews...</p>
+          ) : reviewsWritten === 0 ? (
+            <p className="text-[#65748A]">You haven't written any reviews yet.</p>
+          ) : (
+            <p className="text-[#65748A]">You have {reviewsWritten} reviews.</p>
+          )}
         </div>
       </div>
     </div>

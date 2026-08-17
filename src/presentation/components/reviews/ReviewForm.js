@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useReviews } from "@/presentation/contexts/ReviewsContext";
 
 const STAR_OPTIONS = [1, 2, 3, 4, 5];
 
 export default function ReviewForm({ attractionId, onReviewSubmitted }) {
+  const { refreshAttractionReviews } = useReviews();
   const [rating, setRating] = useState(0);
   const [reviewText, setReviewText] = useState("");
   const [errors, setErrors] = useState({});
@@ -70,6 +72,12 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
       if (!response.ok) {
         throw new Error(result.message || "Unable to submit your review.");
       }
+
+      // Set flag for ReviewList to auto-refresh
+      localStorage.setItem('reviewAdded', 'true');
+      
+      // Refresh attraction reviews in context
+      await refreshAttractionReviews(attractionId);
 
       setRating(0);
       setReviewText("");

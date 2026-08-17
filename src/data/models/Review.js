@@ -9,9 +9,9 @@ const reviewSchema = new mongoose.Schema(
       index: true,
     },
 
+    // CHANGE: Store userId as String (Google UUID)
     userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      type: String,  // ← Changed from ObjectId to String
       required: true,
       index: true,
     },
@@ -41,6 +41,11 @@ const reviewSchema = new mongoose.Schema(
       trim: true,
       maxlength: 1000,
     },
+
+    photos: {
+      type: [String],
+      default: [],
+    },
   },
   {
     timestamps: true,
@@ -48,7 +53,5 @@ const reviewSchema = new mongoose.Schema(
   }
 );
 
-const Review =
-  mongoose.models.Review || mongoose.model("Review", reviewSchema);
-
+const Review = mongoose.models.Review || mongoose.model("Review", reviewSchema);
 export default Review;
