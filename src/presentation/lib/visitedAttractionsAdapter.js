@@ -25,6 +25,39 @@ function isAbortError(error) {
   return error?.name === "AbortError";
 }
 
+export function createVisitedDataReloadRevision({
+  sessionStatus,
+  sessionUserId,
+  requestRevision = 0,
+  developmentPreviewActive = false,
+} = {}) {
+  if (developmentPreviewActive) {
+    return JSON.stringify(["development-preview", requestRevision]);
+  }
+
+  const identity =
+    sessionStatus === "authenticated" && typeof sessionUserId === "string"
+      ? sessionUserId.trim()
+      : "";
+
+  return JSON.stringify([sessionStatus, identity, requestRevision]);
+}
+
+export function canLoadVisitedAttractions({
+  isPreviewQueryReady,
+  developmentPreviewActive,
+  developmentPreviewReady,
+  sessionStatus,
+} = {}) {
+  if (!isPreviewQueryReady) return false;
+
+  if (developmentPreviewActive) {
+    return developmentPreviewReady === true;
+  }
+
+  return sessionStatus !== "loading";
+}
+
 export function getDevelopmentVisitedPreviewMode(
   queryString,
   runtimeEnvironment

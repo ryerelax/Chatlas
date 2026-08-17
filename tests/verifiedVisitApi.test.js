@@ -130,6 +130,50 @@ test("private GET returns the distinct IDs from the service", async () => {
   assert.deepEqual(observed, ["connect", ["service", "google-subject-1"]]);
 });
 
+test("an authenticated provider subject crosses the real handler and service boundary to private visited IDs", async () => {
+  const calls = [];
+  const service = createVerifiedVisitService({
+    isValidObjectId: () => true,
+    now: () => new Date("2026-08-17T00:00:00.000Z"),
+    randomUUID: () => "unused-uuid",
+    findUserByGoogleId: async (googleId) => {
+      calls.push(["find-user", googleId]);
+      return { _id: "persisted-user-object-id" };
+    },
+    findAttractionById: async () => null,
+    uploadVerifiedVisitImage: async () => null,
+    deleteCloudinaryImage: async () => {},
+    appendPhotoToDatedVisit: async () => null,
+    findDistinctVerifiedAttractionIds: async (userId) => {
+      calls.push(["find-visits", userId]);
+      return ["attraction-one", "attraction-two"];
+    },
+    findPublicVerifiedPhotos: async () => [],
+    findOwnedPhotoForDeletion: async () => null,
+    removeOwnedPhoto: async () => null,
+    deleteVisitWhenEmpty: async () => {},
+  });
+  const { GET } = createPrivateHandlers({
+    auth: async () => ({
+      user: {
+        id: "canonical-google-subject",
+        email: "must-not-be-visit-identity@example.test",
+      },
+    }),
+    getVerifiedAttractionIdsForUser:
+      service.getVerifiedAttractionIdsForUser,
+  });
+
+  await assertJsonResponse(await GET(), 200, {
+    success: true,
+    data: ["attraction-one", "attraction-two"],
+  });
+  assert.deepEqual(calls, [
+    ["find-user", "canonical-google-subject"],
+    ["find-visits", "persisted-user-object-id"],
+  ]);
+});
+
 test("private GET returns a safe error when auth fails", async () => {
   const { GET } = createPrivateHandlers({
     auth: async () => {

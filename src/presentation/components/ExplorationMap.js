@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import {
   useCallback,
   useEffect,
@@ -26,6 +27,8 @@ import {
   MELAKA_MAP_CENTRE,
 } from "@/presentation/lib/explorationMapPresentation";
 import {
+  canLoadVisitedAttractions,
+  createVisitedDataReloadRevision,
   createDevelopmentVisitedPreviewAdapter,
   getDevelopmentMapPreviewMode,
   getDevelopmentVisitedPreviewMode,
@@ -212,6 +215,7 @@ function LoadingSkeleton() {
 }
 
 export default function ExplorationMap() {
+  const { data: session, status: sessionStatus } = useSession();
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markerByAttractionIdRef = useRef(new Map());
@@ -274,10 +278,18 @@ export default function ExplorationMap() {
         : null,
     [attractions, dataStatus, developmentVisitedPreviewMode]
   );
-  const isVisitedDataReadyToLoad =
-    isDevelopmentPreviewQueryReady &&
-    (developmentVisitedPreviewMode === null ||
-      developmentPreviewAdapter !== null);
+  const visitedDataReloadRevision = createVisitedDataReloadRevision({
+    sessionStatus,
+    sessionUserId: session?.user?.id,
+    requestRevision: visitedRequest,
+    developmentPreviewActive: developmentVisitedPreviewMode !== null,
+  });
+  const isVisitedDataReadyToLoad = canLoadVisitedAttractions({
+    isPreviewQueryReady: isDevelopmentPreviewQueryReady,
+    developmentPreviewActive: developmentVisitedPreviewMode !== null,
+    developmentPreviewReady: developmentPreviewAdapter !== null,
+    sessionStatus,
+  });
 
   const loadAttractions = useCallback(() => {
     setMapStatus(MAP_STATUS.IDLE);
@@ -372,7 +384,7 @@ export default function ExplorationMap() {
     developmentPreviewAdapter,
     developmentVisitedPreviewMode,
     isVisitedDataReadyToLoad,
-    visitedRequest,
+    visitedDataReloadRevision,
   ]);
 
   const explorationPageState = useMemo(

@@ -212,6 +212,20 @@ test("browser permissions require positively confirmed canonical authentication"
   );
 });
 
+test("authenticated map presentation enables Verify Nearby Visit without a sign-in prompt", () => {
+  const authentication = getVerificationAuthenticationState("success");
+  const transition = getAuthenticationTransition(
+    "idle",
+    authentication.authenticationState
+  );
+  const verificationButtonDisabled = authentication.authenticationPending;
+
+  assert.equal(authentication.authenticationConfirmed, true);
+  assert.equal(authentication.authenticationPending, false);
+  assert.equal(transition.authenticationPromptVisible, false);
+  assert.equal(verificationButtonDisabled, false);
+});
+
 test("success acknowledgement survives the canonical loading and success refresh", () => {
   const whileRefreshing = getAuthenticationTransition("success", "pending");
   assert.deepEqual(whileRefreshing, {

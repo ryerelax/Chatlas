@@ -17,6 +17,8 @@ import {
   getMapMarkerPresentation,
 } from "../src/presentation/lib/explorationMapPresentation.js";
 import {
+  canLoadVisitedAttractions,
+  createVisitedDataReloadRevision,
   createDevelopmentVisitedPreviewAdapter,
   getDevelopmentMapPreviewMode,
   getDevelopmentVisitedPreviewMode,
@@ -52,6 +54,54 @@ const developmentPreviewAttractionFixtures = [
   { ...supportedAttractionFixtures[1], id: "preview-fixture-4" },
   { ...supportedAttractionFixtures[0], id: "preview-fixture-5" },
 ];
+
+test("session status and authenticated identity changes produce new visited-data reload revisions", () => {
+  const loadingRevision = createVisitedDataReloadRevision({
+    sessionStatus: "loading",
+    sessionUserId: null,
+    requestRevision: 0,
+  });
+  const firstIdentityRevision = createVisitedDataReloadRevision({
+    sessionStatus: "authenticated",
+    sessionUserId: "google-subject-one",
+    requestRevision: 0,
+  });
+  const secondIdentityRevision = createVisitedDataReloadRevision({
+    sessionStatus: "authenticated",
+    sessionUserId: "google-subject-two",
+    requestRevision: 0,
+  });
+  const signedOutRevision = createVisitedDataReloadRevision({
+    sessionStatus: "unauthenticated",
+    sessionUserId: null,
+    requestRevision: 0,
+  });
+
+  assert.notEqual(loadingRevision, firstIdentityRevision);
+  assert.notEqual(firstIdentityRevision, secondIdentityRevision);
+  assert.notEqual(secondIdentityRevision, signedOutRevision);
+});
+
+test("private visited-data loading waits for session resolution while development previews stay independent", () => {
+  assert.equal(
+    canLoadVisitedAttractions({
+      isPreviewQueryReady: true,
+      developmentPreviewActive: false,
+      developmentPreviewReady: false,
+      sessionStatus: "loading",
+    }),
+    false
+  );
+  assert.equal(
+    canLoadVisitedAttractions({
+      isPreviewQueryReady: true,
+      developmentPreviewActive: true,
+      developmentPreviewReady: true,
+      sessionStatus: "loading",
+    }),
+    true
+  );
+});
 
 function createProgressAttractionFixtures(count) {
   return Array.from({ length: count }, (_, index) => ({
