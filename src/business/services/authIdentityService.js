@@ -10,9 +10,7 @@ function normaliseNonEmptyString(value) {
 export function createAuthIdentityService({
   connectToDatabase,
   findGoogleIdentityByEmail,
-  findUserByGoogleId,
-  createUser,
-  updateUserByGoogleId,
+  upsertUserByGoogleId,
 }) {
   async function addGoogleSubjectToToken({ token, account } = {}) {
     const providerSubject = account?.provider === "google"
@@ -68,27 +66,86 @@ export function createAuthIdentityService({
     }
 
     await connectToDatabase();
-    const existingUser = await findUserByGoogleId(googleId);
+    const persistedUser = await upsertUserByGoogleId({
+      googleId,
+      name: user?.name,
+      email: user?.email,
+      profilePicture: user?.image,
+      displayName: user?.name || "",
+      bio: "",
+      location: "",
+    });
 
-    if (!existingUser) {
-      await createUser({
-        name: user?.name,
-        email: user?.email,
-        profilePicture: user?.image,
-        googleId,
-        displayName: user?.name || "",
-        bio: "",
-        location: "",
-      });
-      return;
+    if (
+      !persistedUser?._id ||
+      persistedUser.googleId !== googleId
+    ) {
+      throw new Error("Unable to assert the persisted Google identity.");
     }
-
-    await updateUserByGoogleId(googleId, { name: user?.name });
   }
 
   return {
     addGoogleSubjectToToken,
     applyGoogleSubjectToSession,
     persistGoogleSignIn,
+  };
+}
+
+export function createAuthConfig({
+  providers,
+  secret,
+  authIdentityService,
+  connectToDatabase,
+  findUserByGoogleId,
+  logError = console.error,
+}) {
+  return {
+    providers,
+    pages: {
+      signIn: "/login",
+    },
+    secret,
+    callbacks: {
+      async signIn({ user, account }) {
+        if (account?.provider === "google") {
+          try {
+            await authIdentityService.persistGoogleSignIn({ user, account });
+            return true;
+          } catch {
+            logError("Unable to save the signed-in Google user.");
+            return false;
+          }
+        }
+        return true;
+      },
+      async jwt({ token, account }) {
+        return authIdentityService.addGoogleSubjectToToken({ token, account });
+      },
+      async session({ session, token }) {
+        try {
+          await authIdentityService.applyGoogleSubjectToSession({
+            session,
+            token,
+          });
+
+          const googleId = session?.user?.id;
+          if (!googleId) return session;
+
+          await connectToDatabase();
+          const user = await findUserByGoogleId(googleId);
+          if (user) {
+            session.user.image = user.profilePicture || session.user.image;
+            session.user.name = user.displayName || user.name;
+            session.user.displayName = user.displayName || user.name;
+            session.user.bio = user.bio || "";
+            session.user.location = user.location || "";
+          }
+        } catch {
+          logError("Unable to load the signed-in user profile.");
+        }
+
+        return session;
+      },
+    },
   };
 }

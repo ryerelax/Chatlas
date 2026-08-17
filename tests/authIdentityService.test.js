@@ -9,9 +9,7 @@ function createService(overrides = {}) {
   return createAuthIdentityService({
     connectToDatabase: async () => {},
     findGoogleIdentityByEmail: async () => null,
-    findUserByGoogleId: async () => null,
-    createUser: async () => {},
-    updateUserByGoogleId: async () => {},
+    upsertUserByGoogleId: async () => null,
     ...overrides,
   });
 }
@@ -118,69 +116,83 @@ test("a legacy signed JWT recovers only an already-persisted non-empty Google su
   ]);
 });
 
-test("Google user persistence keys creation and updates only by providerAccountId", async () => {
-  const calls = [];
-  const newUserService = createService({
-    findUserByGoogleId: async (googleId) => {
-      calls.push(["find", googleId]);
-      return null;
-    },
-    createUser: async (user) => calls.push(["create", user]),
-  });
-
-  await newUserService.persistGoogleSignIn({
-    user: {
-      name: "New User",
-      email: "new@example.test",
-      image: "https://images.example.test/new-user.jpg",
-    },
-    account: {
-      provider: "google",
-      providerAccountId: "canonical-google-subject",
-    },
-    profile: { sub: "profile-subject-must-not-be-used" },
-  });
-
-  assert.deepEqual(calls, [
-    ["find", "canonical-google-subject"],
-    [
-      "create",
-      {
-        name: "New User",
-        email: "new@example.test",
-        profilePicture: "https://images.example.test/new-user.jpg",
+test("concurrent first Google sign-ins use one atomic canonical upsert each instead of read then create", async () => {
+  const upserts = [];
+  const service = createService({
+    upsertUserByGoogleId: async (input) => {
+      upserts.push(input);
+      return {
+        _id: "persisted-user-id",
         googleId: "canonical-google-subject",
-        displayName: "New User",
-        bio: "",
-        location: "",
+      };
+    },
+  });
+  const account = {
+    provider: "google",
+    providerAccountId: "canonical-google-subject",
+  };
+  const user = {
+    name: "Concurrent User",
+    email: "concurrent@example.test",
+    image: "https://images.example.test/concurrent-user.jpg",
+  };
+
+  await Promise.all([
+    service.persistGoogleSignIn({ user, account }),
+    service.persistGoogleSignIn({ user, account }),
+  ]);
+
+  const expectedInput = {
+    googleId: "canonical-google-subject",
+    name: "Concurrent User",
+    email: "concurrent@example.test",
+    profilePicture: "https://images.example.test/concurrent-user.jpg",
+    displayName: "Concurrent User",
+    bio: "",
+    location: "",
+  };
+  assert.deepEqual(upserts, [expectedInput, expectedInput]);
+});
+
+test("Google sign-in persistence rejects an atomic upsert with no canonical persisted mapping", async () => {
+  const service = createService({
+    upsertUserByGoogleId: async () => null,
+  });
+
+  await assert.rejects(
+    service.persistGoogleSignIn({
+      user: {
+        name: "Unpersisted User",
+        email: "unpersisted@example.test",
       },
-    ],
-  ]);
+      account: {
+        provider: "google",
+        providerAccountId: "canonical-google-subject",
+      },
+    }),
+    /persisted Google identity/i
+  );
+});
 
-  const updateCalls = [];
-  const existingUserService = createService({
-    findUserByGoogleId: async (googleId) => {
-      updateCalls.push(["find", googleId]);
-      return { _id: "persisted-user-id" };
-    },
-    updateUserByGoogleId: async (googleId, updates) => {
-      updateCalls.push(["update", googleId, updates]);
-    },
+test("Google sign-in persistence rejects an atomic upsert for a different canonical subject", async () => {
+  const service = createService({
+    upsertUserByGoogleId: async () => ({
+      _id: "persisted-user-id",
+      googleId: "different-google-subject",
+    }),
   });
 
-  await existingUserService.persistGoogleSignIn({
-    user: {
-      name: "Existing User",
-      email: "changed@example.test",
-    },
-    account: {
-      provider: "google",
-      providerAccountId: "existing-google-subject",
-    },
-  });
-
-  assert.deepEqual(updateCalls, [
-    ["find", "existing-google-subject"],
-    ["update", "existing-google-subject", { name: "Existing User" }],
-  ]);
+  await assert.rejects(
+    service.persistGoogleSignIn({
+      user: {
+        name: "Mismatched User",
+        email: "mismatched@example.test",
+      },
+      account: {
+        provider: "google",
+        providerAccountId: "canonical-google-subject",
+      },
+    }),
+    /persisted Google identity/i
+  );
 });

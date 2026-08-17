@@ -18,10 +18,30 @@ export async function findGoogleIdentityByEmail(email) {
     .lean();
 }
 
-export async function createUser(user) {
-  return User.create(user);
-}
-
-export async function updateUserByGoogleId(googleId, updates) {
-  return User.updateOne({ googleId }, updates);
+export async function upsertUserByGoogleId({
+  googleId,
+  name,
+  email,
+  profilePicture,
+  displayName,
+  bio,
+  location,
+}) {
+  return User.findOneAndUpdate(
+    { googleId },
+    {
+      $set: { name },
+      $setOnInsert: {
+        email,
+        profilePicture,
+        googleId,
+        displayName,
+        bio,
+        location,
+      },
+    },
+    { upsert: true, new: true, runValidators: true }
+  )
+    .select("_id googleId")
+    .lean();
 }
