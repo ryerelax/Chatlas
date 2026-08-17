@@ -59,3 +59,40 @@ export async function uploadImageFromBuffer(buffer, mimeType, { folder, publicId
 
   return result.secure_url;
 }
+
+// Uploads a browser-submitted image and returns the metadata needed to attach
+// it to another document and safely roll it back if that write later fails.
+// Existing URL-only upload helpers intentionally keep their current behaviour.
+export async function uploadImageWithMetadataFromBuffer(
+  buffer,
+  mimeType,
+  { folder, publicId } = {}
+) {
+  const client = getConfiguredClient();
+  const dataUri = `data:${mimeType};base64,${buffer.toString("base64")}`;
+
+  const result = await client.uploader.upload(dataUri, {
+    folder,
+    public_id: publicId,
+    overwrite: false,
+    resource_type: "image",
+  });
+
+  if (!result.secure_url || !result.public_id) {
+    throw new Error("Cloudinary did not return the expected image metadata.");
+  }
+
+  return {
+    url: result.secure_url,
+    publicId: result.public_id,
+  };
+}
+
+export async function deleteImageByPublicId(publicId) {
+  const client = getConfiguredClient();
+
+  return client.uploader.destroy(publicId, {
+    resource_type: "image",
+    invalidate: true,
+  });
+}

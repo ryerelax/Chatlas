@@ -1,10 +1,21 @@
 import mongoose from "mongoose";
+import { randomUUID } from "node:crypto";
 import { findAttractionById } from "@/data/repositories/attractionRepository";
 import {
   createReview,
   findReviewsByAttraction,
 } from "@/data/repositories/reviewRepository";
 import { findUserByEmail } from "@/data/repositories/userRepository";
+import {
+  deleteImageByPublicId,
+  uploadImageWithMetadataFromBuffer,
+} from "@/infrastructure/external/cloudinary";
+import {
+  isValidPhotoSize,
+  isValidPhotoType,
+} from "@/business/services/photoValidation";
+
+const MAX_REVIEW_PHOTOS = 3;
 
 export class ReviewServiceError extends Error {
   constructor(message, statusCode) {
@@ -19,11 +30,13 @@ export async function submitReview({
   email,
   rating,
   reviewText,
+  photoFiles = [],
 }) {
   const normalizedAttractionId = normalizeAttractionId(attractionId);
   const normalizedRating = normalizeRating(rating);
   const normalizedReviewText = normalizeReviewText(reviewText);
   const normalizedEmail = typeof email === "string" ? email.trim() : "";
+  const normalizedPhotoFiles = validateReviewPhotos(photoFiles);
 
   if (!normalizedEmail) {
     throw new ReviewServiceError("User account not found.", 404);
@@ -42,14 +55,36 @@ export async function submitReview({
     throw new ReviewServiceError("User account not found.", 404);
   }
 
-  return createReview({
-    attractionId: normalizedAttractionId,
-    userId: user._id,
-    userName: user.displayName || user.name,
-    userAvatar: user.profilePicture || "",
-    rating: normalizedRating,
-    reviewText: normalizedReviewText,
-  });
+  const uploadedPhotos = [];
+
+  try {
+    for (const photoFile of normalizedPhotoFiles) {
+      const photoBuffer = Buffer.from(await photoFile.arrayBuffer());
+      const uploadedPhoto = await uploadImageWithMetadataFromBuffer(
+        photoBuffer,
+        photoFile.type,
+        {
+          folder: `chatlas/reviews/${normalizedAttractionId}`,
+          publicId: `review-${randomUUID()}`,
+        }
+      );
+
+      uploadedPhotos.push(uploadedPhoto);
+    }
+
+    return await createReview({
+      attractionId: normalizedAttractionId,
+      userId: user._id,
+      userName: user.displayName || user.name,
+      userAvatar: user.profilePicture || "",
+      rating: normalizedRating,
+      reviewText: normalizedReviewText,
+      photos: uploadedPhotos,
+    });
+  } catch (error) {
+    await rollbackUploadedPhotos(uploadedPhotos);
+    throw error;
+  }
 }
 
 export async function getReviewsByAttraction(attractionId) {
@@ -106,4 +141,51 @@ function normalizeReviewText(reviewText) {
   }
 
   return normalizedReviewText;
+}
+
+function validateReviewPhotos(photoFiles) {
+  if (!Array.isArray(photoFiles)) {
+    throw new ReviewServiceError("Invalid review photos.", 400);
+  }
+
+  if (photoFiles.length > MAX_REVIEW_PHOTOS) {
+    throw new ReviewServiceError(
+      `A review can include up to ${MAX_REVIEW_PHOTOS} photos.`,
+      400
+    );
+  }
+
+  for (const photoFile of photoFiles) {
+    if (
+      !photoFile ||
+      typeof photoFile !== "object" ||
+      typeof photoFile.arrayBuffer !== "function" ||
+      !Number.isFinite(photoFile.size) ||
+      photoFile.size <= 0
+    ) {
+      throw new ReviewServiceError("Each photo must contain an image.", 400);
+    }
+
+    if (!isValidPhotoType(photoFile.type)) {
+      throw new ReviewServiceError(
+        "Photos must be JPG, PNG, or WebP images.",
+        400
+      );
+    }
+
+    if (!isValidPhotoSize(photoFile.size)) {
+      throw new ReviewServiceError(
+        "Each photo must be 5 MB or smaller.",
+        400
+      );
+    }
+  }
+
+  return photoFiles;
+}
+
+async function rollbackUploadedPhotos(uploadedPhotos) {
+  await Promise.allSettled(
+    uploadedPhotos.map((photo) => deleteImageByPublicId(photo.publicId))
+  );
 }

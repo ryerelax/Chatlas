@@ -7,6 +7,8 @@ import {
 } from "@/business/services/reviewService";
 import { connectToDatabase } from "@/infrastructure/database/mongodb";
 
+export const runtime = "nodejs";
+
 export async function GET(request) {
   try {
     await connectToDatabase();
@@ -54,9 +56,21 @@ export async function POST(request) {
     }
 
     let body;
+    let photoFiles = [];
 
     try {
-      body = await request.json();
+      if (request.headers.get("content-type")?.includes("multipart/form-data")) {
+        const formData = await request.formData();
+
+        body = {
+          attractionId: formData.get("attractionId"),
+          rating: formData.get("rating"),
+          reviewText: formData.get("reviewText"),
+        };
+        photoFiles = formData.getAll("photos");
+      } else {
+        body = await request.json();
+      }
     } catch {
       return NextResponse.json(
         { success: false, message: "Invalid review request." },
@@ -71,6 +85,7 @@ export async function POST(request) {
       email: session.user.email,
       rating: body.rating,
       reviewText: body.reviewText,
+      photoFiles,
     });
 
     return NextResponse.json(

@@ -9,9 +9,9 @@ const reviewSchema = new mongoose.Schema(
       index: true,
     },
 
-    // CHANGE: Store userId as String (Google UUID)
     userId: {
-      type: String,  // ← Changed from ObjectId to String
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
       required: true,
       index: true,
     },
@@ -43,8 +43,26 @@ const reviewSchema = new mongoose.Schema(
     },
 
     photos: {
-      type: [String],
+      type: [
+        {
+          _id: false,
+          url: {
+            type: String,
+            required: true,
+            trim: true,
+          },
+          publicId: {
+            type: String,
+            required: true,
+            trim: true,
+          },
+        },
+      ],
       default: [],
+      validate: {
+        validator: (photos) => photos.length <= 3,
+        message: "A review can include up to 3 photos.",
+      },
     },
   },
   {
