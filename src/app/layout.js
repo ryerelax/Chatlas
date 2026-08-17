@@ -3,6 +3,7 @@ import ServiceWorkerRegistration from "@/presentation/components/ServiceWorkerRe
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { SessionProvider } from "next-auth/react";
+import { ReviewsProvider } from "@/presentation/contexts/ReviewsContext";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -27,16 +28,18 @@ export default function RootLayout({ children }) {
     >
       <body className="flex min-h-full flex-col bg-gray-50">
         <SessionProvider>
-          <ServiceWorkerRegistration />
+          <ReviewsProvider>
+            <ServiceWorkerRegistration />
 
-          {/* TODO: Add a global travel announcement or system notification banner later. */}
-          <Header />
+            {/* TODO: Add a global travel announcement or system notification banner later. */}
+            <Header />
 
-          <div className="flex-1">
-            {children}
-          </div>
+            <div className="flex-1">
+              {children}
+            </div>
 
-          {/* TODO: Add a shared Chatlas footer after the final branding and navigation structure are confirmed. */}
+            {/* TODO: Add a shared Chatlas footer after the final branding and navigation structure are confirmed. */}
+          </ReviewsProvider>
         </SessionProvider>
       </body>
     </html>

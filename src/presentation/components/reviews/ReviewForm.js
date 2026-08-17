@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
+import { useReviews } from "@/presentation/contexts/ReviewsContext";
 
 const STAR_OPTIONS = [1, 2, 3, 4, 5];
 const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -9,6 +10,7 @@ const MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024;
 const MAX_REVIEW_PHOTOS = 3;
 
 export default function ReviewForm({ attractionId, onReviewSubmitted }) {
+  const { addReview } = useReviews();
   const [rating, setRating] = useState(0);
   const [reviewText, setReviewText] = useState("");
   const [errors, setErrors] = useState({});
@@ -210,6 +212,7 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
       }
       setStatusType("success");
       setStatusMessage("Your review has been submitted.");
+      addReview(result.data);
       onReviewSubmitted?.(result.data);
     } catch (error) {
       setStatusType("error");

@@ -5,20 +5,19 @@ import { getAttractionById } from "@/business/services/attractionService";
 
 export async function GET(request, { params }) {
   try {
-    await connectToDatabase();
-
+    // Validate ID first
     const { id } = await params;
-
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!id) {
       return NextResponse.json(
         {
           success: false,
-          message: "Invalid attraction id.",
+          message: "Attraction ID is required.",
         },
         { status: 400 }
       );
     }
 
+    await connectToDatabase();
     const attraction = await getAttractionById(id);
 
     if (!attraction) {

@@ -52,9 +52,15 @@ Do not install packages only to make the dependency list appear more complete.
 
 ---
 
-## 3. Layered Project Structure
+## 3. Architecture and Layered Project Structure
 
-Chatlas uses a Layered Architecture with three logical layers — Presentation, Business Logic, and Data Access — implemented inside one full-stack Next.js application. `infrastructure/` holds supporting technical helpers; it is not a fourth logical business layer.
+Chatlas uses a Layered Architecture with three logical layers:
+
+1. Presentation Layer
+2. Business Logic Layer
+3. Data Access Layer
+
+All three logical layers are implemented inside one full-stack Next.js Progressive Web Application. The `infrastructure/` folder contains supporting technical helpers; it is not a fourth logical business layer.
 
 The dependency direction is:
 
@@ -64,6 +70,22 @@ Presentation Layer
 Business Logic Layer
         ↓
 Data Access Layer
+        ↓
+MongoDB Atlas
+```
+
+For HTTP-based interactions, the normal flow is:
+
+```text
+Page or Component
+        ↓
+Next.js Route Handler
+        ↓
+Service
+        ↓
+Repository
+        ↓
+Mongoose Model
         ↓
 MongoDB Atlas
 ```
@@ -123,11 +145,35 @@ Rules:
 
 - Do not query MongoDB directly from React components.
 - Do not place Mongoose logic inside pages.
+- Do not import repositories or Mongoose models into pages or components.
 - Keep reusable interface elements inside `src/presentation/components/`.
 - Keep route-specific pages and layouts inside `src/app/`.
 - A file only belongs in `src/presentation/lib/` if it has no meaning outside the browser (e.g. it touches `window`/`document`, or is only ever imported by a `"use client"` component). If it also gets used by a script or server code, it belongs in Business Logic or Infrastructure instead.
 
-### 3.2 Business Logic Layer
+### 3.2 Route Handlers / Application Entry Points
+
+Location:
+
+```text
+src/app/api/
+```
+
+Responsibilities:
+
+- Receive HTTP requests
+- Read route parameters and query parameters
+- Call Business Logic services
+- Return JSON responses
+- Apply suitable HTTP status codes
+
+Rules:
+
+- Route Handlers must call services.
+- Route Handlers must not call repositories or Mongoose models directly.
+- Route Handlers must not contain reusable business rules.
+- Route Handlers are application entry points, not a separate logical layer.
+
+### 3.3 Business Logic Layer
 
 Location:
 
@@ -140,19 +186,24 @@ Responsibilities:
 - Input normalization
 - Validation
 - Business rules
+- Authentication and authorization rules
 - Visibility rules
+- Exploration progress calculation
 - Classification / derivation rules (e.g. deriving a location zone from an address)
 - Calling repository functions
 - Preparing data for API routes or pages
+- Coordinating external-service operations
 - Orchestrating external API calls into a repository update (e.g. the Places → Cloudinary photo/description sync services), even when only invoked from a maintenance script under `scripts/`, not from a live Route Handler
 
 Rules:
 
 - Keep business rules out of React components.
 - Keep business rules out of repositories.
-- Services may call repositories, but repositories must not call services.
+- Services may call repositories.
+- Repositories must not call services.
+- Services must not contain JSX or UI styling.
 
-### 3.3 Data Access Layer
+### 3.4 Data Access Layer
 
 Locations:
 
@@ -165,17 +216,20 @@ Responsibilities:
 
 - Mongoose schemas and models
 - MongoDB queries
-- Database filtering
-- Database sorting
+- Data retrieval, creation, updating, and deletion
+- Database filtering and sorting
 - Returning database results to services
 
 Rules:
 
-- Pages and components must not call Mongoose models directly.
-- API routes should call services instead of repositories or models directly.
+- Keep Mongoose models inside `src/data/models/`.
+- Keep MongoDB queries inside `src/data/repositories/`.
+- Pages and components must not call repositories or models directly.
+- Route Handlers must not call repositories or models directly.
 - Repositories must not contain presentation logic.
+- Repositories must not contain reusable business-policy decisions.
 
-### 3.4 Shared Infrastructure
+### 3.5 Supporting Infrastructure
 
 Locations:
 
@@ -193,6 +247,9 @@ Responsibilities:
 
 Rules:
 
+- Infrastructure supports the three logical layers.
+- Infrastructure must not contain page-specific UI or module business rules.
+- Private credentials must come from environment variables.
 - A file belongs here only if it's server-side and has no business logic of its own — just a thin client/wrapper around an external system. Once it starts making business decisions (what to do with the data), that logic belongs in `src/business/services/`, which may call into `src/infrastructure/`.
 - Client-side helpers (anything that runs in the browser) belong in `src/presentation/lib/` instead, not here.
 - Keep each third-party integration's client under `src/infrastructure/external/`, not loose at the `src/infrastructure/` root, so the database helper and external API clients stay clearly separated.
@@ -316,7 +373,10 @@ Use the configured `@/*` alias for project imports where practical.
 Preferred:
 
 ```js
+import Header from "@/presentation/components/Header";
+import { getAttractions } from "@/business/services/attractionService";
 import Attraction from "@/data/models/Attraction";
+import { connectToDatabase } from "@/infrastructure/database/mongodb";
 ```
 
 Avoid unnecessarily long relative imports such as:
@@ -645,7 +705,11 @@ A task is considered done only when all relevant conditions below are satisfied:
 
 - The requested feature or change is implemented.
 - The feature works locally.
-- The code follows the layered architecture.
+- The code follows the three-layer architecture.
+- Pages and reusable UI remain in the Presentation Layer.
+- Reusable business rules remain in the Business Logic Layer.
+- MongoDB queries remain in the Data Access Layer.
+- Infrastructure helpers do not contain UI or module business rules.
 - React components do not query MongoDB directly.
 - API routes call services instead of Mongoose models directly.
 - Services contain validation and business rules.
