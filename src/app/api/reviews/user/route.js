@@ -6,44 +6,67 @@ import User from "@/data/models/User";
 
 export async function GET(request) {
   try {
+    console.log("=== USER REVIEWS API CALLED ===");
+    
     const session = await auth();
+    console.log("Session:", session ? "Found" : "Not found");
 
     if (!session?.user?.email) {
+      console.log("No session or email");
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
         { status: 401 }
       );
     }
 
+    console.log("User email:", session.user.email);
+    console.log("User ID from session:", session.user.id);
+
     await connectToDatabase();
+    console.log("Database connected");
 
     // Get user from database
     const user = await User.findOne({ email: session.user.email });
+    console.log("User found:", user ? "Yes" : "No");
     
     if (!user) {
+      console.log("User not found in database");
       return NextResponse.json(
         { success: false, message: "User not found" },
         { status: 404 }
       );
     }
 
-    console.log("=== FETCHING USER REVIEWS ===");
-    console.log("User email:", session.user.email);
     console.log("User googleId:", user.googleId);
     console.log("User _id:", user._id);
 
-    // Try both formats: String (googleId) and ObjectId
-    const [stringReviews, objectIdReviews] = await Promise.all([
-      Review.find({ userId: user.googleId })
-        .populate("attractionId", "name category address rating photos")
-        .sort({ createdAt: -1 }),
-      Review.find({ userId: user._id })
-        .populate("attractionId", "name category address rating photos")
-        .sort({ createdAt: -1 }),
-    ]);
+    // Fetch reviews with BOTH formats
+    let stringReviews = [];
+    let objectIdReviews = [];
 
-    // Combine both results, remove duplicates
+    try {
+      // Try fetching by googleId (String)
+      stringReviews = await Review.find({ userId: user.googleId })
+        .populate("attractionId", "name category address rating photos")
+        .sort({ createdAt: -1 });
+      console.log("String userId reviews found:", stringReviews.length);
+    } catch (err) {
+      console.error("Error fetching string reviews:", err.message);
+    }
+
+    try {
+      // Try fetching by _id (ObjectId)
+      objectIdReviews = await Review.find({ userId: user._id })
+        .populate("attractionId", "name category address rating photos")
+        .sort({ createdAt: -1 });
+      console.log("ObjectId userId reviews found:", objectIdReviews.length);
+    } catch (err) {
+      console.error("Error fetching objectId reviews:", err.message);
+    }
+
+    // Combine both results
     const allReviews = [...stringReviews, ...objectIdReviews];
+    console.log("Total combined reviews:", allReviews.length);
     
     // Remove duplicates by _id
     const uniqueReviews = [];
@@ -58,9 +81,7 @@ export async function GET(request) {
     // Sort by createdAt (newest first)
     uniqueReviews.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-    console.log("Total reviews found:", uniqueReviews.length);
-    console.log("String userId reviews:", stringReviews.length);
-    console.log("ObjectId userId reviews:", objectIdReviews.length);
+    console.log("Unique reviews found:", uniqueReviews.length);
 
     return NextResponse.json({
       success: true,
@@ -69,7 +90,7 @@ export async function GET(request) {
   } catch (error) {
     console.error("Failed to fetch user reviews:", error);
     return NextResponse.json(
-      { success: false, message: "Failed to fetch reviews." },
+      { success: false, message: "Failed to fetch reviews: " + error.message },
       { status: 500 }
     );
   }

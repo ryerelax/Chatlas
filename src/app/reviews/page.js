@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useReviews } from "@/presentation/contexts/ReviewsContext";
+import Image from "next/image";
 
 export default function MyReviewsPage() {
   const { data: session, status } = useSession();
@@ -13,6 +14,12 @@ export default function MyReviewsPage() {
   const [editingReview, setEditingReview] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  const showToast = (message, type = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  };
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -65,14 +72,13 @@ export default function MyReviewsPage() {
 
     if (!deleteTarget._id) {
       console.error("No review ID found:", deleteTarget);
-      alert("Error: Review ID not found");
+      showToast("Error: Review ID not found", "error");
       setDeleteTarget(null);
       return;
     }
 
     setIsDeleting(true);
     
-    // Log the review ID and the full review object
     console.log("=== HANDLE DELETE ===");
     console.log("deleteTarget:", deleteTarget);
     console.log("Review ID:", deleteTarget._id);
@@ -85,27 +91,24 @@ export default function MyReviewsPage() {
       if (data.success) {
         setDeleteTarget(null);
         
-        // Refresh user reviews
         await refreshReviews();
         
-        // Refresh attraction reviews if attractionId exists
         if (deleteTarget.attractionId?._id || deleteTarget.attractionId) {
           const attractionId = deleteTarget.attractionId._id || deleteTarget.attractionId;
           await refreshAttractionReviews(attractionId);
         }
         
-        // Set flag for other components
         localStorage.setItem('reviewDeleted', 'true');
         
-        alert("Review deleted successfully!");
+        showToast("Review deleted successfully!", "success");
       } else {
-        alert(data.message || "Failed to delete review");
+        showToast(data.message || "Failed to delete review", "error");
         await refreshReviews();
         setDeleteTarget(null);
       }
     } catch (err) {
       console.error("Error deleting review:", err);
-      alert("Unable to delete review. Please try again.");
+      showToast("Unable to delete review. Please try again.", "error");
       await refreshReviews();
       setDeleteTarget(null);
     } finally {
@@ -122,13 +125,13 @@ export default function MyReviewsPage() {
 
       if (data.success) {
         setEditingReview(null);
-        alert("Review updated successfully!");
+        showToast("Review updated successfully! ✏️", "success");
       } else {
-        alert(data.message || "Failed to update review");
+        showToast(data.message || "Failed to update review", "error");
       }
     } catch (err) {
-      alert("Unable to update review. Please try again.");
       console.error("Error updating review:", err);
+      showToast("Unable to update review. Please try again.", "error");
     }
   };
 
@@ -146,6 +149,40 @@ export default function MyReviewsPage() {
 
   return (
     <div className="min-h-screen bg-[#F7F9FB]">
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed top-6 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-md px-4">
+          <div className={`flex items-center gap-3 px-5 py-4 rounded-xl shadow-lg border transition-all duration-300 animate-in slide-in-from-top-5 ${
+            toast.type === "success" 
+              ? "bg-[#E8F7EF] border-[#16845B] text-[#004638]" 
+              : "bg-[#FDECEC] border-[#C2413B] text-[#7A1A1A]"
+          }`}>
+            {toast.type === "success" ? (
+              <div className="w-8 h-8 rounded-full bg-[#16845B]/20 flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-[#16845B]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-[#C2413B]/20 flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-[#C2413B]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </div>
+            )}
+            <span className="text-base font-medium flex-1">{toast.message}</span>
+            <button
+              onClick={() => setToast(null)}
+              className="text-[#65748A] hover:text-[#10213B] transition-colors flex-shrink-0"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="bg-[#006C56] text-white py-12 px-4">
         <div className="max-w-[1200px] mx-auto">
           <button
@@ -201,52 +238,79 @@ export default function MyReviewsPage() {
             <p className="text-[#65748A] mt-2">No reviews match your search.</p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-6">
             {filtered.map((review) => (
-              <div key={review._id} className="bg-white border border-[#D8E1E7] rounded-[14px] p-5">
+              <div key={review._id} className="bg-white border border-[#D8E1E7] rounded-[18px] p-6 md:p-8 hover:shadow-lg transition-shadow">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <h3 className="font-semibold text-[#10213B]">
+                    <div className="flex items-center gap-3 flex-wrap mb-3">
+                      <h3 className="text-2xl font-bold text-[#10213B]">
                         {review.attractionId?.name || "Unknown attraction"}
                       </h3>
-                      <span className="px-2 py-0.5 bg-[#E6F7F0] text-[#004638] text-xs rounded-full border border-[#A7D7C5]">
+                      <span className="px-3 py-1 bg-[#E6F7F0] text-[#004638] text-sm font-medium rounded-full border border-[#A7D7C5]">
                         {review.attractionId?.category || "Uncategorized"}
                       </span>
                     </div>
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="flex items-center gap-0.5">
+                    
+                    <div className="flex items-center gap-4 mb-3">
+                      <div className="flex items-center gap-1">
                         {[...Array(5)].map((_, i) => (
-                          <span key={i} className={i < review.rating ? "text-[#FFAB00]" : "text-[#D8E1E7]"}>
+                          <span key={i} className={i < review.rating ? "text-[#FFAB00] text-2xl" : "text-[#D8E1E7] text-2xl"}>
                             ★
                           </span>
                         ))}
                       </div>
-                      <span className="text-[#65748A] text-sm">
+                      <span className="text-[#65748A] text-base font-medium">
                         {new Date(review.createdAt).toLocaleDateString("en-US", {
                           year: "numeric",
-                          month: "short",
+                          month: "long",
                           day: "numeric",
                         })}
                       </span>
                     </div>
-                    <p className="text-[#405066] text-sm leading-relaxed">{review.reviewText}</p>
+                    
+                    <p className="text-[#405066] text-lg leading-relaxed mb-4">
+                      {review.reviewText}
+                    </p>
+                    
+                    {review.photos && review.photos.length > 0 && (
+                      <div className="flex gap-4 mt-3 flex-wrap">
+                        {review.photos.slice(0, 4).map((photo, index) => (
+                          <div key={index} className="relative w-28 h-28 rounded-xl overflow-hidden bg-[#CDF5E5] border-2 border-[#D8E1E7] flex-shrink-0 hover:scale-105 transition-transform cursor-pointer shadow-sm">
+                            <Image
+                              src={photo.url || photo}
+                              alt={`Review photo ${index + 1}`}
+                              fill
+                              className="object-cover"
+                            />
+                          </div>
+                        ))}
+                        {review.photos.length > 4 && (
+                          <div className="w-28 h-28 rounded-xl bg-[#F1F6F4] flex items-center justify-center text-[#65748A] text-xl font-medium border-2 border-[#D8E1E7] flex-shrink-0">
+                            +{review.photos.length - 4}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
+                  
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <button
                       onClick={() => setEditingReview(review)}
-                      className="w-9 h-9 flex items-center justify-center border border-[#D8E1E7] text-[#65748A] hover:text-[#006C56] hover:border-[#006C56] rounded-full transition-colors"
+                      className="w-11 h-11 flex items-center justify-center border-2 border-[#D8E1E7] text-[#65748A] hover:text-[#006C56] hover:border-[#006C56] rounded-full transition-colors"
+                      title="Edit review"
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
                     </button>
                     <button
                       onClick={() => setDeleteTarget(review)}
                       disabled={isDeleting}
-                      className="w-9 h-9 flex items-center justify-center border border-[#D8E1E7] text-[#65748A] hover:text-[#C2413B] hover:border-[#C2413B] rounded-full transition-colors disabled:opacity-50"
+                      className="w-11 h-11 flex items-center justify-center border-2 border-[#D8E1E7] text-[#65748A] hover:text-[#C2413B] hover:border-[#C2413B] rounded-full transition-colors disabled:opacity-50"
+                      title="Delete review"
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                       </svg>
                     </button>

@@ -9,7 +9,7 @@ import { useReviews } from "@/presentation/contexts/ReviewsContext";
 export default function ProfilePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const { reviews, loadReviews, refreshReviews } = useReviews();
+  const { reviews, isLoading, loadReviews, refreshReviews } = useReviews();  // ✅ Added isLoading
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [statsLoading, setStatsLoading] = useState(true);
@@ -110,7 +110,8 @@ export default function ProfilePage() {
     }
   };
 
-  if (status === "loading" || loading) {
+  // Wait for all data to load
+  if (status === "loading" || loading || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F7F9FB]">
         <div className="text-[#006C56]">Loading...</div>

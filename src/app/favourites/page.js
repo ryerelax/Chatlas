@@ -11,6 +11,14 @@ export default function FavouritesPage() {
   const [favourites, setFavourites] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isRemoving, setIsRemoving] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [removeTarget, setRemoveTarget] = useState(null);
+
+  const showToast = (message, type = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  };
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -44,8 +52,9 @@ export default function FavouritesPage() {
     }
   };
 
-  const handleRemove = async (attractionId) => {
-    if (!confirm("Remove this attraction from your favourites?")) return;
+  const handleRemove = async (attractionId, attractionName) => {
+    setIsRemoving(true);
+    setRemoveTarget(null);
 
     try {
       const response = await fetch(`/api/collection/favourites?attractionId=${attractionId}`, {
@@ -56,12 +65,15 @@ export default function FavouritesPage() {
 
       if (data.success) {
         setFavourites(favourites.filter((item) => item.attractionId._id !== attractionId));
+        showToast(`Removed "${attractionName || 'attraction'}" from favourites!`, "success");
       } else {
-        alert(data.message || "Failed to remove from favourites");
+        showToast(data.message || "Failed to remove from favourites", "error");
       }
     } catch (err) {
-      alert("Unable to remove from favourites. Please try again.");
       console.error("Error removing from favourites:", err);
+      showToast("Unable to remove from favourites. Please try again.", "error");
+    } finally {
+      setIsRemoving(false);
     }
   };
 
@@ -93,6 +105,74 @@ export default function FavouritesPage() {
 
   return (
     <div className="min-h-screen bg-[#F7F9FB]">
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed top-6 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-md px-4">
+          <div className={`flex items-center gap-3 px-5 py-4 rounded-xl shadow-lg border transition-all duration-300 animate-in slide-in-from-top-5 ${
+            toast.type === "success" 
+              ? "bg-[#E8F7EF] border-[#16845B] text-[#004638]" 
+              : "bg-[#FDECEC] border-[#C2413B] text-[#7A1A1A]"
+          }`}>
+            {toast.type === "success" ? (
+              <div className="w-8 h-8 rounded-full bg-[#16845B]/20 flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-[#16845B]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-[#C2413B]/20 flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-[#C2413B]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </div>
+            )}
+            <span className="text-base font-medium flex-1">{toast.message}</span>
+            <button
+              onClick={() => setToast(null)}
+              className="text-[#65748A] hover:text-[#10213B] transition-colors flex-shrink-0"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Confirmation Modal */}
+      {removeTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: "rgba(0,0,0,0.55)" }}>
+          <div className="bg-white w-full max-w-md rounded-[18px] p-6 shadow-2xl">
+            <div className="flex items-center justify-center w-16 h-16 mx-auto mb-4 rounded-full bg-red-50 border border-red-200">
+              <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-bold text-[#10213B] text-center">
+              Remove from favourites?
+            </h3>
+            <p className="text-[#65748A] text-center mt-2">
+              Are you sure you want to remove <span className="font-semibold text-[#10213B]">"{removeTarget.name}"</span> from your favourites?
+            </p>
+            <div className="flex gap-3 justify-end mt-6">
+              <button
+                onClick={() => setRemoveTarget(null)}
+                className="flex-1 px-5 py-2.5 border border-[#BBC8D0] text-[#004638] font-semibold rounded-lg hover:bg-[#F1F6F4] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleRemove(removeTarget.id, removeTarget.name)}
+                disabled={isRemoving}
+                className="flex-1 px-5 py-2.5 bg-[#C2413B] text-white font-semibold rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                {isRemoving ? "Removing..." : "Remove"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="bg-[#006C56] text-white py-12 px-4">
         <div className="max-w-6xl mx-auto">
           <button
@@ -183,8 +263,13 @@ export default function FavouritesPage() {
                     </div>
                   )}
                   <button
-                    onClick={() => handleRemove(item.attractionId._id)}
-                    className="mt-3 w-full py-2 text-sm text-red-500 border border-red-200 rounded-lg hover:bg-red-50"
+                    onClick={() => {
+                      setRemoveTarget({
+                        id: item.attractionId._id,
+                        name: item.attractionId?.name || "this attraction"
+                      });
+                    }}
+                    className="mt-3 w-full py-2 text-sm text-red-500 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
                   >
                     Remove from Favourites
                   </button>

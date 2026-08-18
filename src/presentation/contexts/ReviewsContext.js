@@ -152,6 +152,35 @@ export function ReviewsProvider({ children }) {
     localStorage.setItem('reviewAdded', 'true');
   }, []);
 
+  // Get all photos from reviews 
+  const getPhotos = useCallback(() => {
+    const allPhotos = [];
+    reviews.forEach((review) => {
+      if (review.photos && review.photos.length > 0) {
+        review.photos.forEach((photo, index) => {
+          allPhotos.push({
+            id: `${review._id}-${index}`,
+            reviewId: review._id,
+            url: photo.url,
+            publicId: photo.publicId,
+            attractionName: review.attractionId?.name || "Unknown",
+            attractionId: review.attractionId?._id || review.attractionId,
+            uploadedAt: review.createdAt,
+            isProfilePicture: false,
+          });
+        });
+      }
+    });
+    return allPhotos;
+  }, [reviews]);
+
+  // Get photo count 
+  const getPhotoCount = useCallback(() => {
+    return reviews.reduce((total, review) => {
+      return total + (review.photos?.length || 0);
+    }, 0);
+  }, [reviews]);
+
   return (
     <ReviewsContext.Provider
       value={{ 
@@ -165,7 +194,9 @@ export function ReviewsProvider({ children }) {
         updateReview,
         refreshReviews,
         refreshAttractionReviews,
-        addReview
+        addReview,
+        getPhotos,
+        getPhotoCount
       }}
     >
       {children}
@@ -178,3 +209,4 @@ export function useReviews() {
   if (!ctx) throw new Error("useReviews must be used inside ReviewsProvider");
   return ctx;
 }
+
