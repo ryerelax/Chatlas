@@ -189,3 +189,115 @@ async function rollbackUploadedPhotos(uploadedPhotos) {
     uploadedPhotos.map((photo) => deleteImageByPublicId(photo.publicId))
   );
 }
+
+// Update Review Function
+export async function updateReview({
+  reviewId,
+  userId,
+  email,
+  rating,
+  reviewText,
+  photoFiles = [],
+  deletePhotoPublicIds = [],
+}) {
+  const normalizedReviewId = reviewId?.trim();
+  const normalizedUserId = userId?.toString();
+  const normalizedRating = normalizeRating(rating);
+  const normalizedReviewText = normalizeReviewText(reviewText);
+  const normalizedPhotoFiles = validateReviewPhotos(photoFiles);
+  const normalizedDeletePhotoPublicIds = Array.isArray(deletePhotoPublicIds)
+    ? deletePhotoPublicIds.filter((id) => typeof id === "string" && id.trim())
+    : [];
+
+  if (!mongoose.Types.ObjectId.isValid(normalizedReviewId)) {
+    throw new ReviewServiceError("Invalid review ID.", 400);
+  }
+
+  // Find the review
+  const Review = mongoose.model("Review");
+  const review = await Review.findById(normalizedReviewId);
+  
+  if (!review) {
+    throw new ReviewServiceError("Review not found.", 404);
+  }
+
+  // Find the user by email
+  const user = await findUserByEmail(email);
+  if (!user) {
+    throw new ReviewServiceError("User not found.", 404);
+  }
+
+  // Check ownership - support both ObjectId and String (Google UUID)
+  const isOwner = 
+    review.userId === user.googleId || 
+    review.userId.toString() === user._id.toString();
+
+  if (!isOwner) {
+    throw new ReviewServiceError("You can only edit your own reviews.", 403);
+  }
+
+  // Update basic fields
+  review.rating = normalizedRating;
+  review.reviewText = normalizedReviewText;
+
+  // Handle photo deletion
+  if (normalizedDeletePhotoPublicIds.length > 0) {
+    // Delete from Cloudinary
+    for (const publicId of normalizedDeletePhotoPublicIds) {
+      try {
+        await deleteImageByPublicId(publicId);
+      } catch (err) {
+        console.error(`Failed to delete photo ${publicId}:`, err);
+        // Continue with other photos even if one fails
+      }
+    }
+    // Remove from review
+    review.photos = review.photos.filter(
+      (p) => !normalizedDeletePhotoPublicIds.includes(p.publicId)
+    );
+  }
+
+  // Handle new photo uploads
+  const uploadedPhotos = [];
+  if (normalizedPhotoFiles.length > 0) {
+    const maxPhotos = 3;
+    const currentCount = review.photos.length;
+    const remainingSlots = maxPhotos - currentCount;
+    
+    if (remainingSlots <= 0) {
+      throw new ReviewServiceError(
+        `Maximum ${maxPhotos} photos allowed per review.`,
+        400
+      );
+    }
+
+    const filesToUpload = normalizedPhotoFiles.slice(0, remainingSlots);
+
+    try {
+      for (const photoFile of filesToUpload) {
+        const photoBuffer = Buffer.from(await photoFile.arrayBuffer());
+        const uploadedPhoto = await uploadImageWithMetadataFromBuffer(
+          photoBuffer,
+          photoFile.type,
+          {
+            folder: `chatlas/reviews/${review.attractionId}`,
+            publicId: `review-${randomUUID()}`,
+          }
+        );
+        uploadedPhotos.push(uploadedPhoto);
+      }
+
+      // Add uploaded photos to review
+      review.photos.push(...uploadedPhotos);
+    } catch (error) {
+      // Rollback uploaded photos if any fail
+      await rollbackUploadedPhotos(uploadedPhotos);
+      throw error;
+    }
+  }
+
+  await review.save();
+
+  // Return populated review
+  return await review.populate("attractionId", "name category address rating photos");
+}

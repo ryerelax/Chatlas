@@ -3,6 +3,7 @@ import { connectToDatabase } from "@/infrastructure/database/mongodb";
 import Review from "@/data/models/Review";
 import User from "@/data/models/User";
 import { auth } from "@/auth";
+import { updateReview, ReviewServiceError } from "@/business/services/reviewService";
 
 // DELETE - Remove a review
 export async function DELETE(request, { params }) {
@@ -17,14 +18,12 @@ export async function DELETE(request, { params }) {
 
     await connectToDatabase();
 
-    // Get the review ID from params
     const { id } = await params;
     
     console.log("=== API: DELETE REVIEW ===");
     console.log("Review ID to delete:", id);
     console.log("Session user ID:", session.user.id);
 
-    // Try to find the review
     let review = null;
     try {
       review = await Review.findById(id);
@@ -44,10 +43,6 @@ export async function DELETE(request, { params }) {
       );
     }
 
-    console.log("Review found:", review._id);
-    console.log("Review userId:", review.userId);
-
-    // Get user to check ownership
     const user = await User.findOne({ email: session.user.email });
     
     if (!user) {
@@ -58,10 +53,6 @@ export async function DELETE(request, { params }) {
       );
     }
 
-    console.log("User googleId:", user.googleId);
-    console.log("User _id:", user._id);
-
-    // Check if userId matches either format
     const isOwner = 
       review.userId === user.googleId || 
       review.userId.toString() === user._id.toString();
@@ -76,7 +67,6 @@ export async function DELETE(request, { params }) {
       );
     }
 
-    // Delete the review
     const deleted = await Review.findByIdAndDelete(id);
     
     if (!deleted) {
@@ -153,55 +143,39 @@ export async function PUT(request, { params }) {
     await connectToDatabase();
 
     const { id } = await params;
-    const body = await request.json();
 
     console.log("=== UPDATING REVIEW ===");
     console.log("Review ID:", id);
+    console.log("User email:", session.user.email);
+    console.log("User ID:", session.user.id);
 
-    const review = await Review.findById(id);
-
-    if (!review) {
-      console.log("Review not found");
-      return NextResponse.json(
-        { success: false, message: "Review not found." },
-        { status: 404 }
-      );
+    // Parse request - handle both JSON and FormData
+    let rating, reviewText, photoFiles = [], deletePhotoPublicIds = [];
+    
+    if (request.headers.get("content-type")?.includes("multipart/form-data")) {
+      const formData = await request.formData();
+      rating = parseInt(formData.get("rating"));
+      reviewText = formData.get("reviewText");
+      photoFiles = formData.getAll("newPhotos") || [];
+      deletePhotoPublicIds = JSON.parse(formData.get("deletePhotos") || "[]");
+    } else {
+      const body = await request.json();
+      rating = body.rating;
+      reviewText = body.text || body.reviewText;
+      deletePhotoPublicIds = body.deletePhotos || [];
+      photoFiles = [];
     }
 
-    // Check if user owns the review
-    const user = await User.findOne({ email: session.user.email });
-    if (!user) {
-      return NextResponse.json(
-        { success: false, message: "User not found." },
-        { status: 404 }
-      );
-    }
-
-    const isOwner = 
-      review.userId === user.googleId || 
-      review.userId.toString() === user._id.toString();
-
-    if (!isOwner) {
-      return NextResponse.json(
-        { success: false, message: "You can only edit your own reviews." },
-        { status: 403 }
-      );
-    }
-
-    const updateData = {
-      rating: body.rating,
-      reviewText: body.text || body.reviewText,
-    };
-
-    if (body.userName) updateData.userName = body.userName;
-    if (body.userAvatar) updateData.userAvatar = body.userAvatar;
-
-    const updatedReview = await Review.findByIdAndUpdate(
-      id,
-      updateData,
-      { new: true }
-    )
-      .populate("attractionId", "name category address rating photos");
+    // Use the reviewService to update
+    const updatedReview = await updateReview({
+      reviewId: id,
+      userId: session.user.id,
+      email: session.user.email,
+      rating: rating,
+      reviewText: reviewText,
+      photoFiles: photoFiles,
+      deletePhotoPublicIds: deletePhotoPublicIds,
+    });
 
     return NextResponse.json({
       success: true,
@@ -210,6 +184,14 @@ export async function PUT(request, { params }) {
     });
   } catch (error) {
     console.error("Failed to update review:", error);
+    
+    if (error instanceof ReviewServiceError) {
+      return NextResponse.json(
+        { success: false, message: error.message },
+        { status: error.statusCode }
+      );
+    }
+    
     return NextResponse.json(
       { success: false, message: "Unable to update review." },
       { status: 500 }
