@@ -194,9 +194,7 @@ export function ReviewsProvider({ children }) {
         updateReview,
         refreshReviews,
         refreshAttractionReviews,
-        addReview,
-        getPhotos,
-        getPhotoCount
+        addReview
       }}
     >
       {children}

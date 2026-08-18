@@ -5,15 +5,15 @@ import { NextResponse } from "next/server";
 import { connectToDatabase } from "src/infrastructure/database/mongodb.js";
 import User from "src/data/models/User";
 
-// GET - 获取当前用户信息
+// GET - Get current user information
 export async function GET(request) {
   try {
     const session = await auth();
-    console.log("🔍 GET /api/user - Session:", session);
+    console.log("GET /api/user - Session:", session);
     
-    // 检查 session 和 user.id
+    // Check session and user.id
     if (!session?.user?.id) {
-      console.log("🔍 No user.id found in session");
+      console.log("No user.id found in session");
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
         { status: 401 }
@@ -22,7 +22,7 @@ export async function GET(request) {
 
     await connectToDatabase();
     
-    // 用 email 或 googleId 查找用户
+    // Find user by email or googleId
     const user = await User.findOne({ 
       $or: [
         { googleId: session.user.id },
@@ -43,7 +43,7 @@ export async function GET(request) {
         displayName: user.displayName || "",
         name: user.name,
         email: user.email,
-        profilePicture: user.profilePicture,
+        profilePicture: user.profilePicture || "",
         bio: user.bio || "",
         location: user.location || "",
       },
@@ -57,14 +57,14 @@ export async function GET(request) {
   }
 }
 
-// PUT - 更新用户信息
+// PUT - Update user information
 export async function PUT(request) {
   try {
     const session = await auth();
-    console.log("🔍 PUT /api/user - Session:", session);
+    console.log("PUT /api/user - Session:", session);
     
     if (!session?.user?.id) {
-      console.log("🔍 No user.id found in session");
+      console.log("No user.id found in session");
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
         { status: 401 }
@@ -74,23 +74,23 @@ export async function PUT(request) {
     const body = await request.json();
     const { displayName, bio, location, profilePicture } = body;
 
-    console.log("🔍 PUT /api/user received:", { displayName, bio, location, profilePicture });
+    console.log("PUT /api/user received:", { displayName, bio, location, profilePicture });
 
     await connectToDatabase();
 
-    // ✅ 构建动态更新对象，只更新提供的字段
+    // Build dynamic update object, only update provided fields
     const updateFields = {
       displayName: displayName || "",
       bio: bio || "",
       location: location || "",
     };
 
-    // ✅ 只有当 profilePicture 被明确提供时才更新它
+    // Only update profilePicture if it is explicitly provided (including empty string to reset)
     if (profilePicture !== undefined && profilePicture !== null) {
       updateFields.profilePicture = profilePicture;
     }
 
-    // 使用 updateOne 确保更新成功
+    // Use updateOne to ensure update succeeds
     const updateResult = await User.updateOne(
       { 
         $or: [
@@ -108,7 +108,7 @@ export async function PUT(request) {
       );
     }
 
-    // 获取更新后的用户数据
+    // Get updated user data
     const updatedUser = await User.findOne({ 
       $or: [
         { googleId: session.user.id },
@@ -116,7 +116,7 @@ export async function PUT(request) {
       ]
     });
 
-    console.log("🔍 Updated user:", updatedUser);
+    console.log("Updated user:", updatedUser);
 
     return NextResponse.json({
       success: true,
@@ -124,7 +124,7 @@ export async function PUT(request) {
         displayName: updatedUser.displayName || "",
         name: updatedUser.name,
         email: updatedUser.email,
-        profilePicture: updatedUser.profilePicture,
+        profilePicture: updatedUser.profilePicture || "",
         bio: updatedUser.bio || "",
         location: updatedUser.location || "",
       },

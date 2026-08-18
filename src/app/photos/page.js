@@ -9,13 +9,15 @@ import { useReviews } from "@/presentation/contexts/ReviewsContext";
 export default function MyPhotosPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
-  const { reviews, loadReviews, refreshReviews } = useReviews();
+  const { reviews, isLoading: reviewsLoading, loadReviews, refreshReviews } = useReviews();
   const [photos, setPhotos] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [lightboxPhoto, setLightboxPhoto] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [toast, setToast] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isSettingProfile, setIsSettingProfile] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -23,34 +25,39 @@ export default function MyPhotosPage() {
       return;
     }
     
-    if (status === "authenticated") {
+    if (status === "authenticated" && !hasLoaded) {
       loadReviews(true);
+      setHasLoaded(true);
     }
-  }, [status, router, loadReviews]);
+  }, [status, router, loadReviews, hasLoaded]);
 
-  // Extract photos from reviews whenever reviews change
   useEffect(() => {
-    if (reviews.length > 0 || !isLoading) {
+    if (reviews.length > 0 || !reviewsLoading) {
       extractPhotosFromReviews();
     }
-  }, [reviews]);
+  }, [reviews, reviewsLoading]);
 
-  // Auto-refresh when coming back to the page
   useEffect(() => {
     const refreshIfNeeded = () => {
+      let needsRefresh = false;
       if (localStorage.getItem('reviewAdded') === 'true') {
         localStorage.removeItem('reviewAdded');
-        console.log("Refreshing photos page after review added...");
-        refreshReviews();
+        needsRefresh = true;
       }
       if (localStorage.getItem('reviewDeleted') === 'true') {
         localStorage.removeItem('reviewDeleted');
-        console.log("Refreshing photos page after review deleted...");
-        refreshReviews();
+        needsRefresh = true;
       }
       if (localStorage.getItem('photoDeleted') === 'true') {
         localStorage.removeItem('photoDeleted');
-        console.log("Refreshing photos page after photo deleted...");
+        needsRefresh = true;
+      }
+      if (localStorage.getItem('profileUpdated') === 'true') {
+        localStorage.removeItem('profileUpdated');
+        needsRefresh = true;
+      }
+      
+      if (needsRefresh) {
         refreshReviews();
       }
     };
@@ -72,10 +79,16 @@ export default function MyPhotosPage() {
     setIsLoading(true);
     try {
       const photoList = [];
-      
+      const seenUrls = new Set();
+      const currentProfilePic = session?.user?.profilePicture;
+
       reviews.forEach((review) => {
         if (review.photos && review.photos.length > 0) {
           review.photos.forEach((photo, index) => {
+            if (seenUrls.has(photo.url)) {
+              return;
+            }
+            
             photoList.push({
               id: `${review._id}-${index}`,
               reviewId: review._id,
@@ -88,17 +101,12 @@ export default function MyPhotosPage() {
                 month: "long",
                 year: "numeric",
               }),
-              isProfilePicture: false,
+              isProfilePicture: photo.url === currentProfilePic,
             });
+            seenUrls.add(photo.url);
           });
         }
       });
-
-      // TODO: Set profile picture from user data when API is ready
-      // For now, mark first photo as profile if exists
-      if (photoList.length > 0 && !photoList.some(p => p.isProfilePicture)) {
-        photoList[0].isProfilePicture = true;
-      }
 
       setPhotos(photoList);
     } catch (error) {
@@ -114,18 +122,55 @@ export default function MyPhotosPage() {
     setTimeout(() => setToast(null), 3500);
   };
 
-  const handleSetProfile = (photoId) => {
-    setPhotos(photos.map((p) => ({ 
-      ...p, 
-      isProfilePicture: p.id === photoId 
-    })));
-    showToast("Profile picture updated successfully");
+  const handleSetProfile = async (photoId) => {
+    setIsSettingProfile(true);
     
-    // TODO: Call API to update user profile picture when your teammate adds it
-    // await fetch("/api/user/profile-picture", {
-    //   method: "PUT",
-    //   body: JSON.stringify({ photoUrl: photo.url, publicId: photo.publicId })
-    // });
+    try {
+      const photo = photos.find(p => p.id === photoId);
+      if (!photo) {
+        showToast("Photo not found", "error");
+        return;
+      }
+
+      const response = await fetch("/api/user/profile-picture", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          photoUrl: photo.url,
+          publicId: photo.publicId,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setPhotos(prev => prev.map((p) => ({ 
+          ...p, 
+          isProfilePicture: p.id === photoId 
+        })));
+        
+        if (session) {
+          session.user.image = photo.url;
+          session.user.profilePicture = photo.url;
+        }
+        
+        localStorage.setItem('profileUpdated', 'true');
+        showToast("Profile picture updated successfully!", "success");
+        
+        setTimeout(() => {
+          router.refresh();
+        }, 1000);
+      } else {
+        showToast(data.message || "Failed to update profile picture", "error");
+      }
+    } catch (error) {
+      console.error("Error setting profile picture:", error);
+      showToast("Failed to update profile picture", "error");
+    } finally {
+      setIsSettingProfile(false);
+    }
   };
 
   const handleDeletePhoto = async () => {
@@ -133,32 +178,59 @@ export default function MyPhotosPage() {
 
     setIsDeleting(true);
     try {
-      // Call API to delete photo from review
-      const response = await fetch(`/api/reviews/${deleteTarget.reviewId}/photos`, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ 
-          publicId: deleteTarget.publicId,
-          url: deleteTarget.url 
-        }),
-      });
+      if (deleteTarget.reviewId) {
+        const response = await fetch(`/api/reviews/${deleteTarget.reviewId}/photos`, {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ 
+            publicId: deleteTarget.publicId,
+            url: deleteTarget.url 
+          }),
+        });
 
-      const data = await response.json();
+        const data = await response.json();
 
-      if (data.success) {
-        // Remove from UI
-        setPhotos(photos.filter((p) => p.id !== deleteTarget.id));
-        setDeleteTarget(null);
-        localStorage.setItem('photoDeleted', 'true');
-        showToast("Photo deleted successfully");
-        
-        // Refresh reviews to sync with database
-        await refreshReviews();
-      } else {
-        showToast(data.message || "Failed to delete photo", "error");
+        if (!data.success) {
+          showToast(data.message || "Failed to delete photo", "error");
+          setIsDeleting(false);
+          return;
+        }
       }
+
+      if (deleteTarget.isProfilePicture) {
+        const resetResponse = await fetch("/api/user/profile-picture", {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            photoUrl: "",
+            publicId: "",
+          }),
+        });
+        
+        console.log("Profile picture reset response:", await resetResponse.json());
+        
+        if (session) {
+          session.user.image = "";
+          session.user.profilePicture = "";
+        }
+        
+        localStorage.setItem('profileUpdated', 'true');
+      }
+
+      setPhotos(photos.filter((p) => p.id !== deleteTarget.id));
+      setDeleteTarget(null);
+      localStorage.setItem('photoDeleted', 'true');
+      showToast("Photo deleted successfully!", "success");
+      
+      await refreshReviews();
+      
+      setTimeout(() => {
+        router.refresh();
+      }, 500);
     } catch (error) {
       console.error("Error deleting photo:", error);
       showToast("Failed to delete photo", "error");
@@ -167,7 +239,7 @@ export default function MyPhotosPage() {
     }
   };
 
-  if (status === "loading" || isLoading) {
+  if (status === "loading" || isLoading || reviewsLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <p className="text-[#65748A]">Loading your photos...</p>
@@ -183,7 +255,68 @@ export default function MyPhotosPage() {
 
   return (
     <div className="min-h-screen bg-[#F7F9FB]">
-      {/* Hero */}
+      {toast && (
+        <div className="fixed top-6 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-md px-4">
+          <div className={`flex items-center gap-3 px-5 py-4 rounded-xl shadow-lg border transition-all duration-300 animate-in slide-in-from-top-5 ${
+            toast.type === "success" 
+              ? "bg-[#E8F7EF] border-[#16845B] text-[#004638]" 
+              : "bg-[#FDECEC] border-[#C2413B] text-[#7A1A1A]"
+          }`}>
+            {toast.type === "success" ? (
+              <div className="w-8 h-8 rounded-full bg-[#16845B]/20 flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-[#16845B]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-[#C2413B]/20 flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-[#C2413B]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </div>
+            )}
+            <span className="text-base font-medium flex-1">{toast.message}</span>
+            <button
+              onClick={() => setToast(null)}
+              className="text-[#65748A] hover:text-[#10213B] transition-colors flex-shrink-0"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: "rgba(0,0,0,0.55)" }}>
+          <div className="bg-white w-full max-w-md rounded-[18px] p-6 shadow-2xl">
+            <div className="flex items-center justify-center w-16 h-16 mx-auto mb-4 rounded-full bg-red-50 border border-red-200">
+              <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-bold text-[#10213B] text-center">Delete this photo?</h3>
+            <p className="text-[#65748A] text-center mt-2">Are you sure you want to permanently delete this photo? This action cannot be undone.</p>
+            <div className="flex gap-3 justify-end mt-6">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="flex-1 px-5 py-2.5 border border-[#BBC8D0] text-[#004638] font-semibold rounded-lg hover:bg-[#F1F6F4] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeletePhoto}
+                disabled={isDeleting}
+                className="flex-1 px-5 py-2.5 bg-[#C2413B] text-white font-semibold rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                {isDeleting ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="bg-[#006C56] text-white py-12 px-4">
         <div className="max-w-[1200px] mx-auto">
           <button
@@ -201,7 +334,6 @@ export default function MyPhotosPage() {
         </div>
       </div>
 
-      {/* Content */}
       <div className="max-w-[1200px] mx-auto px-4 py-8">
         {photos.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -219,19 +351,18 @@ export default function MyPhotosPage() {
           </div>
         ) : (
           <>
-            {/* Current profile picture callout */}
             {profilePic && (
               <div className="flex items-center gap-4 bg-white border border-[#D8E1E7] p-4 mb-6 rounded-[14px]">
                 <div className="w-16 h-16 rounded-full overflow-hidden flex-shrink-0 border-2 border-[#006C56] bg-[#CDF5E5]">
                   {profilePic.url ? (
-                    <Image src={profilePic.url} alt="Profile" width={64} height={64} className="object-cover" />
+                    <Image src={profilePic.url} alt="Profile" width={64} height={64} className="object-cover w-full h-full" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-[#006C56]/50 text-xs">No img</div>
                   )}
                 </div>
                 <div>
                   <p className="font-semibold text-[#10213B]">Current profile picture</p>
-                  <p className="text-[#65748A] text-sm">{profilePic.attractionName} · {profilePic.uploadedAt}</p>
+                  <p className="text-[#65748A] text-sm">{profilePic.attractionName} / {profilePic.uploadedAt}</p>
                 </div>
               </div>
             )}
@@ -244,7 +375,13 @@ export default function MyPhotosPage() {
                   onClick={() => setLightboxPhoto(photo)}
                 >
                   {photo.url ? (
-                    <Image src={photo.url} alt={photo.attractionName} fill className="object-cover" />
+                    <Image 
+                      src={photo.url} 
+                      alt={photo.attractionName} 
+                      fill 
+                      sizes="(max-width: 768px) 50vw, 25vw"
+                      className="object-cover" 
+                    />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-[#006C56]/30 text-sm">No photo</div>
                   )}
@@ -271,9 +408,10 @@ export default function MyPhotosPage() {
                     {!photo.isProfilePicture && (
                       <button
                         onClick={() => handleSetProfile(photo.id)}
-                        className="px-3 py-1.5 bg-[#FFAB00] text-[#142033] text-xs font-medium rounded-md hover:bg-[#E89B00] transition-colors"
+                        disabled={isSettingProfile}
+                        className="px-3 py-1.5 bg-[#FFAB00] text-[#142033] text-xs font-medium rounded-md hover:bg-[#E89B00] transition-colors disabled:opacity-50"
                       >
-                        Set as profile
+                        {isSettingProfile ? "Setting..." : "Set as profile"}
                       </button>
                     )}
                     <button
@@ -295,7 +433,6 @@ export default function MyPhotosPage() {
         )}
       </div>
 
-      {/* Lightbox */}
       {lightboxPhoto && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -332,40 +469,6 @@ export default function MyPhotosPage() {
               <p className="text-white/70 text-sm">{lightboxPhoto.uploadedAt}</p>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Delete Confirmation */}
-      {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: "rgba(0,0,0,0.55)" }}>
-          <div className="bg-white w-full max-w-md rounded-[18px] p-6">
-            <h3 className="text-xl font-bold text-[#10213B]">Delete this photo?</h3>
-            <p className="text-[#65748A] mt-2">Are you sure you want to permanently delete this photo? This action cannot be undone.</p>
-            <div className="flex gap-3 justify-end mt-6">
-              <button
-                onClick={() => setDeleteTarget(null)}
-                className="px-5 py-2.5 border border-[#BBC8D0] text-[#004638] font-semibold rounded-lg hover:bg-[#F1F6F4] transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDeletePhoto}
-                disabled={isDeleting}
-                className="px-5 py-2.5 bg-[#C2413B] text-white font-semibold rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
-              >
-                {isDeleting ? "Deleting..." : "Delete photo"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Toast */}
-      {toast && (
-        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 px-6 py-3 rounded-lg font-medium shadow-lg z-50 ${
-          toast.type === "error" ? "bg-[#C2413B] text-white" : "bg-[#16845B] text-white"
-        }`}>
-          {toast.message}
         </div>
       )}
     </div>

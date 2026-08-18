@@ -17,7 +17,6 @@ export default function EditProfilePage() {
   const [imagePreview, setImagePreview] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // 从 API 获取用户数据（与 My Profile 保持一致）
   const fetchUserData = async () => {
     try {
       const response = await fetch("/api/user");
@@ -69,10 +68,10 @@ export default function EditProfilePage() {
 
     try {
       let profilePictureUrl = null;
+      let publicId = null;
 
-      // 如果有新图片，上传到 Cloudinary
       if (imageFile) {
-        console.log("🔍 Uploading image to Cloudinary...");
+        console.log("Uploading image to Cloudinary...");
         const uploadFormData = new FormData();
         uploadFormData.append("file", imageFile);
 
@@ -82,15 +81,16 @@ export default function EditProfilePage() {
         });
 
         const uploadResult = await uploadRes.json();
-        console.log("🔍 Cloudinary upload result:", uploadResult);
+        console.log("Cloudinary upload result:", uploadResult);
 
         if (!uploadResult.success) {
           throw new Error(uploadResult.message);
         }
         profilePictureUrl = uploadResult.data.url;
-        console.log("✅ Cloudinary upload successful:", profilePictureUrl);
+        publicId = uploadResult.data.publicId;
+        console.log("Cloudinary upload successful:", profilePictureUrl);
       } else {
-        console.log("ℹ️ No image to upload, keeping existing");
+        console.log("No image to upload, keeping existing");
       }
 
       const updateData = {
@@ -99,13 +99,12 @@ export default function EditProfilePage() {
         location,
       };
 
-      // ✅ 如果有新的 Cloudinary URL，添加到更新数据中
       if (profilePictureUrl) {
         updateData.profilePicture = profilePictureUrl;
-        console.log("🔍 Adding profilePicture to updateData:", profilePictureUrl);
+        console.log("Adding profilePicture to updateData:", profilePictureUrl);
       }
 
-      console.log("🔍 Final updateData being sent:", updateData);
+      console.log("Final updateData being sent:", updateData);
 
       const response = await fetch("/api/user", {
         method: "PUT",
@@ -114,14 +113,12 @@ export default function EditProfilePage() {
       });
 
       const result = await response.json();
-      console.log("🔍 Update API response:", result);
+      console.log("Update API response:", result);
 
       if (!result.success) throw new Error(result.message);
 
-      // ✅ 使用服务器返回的 profilePicture，或使用新上传的 URL
       const newImageUrl = profilePictureUrl || result.data.profilePicture || session.user.image;
 
-      // 更新 session
       await update({
         ...session,
         user: {
@@ -133,7 +130,6 @@ export default function EditProfilePage() {
         },
       });
 
-      // 更新本地状态
       if (newImageUrl) {
         setProfilePicture(newImageUrl);
       }
@@ -144,7 +140,7 @@ export default function EditProfilePage() {
         router.push("/profile");
       }, 1500);
     } catch (error) {
-      console.error("❌ Error:", error);
+      console.error("Error:", error);
       setMessage({ type: "error", text: error.message || "Failed to update profile." });
     } finally {
       setIsLoading(false);
@@ -159,7 +155,6 @@ export default function EditProfilePage() {
     );
   }
 
-  // 头像来源：预览 → 数据库 → session
   const avatarSrc = imagePreview || profilePicture || session?.user?.image || "/default-avatar.png";
 
   return (
@@ -180,7 +175,6 @@ export default function EditProfilePage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Avatar Upload */}
           <div className="flex flex-col items-center">
             <div className="relative">
               <img
@@ -219,7 +213,6 @@ export default function EditProfilePage() {
             <p className="text-xs text-gray-500 mt-2">JPG, PNG or WEBP, max 5MB</p>
           </div>
 
-          {/* Display Name */}
           <div>
             <label className="block text-sm font-medium text-black mb-1">Display name</label>
             <input
@@ -233,7 +226,6 @@ export default function EditProfilePage() {
             <p className="text-xs text-gray-500 mt-1">{displayName.length}/50</p>
           </div>
 
-          {/* Email - 只读 */}
           <div>
             <label className="block text-sm font-medium text-black mb-1">Email</label>
             <input
@@ -244,7 +236,6 @@ export default function EditProfilePage() {
             />
           </div>
 
-          {/* Location */}
           <div>
             <label className="block text-sm font-medium text-black mb-1">Location</label>
             <input
@@ -256,7 +247,6 @@ export default function EditProfilePage() {
             />
           </div>
 
-          {/* Bio */}
           <div>
             <label className="block text-sm font-medium text-black mb-1">Bio</label>
             <textarea

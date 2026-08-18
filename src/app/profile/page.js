@@ -9,7 +9,7 @@ import { useReviews } from "@/presentation/contexts/ReviewsContext";
 export default function ProfilePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const { reviews, isLoading, loadReviews, refreshReviews } = useReviews();  // ✅ Added isLoading
+  const { reviews, isLoading, loadReviews, refreshReviews } = useReviews();
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [statsLoading, setStatsLoading] = useState(true);
@@ -33,7 +33,6 @@ export default function ProfilePage() {
     }
   }, [status, router, loadReviews]);
 
-  // Auto-refresh when coming back to the page
   useEffect(() => {
     if (status === "authenticated") {
       const refreshIfNeeded = () => {
@@ -46,6 +45,18 @@ export default function ProfilePage() {
         if (localStorage.getItem('reviewAdded') === 'true') {
           localStorage.removeItem('reviewAdded');
           console.log("Refreshing profile after add...");
+          refreshReviews();
+          fetchCollectionStats();
+        }
+        if (localStorage.getItem('photoDeleted') === 'true') {
+          localStorage.removeItem('photoDeleted');
+          console.log("Refreshing profile after photo deleted...");
+          refreshReviews();
+          fetchCollectionStats();
+        }
+        if (localStorage.getItem('profileUpdated') === 'true') {
+          localStorage.removeItem('profileUpdated');
+          console.log("Refreshing profile after profile update...");
           refreshReviews();
           fetchCollectionStats();
         }
@@ -110,7 +121,6 @@ export default function ProfilePage() {
     }
   };
 
-  // Wait for all data to load
   if (status === "loading" || loading || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F7F9FB]">
@@ -125,27 +135,34 @@ export default function ProfilePage() {
 
   const displayName = userData?.displayName || session.user.displayName || session.user.name || "User";
   const email = userData?.email || session.user.email;
-  const profilePicture = userData?.profilePicture || session.user.image;
+  const profilePicture = userData?.profilePicture || session.user.image || "/default-avatar.png";
   const bio = userData?.bio || session.user.bio || "";
   const location = userData?.location || session.user.location || "";
   const reviewsWritten = reviews.length;
 
+  // ✅ Only count photos from reviews (no profile picture)
+  const photosCount = reviews.reduce((total, review) => {
+    return total + (review.photos?.length || 0);
+  }, 0);
+
   return (
     <div className="min-h-screen bg-[#F7F9FB] py-10 px-4">
       <div className="max-w-4xl mx-auto">
-        {/* Profile Header */}
         <div className="bg-white rounded-lg shadow-md p-8 mb-6">
           <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
             <img
-              src={profilePicture || "/default-avatar.png"}
+              src={profilePicture}
               alt="Profile"
               className="w-24 h-24 rounded-full border-4 border-[#006C56] object-cover"
+              onError={(e) => {
+                e.target.src = "/default-avatar.png";
+              }}
             />
             <div className="flex-1">
               <h1 className="text-2xl font-bold text-[#10213B]">{displayName}</h1>
               <p className="text-[#65748A]">{email}</p>
               {location && (
-                <p className="text-sm text-[#65748A]">📍 {location}</p>
+                <p className="text-sm text-[#65748A]">Location: {location}</p>
               )}
               <p className="text-sm text-[#65748A]">
                 Member since {new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}
@@ -158,12 +175,11 @@ export default function ProfilePage() {
               href="/profile/edit"
               className="px-6 py-2 border border-[#006C56] text-[#006C56] rounded-lg hover:bg-[#006C56] hover:text-white transition"
             >
-              ✏️ Edit Profile
+              Edit Profile
             </Link>
           </div>
         </div>
 
-        {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-white rounded-lg shadow-md p-4 text-center">
             <p className="text-2xl font-bold text-[#006C56]">
@@ -179,7 +195,7 @@ export default function ProfilePage() {
           </div>
           <div className="bg-white rounded-lg shadow-md p-4 text-center">
             <p className="text-2xl font-bold text-[#006C56]">
-              {statsLoading ? "..." : stats.photosUploaded}
+              {statsLoading ? "..." : photosCount}
             </p>
             <p className="text-sm text-[#65748A]">Photos uploaded</p>
           </div>
@@ -191,7 +207,6 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Collection Hub Cards */}
         <div className="bg-white rounded-xl shadow-sm border border-[#D8E1E7] p-6 mb-6">
           <div className="flex items-center gap-2 mb-5">
             <svg className="w-5 h-5 text-[#006C56]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -201,7 +216,6 @@ export default function ProfilePage() {
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            {/* Wishlist Card */}
             <Link
               href="/wishlist"
               className="group relative bg-gradient-to-br from-[#FEF2F2] to-white border-2 border-[#FEF2F2] rounded-xl p-5 text-center hover:border-[#C2413B] hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
@@ -214,11 +228,10 @@ export default function ProfilePage() {
               <p className="font-bold text-[#10213B] text-base mt-3">Wishlist</p>
               <p className="text-[#65748A] text-sm">{statsLoading ? "..." : `${stats.wishlistCount || 0} items saved`}</p>
               <div className="mt-3 text-[#C2413B] text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                View →
+                View 
               </div>
             </Link>
 
-            {/* Favourites Card */}
             <Link
               href="/favourites"
               className="group relative bg-gradient-to-br from-[#FFF3D6] to-white border-2 border-[#FFF3D6] rounded-xl p-5 text-center hover:border-[#FFAB00] hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
@@ -231,11 +244,10 @@ export default function ProfilePage() {
               <p className="font-bold text-[#10213B] text-base mt-3">Favourites</p>
               <p className="text-[#65748A] text-sm">{statsLoading ? "..." : `${stats.favouritesCount || 0} items saved`}</p>
               <div className="mt-3 text-[#FFAB00] text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                View →
+                View 
               </div>
             </Link>
 
-            {/* Reviews Card */}
             <Link
               href="/reviews"
               className="group relative bg-gradient-to-br from-[#EAF3FA] to-white border-2 border-[#EAF3FA] rounded-xl p-5 text-center hover:border-[#2F6DA1] hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
@@ -248,11 +260,10 @@ export default function ProfilePage() {
               <p className="font-bold text-[#10213B] text-base mt-3">My Reviews</p>
               <p className="text-[#65748A] text-sm">{statsLoading ? "..." : `${reviewsWritten || 0} reviews written`}</p>
               <div className="mt-3 text-[#2F6DA1] text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                View →
+                View 
               </div>
             </Link>
 
-            {/* Photos Card */}
             <Link
               href="/photos"
               className="group relative bg-gradient-to-br from-[#F3F0FF] to-white border-2 border-[#F3F0FF] rounded-xl p-5 text-center hover:border-[#7C3AED] hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
@@ -263,13 +274,12 @@ export default function ProfilePage() {
                 </svg>
               </div>
               <p className="font-bold text-[#10213B] text-base mt-3">My Photos</p>
-              <p className="text-[#65748A] text-sm">{statsLoading ? "..." : `${stats.photosUploaded || 0} photos uploaded`}</p>
+              <p className="text-[#65748A] text-sm">{statsLoading ? "..." : `${photosCount || 0} photos uploaded`}</p>
               <div className="mt-3 text-[#7C3AED] text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                View →
+                View 
               </div>
             </Link>
 
-            {/* Travel History Card */}
             <Link
               href="/travel-history"
               className="group relative bg-gradient-to-br from-[#E8F7EF] to-white border-2 border-[#E8F7EF] rounded-xl p-5 text-center hover:border-[#16845B] hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
@@ -282,13 +292,12 @@ export default function ProfilePage() {
               <p className="font-bold text-[#10213B] text-base mt-3">Travel History</p>
               <p className="text-[#65748A] text-sm">0 attractions</p>
               <div className="mt-3 text-[#16845B] text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                View →
+                View 
               </div>
             </Link>
           </div>
         </div>
 
-        {/* Recent Reviews */}
         <div className="bg-white rounded-lg shadow-md p-8">
           <h2 className="text-xl font-bold text-[#10213B] mb-4">Recent Reviews</h2>
           {statsLoading ? (
