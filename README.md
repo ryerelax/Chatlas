@@ -11,7 +11,7 @@ The system is planned around six core modules:
 - Social Profile
 - Personal Collection
 
-The current implementation focuses on the initial project setup and Attraction Explorer prototype.
+The current application includes working attraction discovery, Google authentication, reviews, exploration maps, public Social Profiles, collection-related pages, and offline/PWA support. Some cross-module integration and final design work remains in progress.
 
 ## Technology Stack
 
@@ -22,12 +22,12 @@ The current implementation focuses on the initial project setup and Attraction E
 - MongoDB Atlas
 - Mongoose
 - ESLint
-- Google Identity Services
+- Auth.js v5 with Google sign-in
 - Google Maps JavaScript API
-- Google Places API
+- Google Places API (New)
 - Cloudinary
 
-Google Identity, Maps, Places, Cloudinary, and full PWA support are planned integrations and may not yet be fully implemented.
+Google Maps is used for attraction and exploration-map displays. Google Places and Cloudinary support attraction data-maintenance workflows, while a service worker provides offline caching for supported routes and previously viewed content.
 
 ## System Architecture
 
@@ -77,38 +77,26 @@ The project is maintained as:
 
 ```text
 src/
-├── app/
-│   ├── api/
-│   │   └── attractions/
-│   │       ├── route.js
-│   │       └── [id]/
-│   │           └── route.js
-│   ├── attractions/
-│   │   └── [id]/
-│   │       └── page.js
-│   ├── layout.js
-│   ├── page.js
-│   └── globals.css
+├── app/                          # Pages, layouts, loading UI, and API Route Handlers
+├── auth.ts                      # Full Auth.js configuration
+├── auth.config.ts               # Edge-safe Auth.js configuration
+├── middleware.js                # Session-gated route protection
 │
 ├── presentation/
-│   └── components/
-│       ├── Header.js
-│       ├── AttractionCard.js
-│       └── AttractionList.js
+│   ├── components/               # Reusable React components
+│   ├── contexts/                 # Presentation state such as language selection
+│   └── lib/                      # Browser-only helpers
 │
 ├── business/
-│   └── services/
-│       └── attractionService.js
+│   └── services/                 # Validation, business rules, and orchestration
 │
 ├── data/
-│   ├── models/
-│   │   └── Attraction.js
-│   └── repositories/
-│       └── attractionRepository.js
+│   ├── models/                   # Mongoose schemas and models
+│   └── repositories/             # MongoDB queries
 │
 └── infrastructure/
-    └── database/
-        └── mongodb.js
+    ├── database/                 # Shared MongoDB connection helper
+    └── external/                 # External-service clients
 ```
 
 ### Folder Responsibilities
@@ -124,19 +112,25 @@ src/
 
 ## Current Features
 
-- Display Melaka attractions from MongoDB Atlas
-- Browse a default attraction list
+- Read Melaka attractions from MongoDB Atlas with pagination
 - Search attractions by name, address, or category
-- Filter attractions by category
-- Filter attractions by minimum rating
-- Display the current result count and applied criteria
+- Filter attractions by category, location area, and minimum rating
+- Display result counts and applied criteria
 - Reset search and filter criteria
-- Display loading, error, and no-result states
-- Display attraction details
-- Open an attraction location using its Google Maps link
-- Shared responsive header and navigation
-- Browse and search public traveller profiles
-- View another traveller's display-safe public profile and published reviews
+- Display attraction details, Cloudinary-hosted photos, and synced descriptions
+- Display attraction locations with Google Maps
+- Google sign-in with persisted user records
+- Signed-in user profile view and editing
+- Create, edit, and delete ratings and reviews, including review photos
+- Display a personal exploration map and progress derived from reviewed attractions
+- Browse and search a public Traveller Directory as a guest or registered user
+- Display public profiles without exposing email addresses or Google IDs
+- Display public reviews with attraction links and available photos
+- Let registered users view another traveller's exploration map
+- Compare two travellers using one-decimal progress, separate maps, common visits, and unique visits
+- Provide wishlist, favourites, photos, and travel-history pages
+- Cache supported attraction pages, images, searches, and an offline fallback through the PWA service worker
+- Provide shared responsive navigation with English, Chinese, and Malay labels
 
 <!-- TODO: Update this list whenever a new module or feature is completed. -->
 
@@ -161,9 +155,11 @@ Fill in the required values inside `.env.local`:
 ```env
 MONGODB_URI=
 AUTH_SECRET=
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
+AUTH_GOOGLE_ID=
+AUTH_GOOGLE_SECRET=
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=
+NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID=
+GOOGLE_PLACES_API_KEY=
 CLOUDINARY_CLOUD_NAME=
 CLOUDINARY_API_KEY=
 CLOUDINARY_API_SECRET=
@@ -195,7 +191,7 @@ http://localhost:3000
 
 ## MongoDB Atlas Setup
 
-Before running the Attraction Explorer module:
+Before running features that use MongoDB Atlas:
 
 1. Obtain access to the shared Chatlas MongoDB Atlas project.
 2. Ensure the `chatlas` database contains the `attractions` collection.
@@ -219,18 +215,20 @@ Displays the current homepage and attraction explorer.
 
 ### `/api/attractions`
 
-Returns active Melaka attractions.
+Returns active Melaka attractions with pagination.
 
 Supported query parameters:
 
 - `search`
 - `category`
+- `locationArea`
 - `minRating`
+- `page`
 
 Example:
 
 ```text
-/api/attractions?category=Museum&minRating=4
+/api/attractions?category=Museum&locationArea=Bandar%20Hilir&minRating=4&page=1
 ```
 
 ### `/api/attractions/[id]`
@@ -241,13 +239,45 @@ Returns one attraction by MongoDB ObjectId.
 
 Displays the attraction details page.
 
+### `/attractions/[id]/location`
+
+Displays the selected attraction on Google Maps.
+
+### `/login`
+
+Provides Google sign-in through Auth.js.
+
+### `/profile` and `/profile/edit`
+
+Display and update the signed-in user's profile.
+
+### `/reviews`
+
+Displays the signed-in user's review activity and review-management interface.
+
+### `/exploration-map`
+
+Displays the signed-in user's exploration progress and visited attractions.
+
 ### `/profiles`
 
-Displays the searchable public traveller directory.
+Displays the searchable public Traveller Directory. The signed-in user is excluded from their own directory results.
 
 ### `/profiles/[id]`
 
-Displays a traveller's public profile and published reviews. Signed-in users can view the traveller's public exploration map and compare exploration progress, where each distinct reviewed attraction counts as visited.
+Displays a traveller's public profile and reviews. Registered users can also view the traveller's exploration map and compare both users' exploration progress. Each distinct reviewed attraction counts as one visited attraction.
+
+### Collection routes
+
+`/wishlist`, `/favourites`, `/photos`, and `/travel-history` provide the current personal-collection interfaces.
+
+### Social Profile APIs
+
+- `/api/profiles` — paginated public Traveller Directory
+- `/api/profiles/[id]` — one display-safe public profile
+- `/api/profiles/[id]/reviews` — public reviews
+- `/api/profiles/[id]/exploration` — registered-user public exploration data
+- `/api/profiles/[id]/comparison` — registered-user exploration comparison
 
 ## Development Guidelines
 
@@ -264,22 +294,20 @@ Team members should read `AGENTS.md` before making major changes.
 ```bash
 npm install
 npm run dev
+npm test
 npm run lint
 npm run build
 git status
 ```
 
+Maintenance scripts are available for attraction photo sync, description sync, location-area classification, and address repair. Review the corresponding commands in `package.json` before running them because they update stored attraction data.
+
 ## Planned Improvements
 
-- Google authentication
-- Interactive attraction map
-- Attraction photo previews and lightbox
-- Review creation, ratings, editing, and deletion
-- Personal exploration map and progress
-- Wishlist, favourites, reviews, photos, and travel history
-- Cloudinary image storage
-- PWA Service Worker and offline caching
-- Final Chatlas branding and responsive design
+- Complete and validate the registered-user Add Attraction submission workflow
+- Resolve outstanding cross-module lint, test, and production-build integration issues
+- Refine final Chatlas branding and visual consistency
+- Continue responsive-layout and accessibility improvements
+- Extend review, community, and personal-collection experiences as team requirements are confirmed
 
-<!-- TODO: Update the roadmap when the team confirms implementation priorities. -->
-<!-- TODO: Add additional dependencies only when the related authentication, Maps, Cloudinary, or PWA feature is implemented. -->
+<!-- TODO: Update this roadmap whenever the team confirms a new priority. -->
