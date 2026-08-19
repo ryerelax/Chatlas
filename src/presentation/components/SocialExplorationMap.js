@@ -8,7 +8,10 @@ const VISITED_MARKER_ICON = `data:image/svg+xml;charset=UTF-8,${encodeURICompone
   '<svg xmlns="http://www.w3.org/2000/svg" width="30" height="42" viewBox="0 0 30 42"><path fill="#006C56" stroke="#ffffff" stroke-width="2" d="M15 1C7.82 1 2 6.82 2 14c0 10.25 13 26 13 26s13-15.75 13-26C28 6.82 22.18 1 15 1Z"/><circle cx="15" cy="14" r="5" fill="#ffffff"/></svg>'
 )}`;
 
-export default function SocialExplorationMap({ attractions }) {
+export default function SocialExplorationMap({
+  attractions,
+  ariaLabel = "Visited attractions map",
+}) {
   const mapContainerRef = useRef(null);
   const [mapState, setMapState] = useState("loading");
   const mappedAttractions = useMemo(
@@ -95,7 +98,11 @@ export default function SocialExplorationMap({ attractions }) {
   }
 
   return (
-    <div className="relative min-h-80 overflow-hidden rounded-[18px] border border-attraction-border md:min-h-[420px]">
+    <div
+      className="relative min-h-80 overflow-hidden rounded-[18px] border border-attraction-border md:min-h-[420px]"
+      role="region"
+      aria-label={ariaLabel}
+    >
       {mapState !== "ready" && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-attraction-surface-soft">
           <p className="text-sm text-attraction-muted">Loading exploration map...</p>

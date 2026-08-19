@@ -411,6 +411,14 @@ function ComparisonSection({ authStatus, profile, state }) {
 
   const comparison = state.data;
   if (!comparison) return null;
+  const viewerAttractions = [
+    ...(comparison.common || []),
+    ...(comparison.viewerOnly || []),
+  ];
+  const targetAttractions = [
+    ...(comparison.common || []),
+    ...(comparison.targetOnly || []),
+  ];
 
   return (
     <div>
@@ -419,6 +427,24 @@ function ComparisonSection({ authStatus, profile, state }) {
         <ProgressComparisonCard user={comparison.viewer} label="You" />
         <ProgressComparisonCard user={comparison.target} label={profile.displayName} />
       </div>
+      <section className="mt-8">
+        <h3 className="text-base font-bold text-attraction-ink">
+          Visited-location maps
+        </h3>
+        <p className="mt-1 text-sm text-attraction-muted">
+          Compare where each traveller has explored across Melaka.
+        </p>
+        <div className="mt-4 grid gap-5 lg:grid-cols-2">
+          <ComparisonMap
+            label="Your visited locations"
+            attractions={viewerAttractions}
+          />
+          <ComparisonMap
+            label={`${profile.displayName}'s visited locations`}
+            attractions={targetAttractions}
+          />
+        </div>
+      </section>
       <div className="mt-8 space-y-7">
         <VisitedAttractionList title="Visited by both travellers" attractions={comparison.common || []} />
         <VisitedAttractionList title="Only visited by you" attractions={comparison.viewerOnly || []} />
@@ -430,18 +456,41 @@ function ComparisonSection({ authStatus, profile, state }) {
 
 function ProgressComparisonCard({ user, label }) {
   const progress = Math.min(100, Math.max(0, Number(user?.progressPercentage) || 0));
+  const progressLabel = progress.toFixed(1);
   return (
     <article className="rounded-[14px] bg-attraction-primary-soft p-5">
       <div className="flex items-center justify-between gap-3">
         <h3 className="font-bold text-attraction-ink">{label}</h3>
-        <span className="text-sm font-semibold text-attraction-primary-dark">{progress}%</span>
+        <span className="text-sm font-semibold text-attraction-primary-dark">{progressLabel}%</span>
       </div>
-      <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-white" aria-label={`${label} exploration progress: ${progress}%`}>
+      <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-white" aria-label={`${label} exploration progress: ${progressLabel}%`}>
         <div className="h-full rounded-full bg-attraction-primary" style={{ width: `${progress}%` }} />
       </div>
       <p className="mt-3 text-sm text-attraction-body">
         {user?.visitedCount || 0} attraction{user?.visitedCount === 1 ? "" : "s"} visited
       </p>
+    </article>
+  );
+}
+
+function ComparisonMap({ label, attractions }) {
+  return (
+    <article className="rounded-[16px] border border-attraction-border bg-attraction-surface-soft p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h4 className="font-bold text-attraction-ink">{label}</h4>
+        <span className="text-xs font-semibold text-attraction-muted">
+          {attractions.length} visited
+        </span>
+      </div>
+      {attractions.length > 0 ? (
+        <SocialExplorationMap attractions={attractions} ariaLabel={label} />
+      ) : (
+        <div className="flex min-h-80 items-center justify-center rounded-[18px] border border-attraction-border bg-white px-6 text-center">
+          <p className="text-sm text-attraction-muted">
+            No reviewed attractions to display on this map.
+          </p>
+        </div>
+      )}
     </article>
   );
 }

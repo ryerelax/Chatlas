@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createProfilesHandler } from "../src/app/api/profiles/handler.js";
 import {
+  buildExplorationComparison,
+  createPublicExplorationComparisonService,
   createPublicProfileExplorationService,
   createPublicProfileReviewsService,
+  SocialProfileDependencyError,
 } from "../src/business/services/socialProfileService.js";
 import { createSocialProfileUserService } from "../src/business/services/userService.js";
 import { createPublicReviewRepository } from "../src/data/repositories/reviewRepository.js";
@@ -480,5 +483,135 @@ test("public profile exploration does not query map data for a missing profile",
   });
 
   assert.equal(await getExploration("missing-profile"), null);
+  assert.equal(dependencyCalls, 0);
+});
+
+test("public exploration comparison groups common and unique reviewed attractions", async () => {
+  const observedUserIds = [];
+  const compareExploration = createPublicExplorationComparisonService({
+    getPublicProfileById: async (userId) => {
+      assert.equal(userId, "target-request-id");
+      return { id: "target-user-id" };
+    },
+    getExplorationMapAttractions: async () => [
+      {
+        _id: "common-attraction",
+        name: "Common Museum",
+        address: "Common Street",
+        category: "Museum",
+        latitude: 2.2,
+        longitude: 102.2,
+      },
+      {
+        _id: "viewer-attraction",
+        name: "Viewer Gallery",
+        address: "Viewer Street",
+        category: "Gallery",
+        latitude: 2.3,
+        longitude: 102.3,
+      },
+      {
+        _id: "target-attraction",
+        name: "Target Park",
+        address: "Target Street",
+        category: "Park",
+        latitude: 2.4,
+        longitude: 102.4,
+      },
+      {
+        _id: "unvisited-attraction",
+        name: "Unvisited Place",
+        address: "Unvisited Street",
+        category: "Attraction",
+        latitude: 2.5,
+        longitude: 102.5,
+      },
+    ],
+    findReviewedAttractionIdsByUserId: async (userId) => {
+      observedUserIds.push(userId);
+      return userId === "viewer-user-id"
+        ? ["common-attraction", "viewer-attraction"]
+        : ["common-attraction", "target-attraction"];
+    },
+  });
+
+  const comparison = await compareExploration(
+    "viewer-user-id",
+    "target-request-id"
+  );
+
+  assert.deepEqual(observedUserIds, ["viewer-user-id", "target-user-id"]);
+  assert.deepEqual(comparison.viewer, {
+    visitedCount: 2,
+    progressPercentage: 50,
+  });
+  assert.deepEqual(comparison.target, {
+    visitedCount: 2,
+    progressPercentage: 50,
+  });
+  assert.deepEqual(
+    comparison.common.map((attraction) => attraction.id),
+    ["common-attraction"]
+  );
+  assert.deepEqual(
+    comparison.viewerOnly.map((attraction) => attraction.id),
+    ["viewer-attraction"]
+  );
+  assert.deepEqual(
+    comparison.targetOnly.map((attraction) => attraction.id),
+    ["target-attraction"]
+  );
+  assert.equal(comparison.common[0].address, "Common Street");
+});
+
+test("public exploration comparison keeps one decimal place of progress precision", () => {
+  const comparison = buildExplorationComparison({
+    viewerAttractions: [{ id: "visited-attraction", name: "Museum" }],
+    targetAttractions: [],
+    totalAttractions: 41,
+  });
+
+  assert.equal(comparison.viewer.progressPercentage, 2.4);
+  assert.equal(comparison.target.progressPercentage, 0);
+});
+
+test("public exploration comparison stops before dependencies for a missing target", async () => {
+  let dependencyCalls = 0;
+  const compareExploration = createPublicExplorationComparisonService({
+    getPublicProfileById: async () => null,
+    getExplorationMapAttractions: async () => {
+      dependencyCalls += 1;
+      return [];
+    },
+    findReviewedAttractionIdsByUserId: async () => {
+      dependencyCalls += 1;
+      return [];
+    },
+  });
+
+  assert.equal(await compareExploration("viewer", "missing"), null);
+  assert.equal(dependencyCalls, 0);
+});
+
+test("public exploration comparison rejects comparison with the signed-in user", async () => {
+  let dependencyCalls = 0;
+  const compareExploration = createPublicExplorationComparisonService({
+    getPublicProfileById: async () => ({ id: "same-user-id" }),
+    getExplorationMapAttractions: async () => {
+      dependencyCalls += 1;
+      return [];
+    },
+    findReviewedAttractionIdsByUserId: async () => {
+      dependencyCalls += 1;
+      return [];
+    },
+  });
+
+  await assert.rejects(
+    () => compareExploration("same-user-id", "same-user-id"),
+    (error) =>
+      error instanceof SocialProfileDependencyError &&
+      error.code === "SELF_COMPARISON_NOT_ALLOWED"
+  );
   assert.equal(dependencyCalls, 0);
 });

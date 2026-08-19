@@ -29,6 +29,8 @@ function normalizeVisitedAttractions(attractions = []) {
       id,
       name: attraction.name || "Unnamed attraction",
       locationArea: attraction.locationArea || "",
+      address: attraction.address || "",
+      category: attraction.category || "Attraction",
       latitude: attraction.latitude,
       longitude: attraction.longitude,
     });
@@ -41,7 +43,10 @@ function calculateProgress(visitedCount, totalAttractions) {
   const normalizedTotal = Math.max(0, Number(totalAttractions) || 0);
   if (normalizedTotal === 0) return 0;
 
-  return Math.min(100, Math.round((visitedCount / normalizedTotal) * 100));
+  return Math.min(
+    100,
+    Math.round((visitedCount / normalizedTotal) * 1000) / 10
+  );
 }
 
 export function buildExplorationComparison({
@@ -170,21 +175,55 @@ export async function getPublicExplorationForProfile(userId) {
   return getExplorationForProfile(userId);
 }
 
-export async function comparePublicExploration(viewerId, targetUserId) {
-  const targetProfile = await getPublicProfileById(targetUserId);
-  if (!targetProfile) return null;
+export function createPublicExplorationComparisonService({
+  getPublicProfileById: getProfileById,
+  getExplorationMapAttractions: getMapAttractions,
+  findReviewedAttractionIdsByUserId: findReviewedAttractionIds,
+}) {
+  return async function compareExploration(viewerId, targetUserId) {
+    const targetProfile = await getProfileById(targetUserId);
+    if (!targetProfile) return null;
 
-  if (viewerId === targetUserId) {
-    throw new SocialProfileDependencyError(
-      "SELF_COMPARISON_NOT_ALLOWED",
-      "Choose another traveller to compare exploration progress."
+    const normalizedViewerId = String(viewerId || "");
+    if (normalizedViewerId === String(targetProfile.id)) {
+      throw new SocialProfileDependencyError(
+        "SELF_COMPARISON_NOT_ALLOWED",
+        "Choose another traveller to compare exploration progress."
+      );
+    }
+
+    const [mapAttractionRecords, viewerReviewedIds, targetReviewedIds] =
+      await Promise.all([
+        getMapAttractions(),
+        findReviewedAttractionIds(normalizedViewerId),
+        findReviewedAttractionIds(targetProfile.id),
+      ]);
+    const supportedAttractions = normaliseMapAttractions(mapAttractionRecords);
+    const viewerViewModel = createExplorationMapViewModel(
+      supportedAttractions,
+      viewerReviewedIds,
+      VISITED_DATA_STATUS.SUCCESS
     );
-  }
+    const targetViewModel = createExplorationMapViewModel(
+      supportedAttractions,
+      targetReviewedIds,
+      VISITED_DATA_STATUS.SUCCESS
+    );
 
-  // TODO: Call buildExplorationComparison here after the Exploration Map
-  // module exposes both users' persisted visited-attraction records.
-  throw new SocialProfileDependencyError(
-    "COMPARISON_UNAVAILABLE",
-    "Exploration comparison is not available until visited-attraction records are integrated."
-  );
+    return buildExplorationComparison({
+      viewerAttractions: viewerViewModel.visitedAttractions,
+      targetAttractions: targetViewModel.visitedAttractions,
+      totalAttractions: supportedAttractions.length,
+    });
+  };
+}
+
+const compareExploration = createPublicExplorationComparisonService({
+  getPublicProfileById,
+  getExplorationMapAttractions,
+  findReviewedAttractionIdsByUserId,
+});
+
+export async function comparePublicExploration(viewerId, targetUserId) {
+  return compareExploration(viewerId, targetUserId);
 }

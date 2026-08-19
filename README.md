@@ -247,7 +247,7 @@ Displays the searchable public traveller directory.
 
 ### `/profiles/[id]`
 
-Displays a traveller's public profile and published reviews. Signed-in users can also view the traveller's public exploration map, where each distinct reviewed attraction counts as visited. Public exploration comparisons remain pending integration.
+Displays a traveller's public profile and published reviews. Signed-in users can view the traveller's public exploration map and compare exploration progress, where each distinct reviewed attraction counts as visited.
 
 ## Development Guidelines
 
@@ -276,7 +276,6 @@ git status
 - Attraction photo previews and lightbox
 - Review creation, ratings, editing, and deletion
 - Personal exploration map and progress
-- Social Profile exploration comparison integration
 - Wishlist, favourites, reviews, photos, and travel history
 - Cloudinary image storage
 - PWA Service Worker and offline caching

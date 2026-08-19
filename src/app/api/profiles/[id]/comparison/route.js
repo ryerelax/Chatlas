@@ -24,7 +24,7 @@ export async function GET(request, { params }) {
     const { id } = await params;
     await connectToDatabase();
     const viewer = await getCurrentUserProfile({
-      googleId: session.user.id,
+      googleId: session.user.googleId || session.user.id,
       email: session.user.email,
     });
 
