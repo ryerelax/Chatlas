@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createProfilesHandler } from "../src/app/api/profiles/handler.js";
-import { createPublicProfileReviewsService } from "../src/business/services/socialProfileService.js";
+import {
+  createPublicProfileExplorationService,
+  createPublicProfileReviewsService,
+} from "../src/business/services/socialProfileService.js";
 import { createSocialProfileUserService } from "../src/business/services/userService.js";
 import { createPublicReviewRepository } from "../src/data/repositories/reviewRepository.js";
 import { createPublicUserRepository } from "../src/data/repositories/userRepository.js";
@@ -356,4 +359,126 @@ test("public profile reviews service distinguishes missing profiles from no revi
   });
 
   assert.deepEqual(await emptyProfileReviews("existing-profile"), []);
+});
+
+test("public review repository derives distinct visited attraction ids for one user", async () => {
+  const observed = {};
+  const repository = createPublicReviewRepository({
+    ReviewModel: {
+      distinct(field, query) {
+        observed.field = field;
+        observed.query = query;
+        return ["attraction-one", "attraction-two"];
+      },
+    },
+  });
+
+  const result = await repository.findReviewedAttractionIdsByUserId(
+    "507f1f77bcf86cd799439011"
+  );
+
+  assert.deepEqual(result, ["attraction-one", "attraction-two"]);
+  assert.equal(observed.field, "attractionId");
+  assert.deepEqual(observed.query, {
+    userId: "507f1f77bcf86cd799439011",
+  });
+});
+
+test("public profile exploration uses reviewed attractions as visited map locations", async () => {
+  const observed = {};
+  const getExploration = createPublicProfileExplorationService({
+    getPublicProfileById: async (userId) => {
+      observed.requestedProfileId = userId;
+      return { id: "507f1f77bcf86cd799439011" };
+    },
+    getExplorationMapAttractions: async () => [
+      {
+        _id: "507f1f77bcf86cd799439021",
+        name: "Visited Museum",
+        address: "Museum Street",
+        category: "Museum",
+        latitude: 2.2,
+        longitude: 102.2,
+        rating: 4.5,
+      },
+      {
+        _id: "507f1f77bcf86cd799439022",
+        name: "Unvisited Gallery",
+        address: "Gallery Street",
+        category: "Gallery",
+        latitude: 2.3,
+        longitude: 102.3,
+        rating: 4,
+      },
+    ],
+    findReviewedAttractionIdsByUserId: async (userId) => {
+      observed.requestedReviewUserId = userId;
+      return ["507f1f77bcf86cd799439021"];
+    },
+  });
+
+  const exploration = await getExploration("selected-profile-id");
+
+  assert.equal(observed.requestedProfileId, "selected-profile-id");
+  assert.equal(
+    observed.requestedReviewUserId,
+    "507f1f77bcf86cd799439011"
+  );
+  assert.deepEqual(exploration, {
+    visitedAttractions: [
+      {
+        id: "507f1f77bcf86cd799439021",
+        name: "Visited Museum",
+        address: "Museum Street",
+        category: "Museum",
+        latitude: 2.2,
+        longitude: 102.2,
+      },
+    ],
+    visitedCount: 1,
+    totalAttractions: 2,
+    progressPercentage: 50,
+  });
+});
+
+test("public profile exploration returns a truthful zero progress state", async () => {
+  const getExploration = createPublicProfileExplorationService({
+    getPublicProfileById: async () => ({ id: "existing-profile" }),
+    getExplorationMapAttractions: async () => [
+      {
+        _id: "507f1f77bcf86cd799439021",
+        name: "Museum",
+        address: "Museum Street",
+        category: "Museum",
+        latitude: 2.2,
+        longitude: 102.2,
+      },
+    ],
+    findReviewedAttractionIdsByUserId: async () => [],
+  });
+
+  assert.deepEqual(await getExploration("existing-profile"), {
+    visitedAttractions: [],
+    visitedCount: 0,
+    totalAttractions: 1,
+    progressPercentage: 0,
+  });
+});
+
+test("public profile exploration does not query map data for a missing profile", async () => {
+  let dependencyCalls = 0;
+  const getExploration = createPublicProfileExplorationService({
+    getPublicProfileById: async () => null,
+    getExplorationMapAttractions: async () => {
+      dependencyCalls += 1;
+      return [];
+    },
+    findReviewedAttractionIdsByUserId: async () => {
+      dependencyCalls += 1;
+      return [];
+    },
+  });
+
+  assert.equal(await getExploration("missing-profile"), null);
+  assert.equal(dependencyCalls, 0);
 });

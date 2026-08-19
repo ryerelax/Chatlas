@@ -12,6 +12,10 @@ export function createPublicReviewRepository({ ReviewModel }) {
         .sort({ createdAt: -1, _id: -1 })
         .lean();
     },
+
+    async findReviewedAttractionIdsByUserId(userId) {
+      return ReviewModel.distinct("attractionId", { userId });
+    },
   };
 }
 
@@ -21,6 +25,10 @@ const publicReviewRepository = createPublicReviewRepository({
 
 export async function findPublicReviewsByUserId(userId) {
   return publicReviewRepository.findPublicReviewsByUserId(userId);
+}
+
+export async function findReviewedAttractionIdsByUserId(userId) {
+  return publicReviewRepository.findReviewedAttractionIdsByUserId(userId);
 }
 
 /**

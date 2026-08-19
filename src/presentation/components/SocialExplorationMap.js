@@ -29,9 +29,10 @@ export default function SocialExplorationMap({ attractions }) {
     async function initialiseMap() {
       try {
         const importLibrary = await loadGoogleMaps(GOOGLE_MAPS_API_KEY);
-        const [{ Map, LatLngBounds }, { Marker }] = await Promise.all([
+        const [{ Map }, { Marker }, { LatLngBounds }] = await Promise.all([
           importLibrary("maps"),
           importLibrary("marker"),
+          importLibrary("core"),
         ]);
 
         if (cancelled || !mapContainerRef.current) return;

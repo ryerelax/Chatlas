@@ -225,7 +225,7 @@ function OverviewSection({ profile }) {
           <h2 className="mt-1 text-xl font-bold text-attraction-ink">Public activity summary</h2>
         </div>
         <span className="rounded-full bg-attraction-surface-soft px-3 py-1 text-xs font-semibold text-attraction-muted">
-          Integration pending
+          See activity tabs
         </span>
       </div>
       <div className="mt-5 grid gap-4 sm:grid-cols-3">
@@ -234,7 +234,7 @@ function OverviewSection({ profile }) {
         <SummaryCard label="Exploration progress" value={profile.activitySummary.explorationProgress} suffix="%" />
       </div>
       <p className="mt-5 rounded-[10px] bg-[#EAF3FA] px-4 py-3 text-sm leading-relaxed text-attraction-body">
-        Review and visited-attraction totals will appear here when the Review &amp; Community and Exploration Map modules publish their data services.
+        Open the Reviews and Exploration map tabs to view this traveller&apos;s published activity. A combined overview summary is still being prepared.
       </p>
     </div>
   );
@@ -349,11 +349,20 @@ function ExplorationSection({ authStatus, state }) {
   const attractions = state.data?.visitedAttractions || [];
   if (attractions.length === 0) {
     return (
-      <SocialProfileStatus
-        icon="⌖"
-        title="No visited attractions available"
-        message="This traveller has no public visited-attraction records yet."
-      />
+      <div>
+        <div className="mb-5 flex justify-end">
+          <SummaryCard
+            label="Exploration progress"
+            value={state.data?.progressPercentage ?? 0}
+            suffix="%"
+          />
+        </div>
+        <SocialProfileStatus
+          icon="⌖"
+          title="No visited attractions available"
+          message="This traveller has not reviewed any supported attractions yet."
+        />
+      </div>
     );
   }
 
@@ -454,8 +463,10 @@ function VisitedAttractionList({ title, attractions }) {
                 className="block min-h-11 rounded-[10px] border border-attraction-border bg-white px-4 py-3 transition hover:border-attraction-primary-muted hover:bg-attraction-primary-soft focus:outline-none focus:ring-2 focus:ring-attraction-primary"
               >
                 <span className="font-semibold text-attraction-ink">{attraction.name}</span>
-                {attraction.locationArea && (
-                  <span className="mt-1 block text-xs text-attraction-muted">{attraction.locationArea}</span>
+                {(attraction.locationArea || attraction.address) && (
+                  <span className="mt-1 block text-xs text-attraction-muted">
+                    {attraction.locationArea || attraction.address}
+                  </span>
                 )}
               </Link>
             </li>

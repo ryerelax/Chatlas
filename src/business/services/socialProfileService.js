@@ -1,5 +1,14 @@
 import { getPublicProfileById } from "@/business/services/userService";
-import { findPublicReviewsByUserId } from "@/data/repositories/reviewRepository";
+import { getExplorationMapAttractions } from "@/business/services/explorationMapAttractionService";
+import {
+  createExplorationMapViewModel,
+  normaliseMapAttractions,
+  VISITED_DATA_STATUS,
+} from "@/business/services/explorationMapService";
+import {
+  findPublicReviewsByUserId,
+  findReviewedAttractionIdsByUserId,
+} from "@/data/repositories/reviewRepository";
 
 export class SocialProfileDependencyError extends Error {
   constructor(code, message) {
@@ -109,16 +118,56 @@ export async function getPublicReviewsForProfile(userId) {
   return getReviewsForProfile(userId);
 }
 
-export async function getPublicExplorationForProfile(userId) {
-  const profile = await getPublicProfileById(userId);
-  if (!profile) return null;
+function serializeVisitedAttraction(attraction) {
+  return {
+    id: attraction.id,
+    name: attraction.name,
+    address: attraction.address,
+    category: attraction.category,
+    latitude: attraction.latitude,
+    longitude: attraction.longitude,
+  };
+}
 
-  // TODO: Replace this dependency state with visited-attraction records when
-  // the Exploration Map module publishes its approved repository and service.
-  throw new SocialProfileDependencyError(
-    "EXPLORATION_UNAVAILABLE",
-    "Exploration data is not available yet because the Exploration Map module has not been integrated."
-  );
+export function createPublicProfileExplorationService({
+  getPublicProfileById: getProfileById,
+  getExplorationMapAttractions: getMapAttractions,
+  findReviewedAttractionIdsByUserId: findReviewedAttractionIds,
+}) {
+  return async function getExplorationForProfile(userId) {
+    const profile = await getProfileById(userId);
+    if (!profile) return null;
+
+    const [mapAttractionRecords, reviewedAttractionIds] = await Promise.all([
+      getMapAttractions(),
+      findReviewedAttractionIds(profile.id),
+    ]);
+    const supportedAttractions = normaliseMapAttractions(mapAttractionRecords);
+    const viewModel = createExplorationMapViewModel(
+      supportedAttractions,
+      reviewedAttractionIds,
+      VISITED_DATA_STATUS.SUCCESS
+    );
+
+    return {
+      visitedAttractions: viewModel.visitedAttractions.map(
+        serializeVisitedAttraction
+      ),
+      visitedCount: viewModel.progress.visitedCount,
+      totalAttractions: viewModel.progress.totalCount,
+      progressPercentage: viewModel.progress.percentage,
+    };
+  };
+}
+
+const getExplorationForProfile = createPublicProfileExplorationService({
+  getPublicProfileById,
+  getExplorationMapAttractions,
+  findReviewedAttractionIdsByUserId,
+});
+
+export async function getPublicExplorationForProfile(userId) {
+  return getExplorationForProfile(userId);
 }
 
 export async function comparePublicExploration(viewerId, targetUserId) {
