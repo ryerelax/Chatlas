@@ -51,12 +51,12 @@ export default function Header() {
           >
             Map
           </Link>
-          <span
-            className="cursor-not-allowed rounded-lg px-4 py-2 text-sm font-semibold text-gray-400"
-            title="Coming later"
+          <Link
+            href="/reviews"
+            className="rounded-lg px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-emerald-50 hover:text-emerald-700"
           >
             Community
-          </span>
+          </Link>
         </nav>
 
         {/* Desktop auth */}
@@ -68,9 +68,17 @@ export default function Header() {
                 className="flex items-center gap-2 focus:outline-none"
               >
                 <img
-                  src={session?.user?.image || session?.user?.picture || "/default-avatar.png"}
-                  alt={session?.user?.displayName || session?.user?.name || "Profile"}
-                  className="w-8 h-8 rounded-full border border-gray-300 object-cover"
+                  src={
+                    session?.user?.image ||
+                    session?.user?.picture ||
+                    "/default-avatar.png"
+                  }
+                  alt={
+                    session?.user?.displayName ||
+                    session?.user?.name ||
+                    "Profile"
+                  }
+                  className="h-8 w-8 rounded-full border border-gray-300 object-cover"
                   onError={(e) => {
                     e.currentTarget.src = "/default-avatar.png";
                   }}
@@ -148,9 +156,12 @@ export default function Header() {
             >
               Map
             </Link>
-            <span className="block cursor-not-allowed rounded-lg px-4 py-3 text-sm font-semibold text-gray-400">
+            <Link
+              href="/reviews"
+              className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700"
+            >
               Community
-            </span>
+            </Link>
             <div className="my-2 border-t border-gray-200" />
 
             {isLoggedIn ? (
