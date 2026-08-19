@@ -1,4 +1,5 @@
 import { getPublicProfileById } from "@/business/services/userService";
+import { findPublicReviewsByUserId } from "@/data/repositories/reviewRepository";
 
 export class SocialProfileDependencyError extends Error {
   constructor(code, message) {
@@ -59,16 +60,53 @@ export function buildExplorationComparison({
   };
 }
 
-export async function getPublicReviewsForProfile(userId) {
-  const profile = await getPublicProfileById(userId);
-  if (!profile) return null;
+function serializePublicReview(review) {
+  const attraction = review.attractionId;
+  const createdAt = review.createdAt ? new Date(review.createdAt) : null;
 
-  // TODO: Replace this dependency state with Review repository data when the
-  // Review & Community module introduces its approved Review model and service.
-  throw new SocialProfileDependencyError(
-    "REVIEWS_UNAVAILABLE",
-    "Reviews are not available yet because the Review & Community module has not been integrated."
-  );
+  return {
+    id: String(review._id),
+    rating: Number(review.rating) || 0,
+    text: review.reviewText?.trim() || "",
+    photos: Array.isArray(review.photos)
+      ? review.photos
+          .map((photo) => photo?.url)
+          .filter((photoUrl) => typeof photoUrl === "string" && photoUrl)
+      : [],
+    createdAt:
+      createdAt && !Number.isNaN(createdAt.getTime())
+        ? createdAt.toISOString()
+        : null,
+    attraction:
+      attraction?._id && attraction?.name
+        ? {
+            id: String(attraction._id),
+            name: attraction.name,
+          }
+        : null,
+  };
+}
+
+export function createPublicProfileReviewsService({
+  getPublicProfileById: getProfileById,
+  findPublicReviewsByUserId: findReviewsByUserId,
+}) {
+  return async function getReviewsForProfile(userId) {
+    const profile = await getProfileById(userId);
+    if (!profile) return null;
+
+    const reviews = await findReviewsByUserId(profile.id);
+    return reviews.map(serializePublicReview);
+  };
+}
+
+const getReviewsForProfile = createPublicProfileReviewsService({
+  getPublicProfileById,
+  findPublicReviewsByUserId,
+});
+
+export async function getPublicReviewsForProfile(userId) {
+  return getReviewsForProfile(userId);
 }
 
 export async function getPublicExplorationForProfile(userId) {

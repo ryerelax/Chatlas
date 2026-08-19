@@ -854,9 +854,10 @@ The Social Profile module supports:
 
 - Guest and registered-user access to a searchable public traveller directory
 - Public profile pages that expose only display-safe profile fields
+- Public reviews loaded from the Review & Community records, including ratings, attraction links, and available review photos
 - Profile tabs for public reviews, exploration maps, and exploration comparison
 - Registered-user access controls for exploration maps and comparisons
-- Honest unavailable states while the Review & Community and Exploration Map modules have no persisted data services to integrate
+- Honest unavailable states while Exploration Map records are not yet integrated into public profiles
 - Comparison calculation for progress, common visits, and attractions visited by only one user, ready for Exploration Map data integration
 
 Maintenance/data-quality scripts (`scripts/`, run via `npm run <script>`, not part of the live app) exist for one-time or re-runnable backfill and repair jobs: photo sync, description sync, location-area classification, and address repair. See `package.json` for the exact commands.
@@ -871,7 +872,6 @@ Planned work includes:
 
 - Registered-User "Add Attraction" submission flow (Google Places-backed, no free-text entry)
 - Reviews and ratings
-- Integrating Review & Community records into public Social Profile reviews
 - Integrating Exploration Map visited-attraction records into public maps and comparisons
 - Final Chatlas branding
 - Further responsive and accessibility improvements

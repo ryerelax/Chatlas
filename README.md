@@ -135,6 +135,8 @@ src/
 - Display attraction details
 - Open an attraction location using its Google Maps link
 - Shared responsive header and navigation
+- Browse and search public traveller profiles
+- View another traveller's display-safe public profile and published reviews
 
 <!-- TODO: Update this list whenever a new module or feature is completed. -->
 
@@ -239,6 +241,14 @@ Returns one attraction by MongoDB ObjectId.
 
 Displays the attraction details page.
 
+### `/profiles`
+
+Displays the searchable public traveller directory.
+
+### `/profiles/[id]`
+
+Displays a traveller's public profile and published reviews. Public exploration maps and comparisons remain pending integration with persisted visited-attraction data.
+
 ## Development Guidelines
 
 All Coding Standards, layered-architecture rules, Git Workflow, branch rules, Pull Request guidelines, security guidelines, and Definition of Done requirements are maintained in:
@@ -266,7 +276,7 @@ git status
 - Attraction photo previews and lightbox
 - Review creation, ratings, editing, and deletion
 - Personal exploration map and progress
-- Social profiles and comparison features
+- Social Profile exploration-map and comparison integration
 - Wishlist, favourites, reviews, photos, and travel history
 - Cloudinary image storage
 - PWA Service Worker and offline caching
