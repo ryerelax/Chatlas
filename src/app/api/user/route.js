@@ -10,8 +10,7 @@ export async function GET(request) {
   try {
     const session = await auth();
     console.log("GET /api/user - Session:", session);
-    
-    // Check session and user.id
+
     if (!session?.user?.id) {
       console.log("No user.id found in session");
       return NextResponse.json(
@@ -21,13 +20,13 @@ export async function GET(request) {
     }
 
     await connectToDatabase();
-    
-    // Find user by email or googleId
-    const user = await User.findOne({ 
+
+    const user = await User.findOne({
       $or: [
-        { googleId: session.user.id },
-        { email: session.user.email }
-      ]
+        { googleId: session.user.googleId || session.user.id },
+        { email: session.user.email },
+        { _id: session.user.id },
+      ],
     });
 
     if (!user) {
@@ -62,7 +61,7 @@ export async function PUT(request) {
   try {
     const session = await auth();
     console.log("PUT /api/user - Session:", session);
-    
+
     if (!session?.user?.id) {
       console.log("No user.id found in session");
       return NextResponse.json(
@@ -74,29 +73,32 @@ export async function PUT(request) {
     const body = await request.json();
     const { displayName, bio, location, profilePicture } = body;
 
-    console.log("PUT /api/user received:", { displayName, bio, location, profilePicture });
+    console.log("PUT /api/user received:", {
+      displayName,
+      bio,
+      location,
+      profilePicture,
+    });
 
     await connectToDatabase();
 
-    // Build dynamic update object, only update provided fields
     const updateFields = {
       displayName: displayName || "",
       bio: bio || "",
       location: location || "",
     };
 
-    // Only update profilePicture if it is explicitly provided (including empty string to reset)
     if (profilePicture !== undefined && profilePicture !== null) {
       updateFields.profilePicture = profilePicture;
     }
 
-    // Use updateOne to ensure update succeeds
     const updateResult = await User.updateOne(
-      { 
+      {
         $or: [
-          { googleId: session.user.id },
-          { email: session.user.email }
-        ]
+          { googleId: session.user.googleId || session.user.id },
+          { email: session.user.email },
+          { _id: session.user.id },
+        ],
       },
       { $set: updateFields }
     );
@@ -108,12 +110,12 @@ export async function PUT(request) {
       );
     }
 
-    // Get updated user data
-    const updatedUser = await User.findOne({ 
+    const updatedUser = await User.findOne({
       $or: [
-        { googleId: session.user.id },
-        { email: session.user.email }
-      ]
+        { googleId: session.user.googleId || session.user.id },
+        { email: session.user.email },
+        { _id: session.user.id },
+      ],
     });
 
     console.log("Updated user:", updatedUser);

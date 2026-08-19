@@ -42,7 +42,8 @@ export async function getAttractions({
   const normalizedCategory = category.trim();
   const normalizedLocationArea = locationArea.trim();
   const normalizedMinRating = Number(minRating) || 0;
-  const normalizedCommunitySubmitted = communitySubmitted === true || communitySubmitted === "true";
+  const normalizedCommunitySubmitted =
+    communitySubmitted === true || communitySubmitted === "true";
   const normalizedPage = Math.max(1, Number(page) || 1);
 
   const { items, total } = await findAttractions({
@@ -77,7 +78,6 @@ export async function getAttractionById(attractionId) {
     return null;
   }
 
-  // TODO: Add extra business rules here if attraction visibility rules change.
   const attraction = await findAttractionById(attractionId);
 
   if (!attraction) {
