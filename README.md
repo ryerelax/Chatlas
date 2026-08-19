@@ -42,6 +42,11 @@ The project is maintained as:
 - Display attraction details
 - Open attraction location in Google Maps
 - Responsive header and navigation bar
+- Sign in with Google and edit the signed-in user profile
+- Browse and search public traveller profiles as a guest or registered user
+- View public traveller profile information without exposing private identity fields
+- Registered-only exploration map and comparison surfaces, ready for Exploration Map data integration
+- Public review surfaces, ready for Review & Community data integration
 
 <!-- TODO: Update this list whenever a new module or feature is completed. -->
 
@@ -84,8 +89,8 @@ Fill in the required values inside `.env.local`:
 ```env
 MONGODB_URI=
 AUTH_SECRET=
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
+AUTH_GOOGLE_ID=
+AUTH_GOOGLE_SECRET=
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=
 CLOUDINARY_CLOUD_NAME=
 CLOUDINARY_API_KEY=
@@ -165,6 +170,34 @@ Returns one attraction by MongoDB ObjectId.
 
 Displays the attraction details page.
 
+### `/profiles`
+
+Displays the searchable public traveller directory. This route is available to guests and registered users.
+
+### `/profiles/[id]`
+
+Displays another traveller's public profile with Overview, Reviews, Exploration map, and Compare tabs. Reviews are public; exploration maps and comparison require Google sign-in.
+
+### `/api/profiles`
+
+Returns paginated public profiles. Supports `search` and `page` query parameters and never returns email addresses or Google IDs.
+
+### `/api/profiles/[id]`
+
+Returns one public profile by MongoDB ObjectId.
+
+### `/api/profiles/[id]/reviews`
+
+Returns public reviews after the Review & Community module publishes its data service. It currently returns a precise dependency-unavailable response.
+
+### `/api/profiles/[id]/exploration`
+
+Registered-user endpoint for another traveller's public exploration data. It currently returns a precise dependency-unavailable response.
+
+### `/api/profiles/[id]/comparison`
+
+Registered-user endpoint for progress and visited-attraction comparison. It currently returns a precise dependency-unavailable response.
+
 ## Git Workflow
 
 Create or switch to your assigned feature branch before making changes:
@@ -207,14 +240,10 @@ Do not commit directly to `main` unless instructed by the team leader.
 
 ## Planned Improvements
 
-- Google authentication
-- Interactive exploration map
-- Attraction images
 - Reviews and ratings
-- Social profiles
-- Community features
-- Cloudinary image storage
-- PWA configuration
+- Review & Community integration with public profiles
+- Exploration Map visit-data integration with public profiles and comparisons
+- Community features defined by the approved SRS
 - Final Chatlas branding and responsive design
 
 <!-- TODO: Replace this section with the final development roadmap when the team confirms module priorities. -->
