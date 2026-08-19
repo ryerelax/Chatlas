@@ -41,9 +41,12 @@ export default function Header() {
                 className="flex items-center gap-2 focus:outline-none"
               >
                 <img
-                  src={session.user.image || "/default-avatar.png"}
-                  alt="Profile"
+                  src={session?.user?.image || session?.user?.picture || "/default-avatar.png"}
+                  alt={session?.user?.displayName || session?.user?.name || "Profile"}
                   className="w-8 h-8 rounded-full border border-gray-300 object-cover"
+                  onError={(e) => {
+                    e.currentTarget.src = "/default-avatar.png";
+                  }}
                 />
                 <span className="text-sm text-gray-700 hidden sm:inline">
                   {session.user.displayName || session.user.name?.split(" ")[0] || "User"}
