@@ -4,10 +4,13 @@ import { useEffect, useState } from "react";
 import AttractionCard from "@/presentation/components/AttractionCard";
 import { LOCATION_AREAS } from "@/business/services/locationAreas";
 import { ATTRACTION_CATEGORIES } from "@/business/services/attractionCategories";
+import { useLanguage } from "@/presentation/contexts/LanguageContext";
 
 const CATEGORIES = ["All", ...ATTRACTION_CATEGORIES];
 
 export default function AttractionList() {
+  const { t, translateCategory } = useLanguage();
+
   const [attractions, setAttractions] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -25,7 +28,8 @@ export default function AttractionList() {
   const [appliedLocationArea, setAppliedLocationArea] = useState("All");
 
   const [communitySubmitted, setCommunitySubmitted] = useState(false);
-  const [appliedCommunitySubmitted, setAppliedCommunitySubmitted] = useState(false);
+  const [appliedCommunitySubmitted, setAppliedCommunitySubmitted] =
+    useState(false);
 
   const [page, setPage] = useState(1);
 
@@ -73,16 +77,23 @@ export default function AttractionList() {
         setAttractions(result.data || []);
         setTotalCount(result.count || 0);
         setTotalPages(result.pagination?.totalPages || 1);
-      } catch (error) {
-        console.error("Failed to load attractions:", error);
-        setError("Failed to load attractions. Please try again.");
+      } catch (err) {
+        console.error("Failed to load attractions:", err);
+        setError("load_failed");
       } finally {
         setIsLoading(false);
       }
     }
 
     loadAttractions();
-  }, [appliedSearch, appliedCategory, appliedLocationArea, appliedMinRating, appliedCommunitySubmitted, page]);
+  }, [
+    appliedSearch,
+    appliedCategory,
+    appliedLocationArea,
+    appliedMinRating,
+    appliedCommunitySubmitted,
+    page,
+  ]);
 
   function handleSearch(event) {
     event.preventDefault();
@@ -133,35 +144,41 @@ export default function AttractionList() {
     const criteria = [];
 
     if (appliedSearch) {
-      criteria.push(`keyword "${appliedSearch}"`);
+      criteria.push(`${t("keyword")} "${appliedSearch}"`);
     }
 
     if (appliedCategory !== "All") {
-      criteria.push(`category ${appliedCategory}`);
+      criteria.push(
+        `${t("category")} ${translateCategory(appliedCategory)}`
+      );
     }
 
     if (appliedLocationArea !== "All") {
-      criteria.push(`area ${appliedLocationArea}`);
+      criteria.push(`${t("area")} ${appliedLocationArea}`);
     }
 
     if (appliedMinRating !== "0") {
-      criteria.push(`rating ${appliedMinRating} and above`);
+      criteria.push(
+        `${t("rating")} ${appliedMinRating} ${t("ratingAndAbove")}`
+      );
     }
 
     if (appliedCommunitySubmitted) {
-      criteria.push("community-submitted only");
+      criteria.push(t("communitySubmittedOnly"));
     }
 
     if (criteria.length === 0) {
-      return `${totalCount} attraction(s) available`;
+      return t("attractionsAvailable", { count: totalCount });
     }
 
-    return `${totalCount} result(s) found for ${criteria.join(", ")}`;
+    return t("resultsFound", {
+      count: totalCount,
+      criteria: criteria.join(", "),
+    });
   }
 
   return (
     <section>
-      {/* Search and category filters follow the current Attraction Explorer Figma design. */}
       <form
         onSubmit={handleSearch}
         className="relative z-10 -mt-16 mb-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-lg"
@@ -170,7 +187,7 @@ export default function AttractionList() {
           htmlFor="attraction-search"
           className="mb-2 block font-semibold text-gray-900"
         >
-          Search Attractions
+          {t("searchAttractions")}
         </label>
 
         <div className="grid gap-3 lg:grid-cols-[2fr_auto_auto_auto]">
@@ -179,7 +196,7 @@ export default function AttractionList() {
             type="text"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search attractions in Melaka"
+            placeholder={t("searchPlaceholder")}
             className="rounded-lg border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-emerald-500"
           />
 
@@ -188,14 +205,14 @@ export default function AttractionList() {
             onClick={() => setShowMoreFilters((current) => !current)}
             className="rounded-lg border border-gray-300 bg-white px-5 py-3 font-semibold text-gray-700 transition hover:border-emerald-600 hover:text-emerald-700"
           >
-            {showMoreFilters ? "Hide Filters" : "More Filters"}
+            {showMoreFilters ? t("hideFilters") : t("moreFilters")}
           </button>
 
           <button
             type="submit"
             className="rounded-lg bg-amber-400 px-6 py-3 font-semibold text-gray-900 transition hover:bg-amber-500"
           >
-            Search
+            {t("search")}
           </button>
 
           <button
@@ -203,9 +220,10 @@ export default function AttractionList() {
             onClick={handleReset}
             className="rounded-lg border border-gray-300 px-6 py-3 font-semibold text-gray-700 transition hover:bg-gray-100"
           >
-            Reset
+            {t("reset")}
           </button>
         </div>
+
         {showMoreFilters && (
           <div className="mt-5 grid gap-5 border-t border-gray-200 pt-5 sm:grid-cols-2">
             <div>
@@ -213,7 +231,7 @@ export default function AttractionList() {
                 htmlFor="minimum-rating"
                 className="mb-2 block text-sm font-semibold text-gray-800"
               >
-                Minimum Rating
+                {t("minimumRating")}
               </label>
 
               <select
@@ -222,11 +240,11 @@ export default function AttractionList() {
                 onChange={(event) => setMinRating(event.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-emerald-500"
               >
-                <option value="0">Any Rating</option>
-                <option value="3">3.0 and above</option>
-                <option value="3.5">3.5 and above</option>
-                <option value="4">4.0 and above</option>
-                <option value="4.5">4.5 and above</option>
+                <option value="0">{t("anyRating")}</option>
+                <option value="3">3.0 {t("ratingAndAbove")}</option>
+                <option value="3.5">3.5 {t("ratingAndAbove")}</option>
+                <option value="4">4.0 {t("ratingAndAbove")}</option>
+                <option value="4.5">4.5 {t("ratingAndAbove")}</option>
               </select>
             </div>
 
@@ -235,17 +253,16 @@ export default function AttractionList() {
                 htmlFor="location-area"
                 className="mb-2 block text-sm font-semibold text-gray-800"
               >
-                Location Area
+                {t("locationArea")}
               </label>
 
-              {/* TODO: This zone list is a team draft, not yet confirmed (see src/business/services/locationAreas.js). */}
               <select
                 id="location-area"
                 value={locationArea}
                 onChange={(event) => setLocationArea(event.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-emerald-500"
               >
-                <option value="All">All Areas</option>
+                <option value="All">{t("allAreas")}</option>
                 {LOCATION_AREAS.map((area) => (
                   <option key={area} value={area}>
                     {area}
@@ -259,17 +276,19 @@ export default function AttractionList() {
                 htmlFor="community-submitted"
                 className="mb-2 block text-sm font-semibold text-gray-800"
               >
-                Source
+                {t("source")}
               </label>
 
               <select
                 id="community-submitted"
                 value={communitySubmitted ? "community" : "all"}
-                onChange={(event) => setCommunitySubmitted(event.target.value === "community")}
+                onChange={(event) =>
+                  setCommunitySubmitted(event.target.value === "community")
+                }
                 className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-emerald-500"
               >
-                <option value="all">All Attractions</option>
-                <option value="community">Community-submitted only</option>
+                <option value="all">{t("allAttractions")}</option>
+                <option value="community">{t("communitySubmittedOnly")}</option>
               </select>
             </div>
           </div>
@@ -291,59 +310,51 @@ export default function AttractionList() {
                   : "border-gray-300 bg-white text-gray-700 hover:border-emerald-600 hover:text-emerald-700"
               }`}
             >
-              {item === "All" ? "All Categories" : item}
+              {translateCategory(item)}
             </button>
           );
         })}
       </div>
 
       <div className="mb-5">
-        <p className="text-sm text-gray-600">
-          {getResultMessage()}
-        </p>
+        <p className="text-sm text-gray-600">{getResultMessage()}</p>
       </div>
 
       {isLoading && (
         <p className="py-10 text-center text-gray-600">
-          Loading attractions...
+          {t("loadingAttractions")}
         </p>
       )}
 
       {!isLoading && error && (
         <p className="py-10 text-center text-red-600">
-          {error}
+          {t("failedLoadAttractions")}
         </p>
       )}
 
       {!isLoading && !error && attractions.length === 0 && (
         <div className="rounded-2xl border border-gray-200 bg-white py-12 text-center">
           <p className="text-lg font-semibold text-gray-800">
-            No attractions found
+            {t("noAttractionsFound")}
           </p>
 
-          <p className="mt-2 text-gray-500">
-            Try changing the keyword, category, area, rating, or clear all filters.
-          </p>
+          <p className="mt-2 text-gray-500">{t("tryChangingFilters")}</p>
 
           <button
             type="button"
             onClick={handleReset}
             className="mt-6 rounded-lg bg-emerald-600 px-5 py-2.5 font-semibold text-white transition hover:bg-emerald-700"
           >
-            Clear Search and Filters
+            {t("clearSearchAndFilters")}
           </button>
         </div>
       )}
 
       {!isLoading && !error && attractions.length > 0 && (
         <>
-          {/* TODO: Refine the grid spacing and responsive layout based on the final Chatlas design. */}
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {attractions.map((attraction) => (
-                <AttractionCard
-                key={attraction._id}
-                attraction={attraction}
-                />
+              <AttractionCard key={attraction._id} attraction={attraction} />
             ))}
           </div>
 
@@ -358,11 +369,11 @@ export default function AttractionList() {
                 disabled={page <= 1}
                 className="rounded-lg border border-gray-300 px-4 py-2 font-semibold text-gray-700 transition hover:border-emerald-600 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Previous
+                {t("previous")}
               </button>
 
               <span className="text-sm font-semibold text-gray-700">
-                Page {page} of {totalPages}
+                {t("pageOf", { page, total: totalPages })}
               </span>
 
               <button
@@ -371,7 +382,7 @@ export default function AttractionList() {
                 disabled={page >= totalPages}
                 className="rounded-lg border border-gray-300 px-4 py-2 font-semibold text-gray-700 transition hover:border-emerald-600 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Next
+                {t("next")}
               </button>
             </nav>
           )}

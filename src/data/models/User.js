@@ -7,12 +7,12 @@ const UserSchema = new mongoose.Schema(
     email: { type: String, required: true, unique: true },
     googleId: { type: String, required: true, unique: true },
     profilePicture: { type: String, default: "" },
-    
+
     // Chatlas 用户自定义字段
-    displayName: { type: String, default: "" },     // ← 新增：Chatlas 显示名
-    location: { type: String, default: "" },        // ← 已有
-    bio: { type: String, default: "" },             // ← 已有
-    
+    displayName: { type: String, default: "" },
+    location: { type: String, default: "" },
+    bio: { type: String, default: "" },
+
     joinedAt: { type: Date, default: Date.now },
   },
   { timestamps: true }

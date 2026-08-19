@@ -846,8 +846,18 @@ The current attraction module supports:
 The user module (Tan Yi Jia, `feature/user-mgmt`) supports:
 
 - Google sign-in via Auth.js v5 (`next-auth` beta), configured in `src/auth.ts` / `src/auth.config.ts`
-- Session-gated routing via `src/middleware.js` (redirects unauthenticated requests to `/login` for non-API routes)
+- Session-gated private routing via `src/middleware.js`, with guest access retained for attractions, offline support, and public Social Profile routes
+- Persisting a `User` document on first Google sign-in
 - Profile view and edit pages
+
+The Social Profile module supports:
+
+- Guest and registered-user access to a searchable public traveller directory
+- Public profile pages that expose only display-safe profile fields
+- Profile tabs for public reviews, exploration maps, and exploration comparison
+- Registered-user access controls for exploration maps and comparisons
+- Honest unavailable states while the Review & Community and Exploration Map modules have no persisted data services to integrate
+- Comparison calculation for progress, common visits, and attractions visited by only one user, ready for Exploration Map data integration
 
 Maintenance/data-quality scripts (`scripts/`, run via `npm run <script>`, not part of the live app) exist for one-time or re-runnable backfill and repair jobs: photo sync, description sync, location-area classification, and address repair. See `package.json` for the exact commands.
 
@@ -861,9 +871,9 @@ Planned work includes:
 
 - Registered-User "Add Attraction" submission flow (Google Places-backed, no free-text entry)
 - Reviews and ratings
-- Social profiles and community features
+- Integrating Review & Community records into public Social Profile reviews
+- Integrating Exploration Map visited-attraction records into public maps and comparisons
 - Final Chatlas branding
 - Further responsive and accessibility improvements
-- Persisting a `User` document on first Google sign-in (currently a stubbed TODO in `src/auth.ts`'s `signIn` callback)
 
 <!-- TODO: Update the priority order after the team confirms the development plan. -->

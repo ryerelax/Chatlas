@@ -6,8 +6,16 @@ export default auth((req) => {
   const isLoggedIn = !!req.auth;
   const isLoginPage = req.nextUrl.pathname === "/login";
   const isApiRoute = req.nextUrl.pathname.startsWith("/api");
+  const isPublicPage =
+    req.nextUrl.pathname === "/" ||
+    req.nextUrl.pathname === "/offline" ||
+    req.nextUrl.pathname === "/sw.js" ||
+    req.nextUrl.pathname === "/manifest.webmanifest" ||
+    req.nextUrl.pathname.startsWith("/attractions/") ||
+    req.nextUrl.pathname === "/profiles" ||
+    req.nextUrl.pathname.startsWith("/profiles/");
 
-  if (isApiRoute) {
+  if (isApiRoute || isPublicPage) {
     return NextResponse.next();
   }
 

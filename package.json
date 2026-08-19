@@ -2,6 +2,7 @@
   "name": "chatlas",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -10,7 +11,8 @@
     "sync:photos": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/syncAttractionPhotos.mjs",
     "classify:areas": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/classifyLocationAreas.mjs",
     "fix:address": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/fixAttractionAddress.mjs",
-    "sync:descriptions": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/syncAttractionDescriptions.mjs"
+    "sync:descriptions": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/syncAttractionDescriptions.mjs",
+    "test": "node --import ./scripts/register-aliases.mjs --test tests/**/*.test.js"
   },
   "dependencies": {
     "axios": "^1.19.0",

@@ -1,5 +1,26 @@
 import Attraction from "@/data/models/Attraction";
 
+const EXPLORATION_MAP_FIELDS =
+  "_id name address latitude longitude category rating totalReviews businessStatus";
+
+export function createExplorationMapAttractionsRepository(AttractionModel) {
+  return {
+    findAllActiveMelakaMapAttractions() {
+      return AttractionModel.find({ state: "Melaka", isActive: true })
+        .select(EXPLORATION_MAP_FIELDS)
+        .sort({ name: 1, _id: 1 })
+        .lean();
+    },
+  };
+}
+
+const explorationMapAttractionsRepository =
+  createExplorationMapAttractionsRepository(Attraction);
+
+export async function findAllActiveMelakaMapAttractions() {
+  return explorationMapAttractionsRepository.findAllActiveMelakaMapAttractions();
+}
+
 export async function findAttractions({
   search = "",
   category = "",

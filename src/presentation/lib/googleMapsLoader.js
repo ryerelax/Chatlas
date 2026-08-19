@@ -11,24 +11,36 @@ let apiPromise = null;
 export function loadGoogleMaps(apiKey) {
   if (apiPromise) return apiPromise;
 
-  apiPromise = new Promise((resolve, reject) => {
+  let script;
+  const callbackName = "__chatlasGoogleMapsReady__";
+  const clearAttempt = () => {
+    delete window[callbackName];
+    script?.remove?.();
+  };
+  const pendingPromise = new Promise((resolve, reject) => {
     if (window.google?.maps?.importLibrary) {
       resolve(window.google.maps.importLibrary);
       return;
     }
 
-    const callbackName = "__chatlasGoogleMapsReady__";
     window[callbackName] = () => {
-      delete window[callbackName];
+      clearAttempt();
       resolve(window.google.maps.importLibrary);
     };
 
-    const script = document.createElement("script");
+    script = document.createElement("script");
     script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&v=weekly&loading=async&callback=${callbackName}`;
     script.async = true;
-    script.onerror = () => reject(new Error("Google Maps script failed to load."));
+    script.onerror = () => {
+      clearAttempt();
+      if (apiPromise === pendingPromise) {
+        apiPromise = null;
+      }
+      reject(new Error("Google Maps script failed to load."));
+    };
     document.head.appendChild(script);
   });
+  apiPromise = pendingPromise;
 
   return apiPromise;
 }
