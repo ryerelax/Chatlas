@@ -2,10 +2,12 @@
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { useState } from "react";
+import { useLanguage } from "@/presentation/contexts/LanguageContext";
 
 export default function Header() {
   const { data: session, status } = useSession();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const { lang, changeLang, t } = useLanguage();
 
   const isLoggedIn = status === "authenticated";
 
@@ -29,38 +31,75 @@ export default function Header() {
             href="/"
             className="rounded-lg px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-emerald-50 hover:text-emerald-700"
           >
-            Home
+            {t("home")}
           </Link>
           <Link
             href="/#attractions"
             className="rounded-lg px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-emerald-50 hover:text-emerald-700"
           >
-            Attractions
+            {t("attractions")}
           </Link>
           {isLoggedIn && (
             <Link
               href="/attractions/submit"
               className="rounded-lg px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-emerald-50 hover:text-emerald-700"
             >
-              + Add Attraction
+              {t("addAttraction")}
             </Link>
           )}
           <Link
             href="/exploration-map"
             className="rounded-lg px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-emerald-50 hover:text-emerald-700"
           >
-            Map
+            {t("map")}
           </Link>
           <Link
             href="/reviews"
             className="rounded-lg px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-emerald-50 hover:text-emerald-700"
           >
-            Community
+            {t("community")}
           </Link>
         </nav>
 
-        {/* Desktop auth */}
-        <div className="hidden md:block">
+        {/* Desktop auth + language */}
+        <div className="hidden items-center gap-3 md:flex">
+          {/* Language switcher */}
+          <div className="flex overflow-hidden rounded-lg border border-gray-200 text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => changeLang("en")}
+              className={`px-2.5 py-1.5 ${
+                lang === "en"
+                  ? "bg-emerald-600 text-white"
+                  : "bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              EN
+            </button>
+            <button
+              type="button"
+              onClick={() => changeLang("zh")}
+              className={`px-2.5 py-1.5 ${
+                lang === "zh"
+                  ? "bg-emerald-600 text-white"
+                  : "bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              中
+            </button>
+            <button
+              type="button"
+              onClick={() => changeLang("ms")}
+              className={`px-2.5 py-1.5 ${
+                lang === "ms"
+                  ? "bg-emerald-600 text-white"
+                  : "bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              BM
+            </button>
+          </div>
+
           {isLoggedIn ? (
             <div className="relative">
               <button
@@ -97,7 +136,7 @@ export default function Header() {
                     className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     onClick={() => setIsDropdownOpen(false)}
                   >
-                    👤 My Profile
+                    👤 {t("myProfile")}
                   </Link>
                   <button
                     onClick={() => {
@@ -106,7 +145,7 @@ export default function Header() {
                     }}
                     className="block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-gray-50"
                   >
-                    🚪 Logout
+                    🚪 {t("logout")}
                   </button>
                 </div>
               )}
@@ -116,7 +155,7 @@ export default function Header() {
               href="/login"
               className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
             >
-              Sign in
+              {t("signIn")}
             </Link>
           )}
         </div>
@@ -124,43 +163,73 @@ export default function Header() {
         {/* Mobile navigation */}
         <details className="relative md:hidden">
           <summary className="cursor-pointer list-none rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700">
-            Menu
+            {t("menu")}
           </summary>
           <nav
             className="absolute right-0 mt-3 w-56 rounded-xl border border-gray-200 bg-white p-3 shadow-lg"
             aria-label="Mobile navigation"
           >
+            <div className="mb-2 flex overflow-hidden rounded-lg border border-gray-200 text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => changeLang("en")}
+                className={`flex-1 px-2 py-1.5 ${
+                  lang === "en" ? "bg-emerald-600 text-white" : "bg-white text-gray-600"
+                }`}
+              >
+                EN
+              </button>
+              <button
+                type="button"
+                onClick={() => changeLang("zh")}
+                className={`flex-1 px-2 py-1.5 ${
+                  lang === "zh" ? "bg-emerald-600 text-white" : "bg-white text-gray-600"
+                }`}
+              >
+                中
+              </button>
+              <button
+                type="button"
+                onClick={() => changeLang("ms")}
+                className={`flex-1 px-2 py-1.5 ${
+                  lang === "ms" ? "bg-emerald-600 text-white" : "bg-white text-gray-600"
+                }`}
+              >
+                BM
+              </button>
+            </div>
+
             <Link
               href="/"
               className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700"
             >
-              Home
+              {t("home")}
             </Link>
             <Link
               href="/#attractions"
               className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700"
             >
-              Attractions
+              {t("attractions")}
             </Link>
             {isLoggedIn && (
               <Link
                 href="/attractions/submit"
                 className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700"
               >
-                + Add Attraction
+                {t("addAttraction")}
               </Link>
             )}
             <Link
               href="/exploration-map"
               className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700"
             >
-              Map
+              {t("map")}
             </Link>
             <Link
               href="/reviews"
               className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700"
             >
-              Community
+              {t("community")}
             </Link>
             <div className="my-2 border-t border-gray-200" />
 
@@ -170,13 +239,13 @@ export default function Header() {
                   href="/profile"
                   className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700"
                 >
-                  👤 My Profile
+                  👤 {t("myProfile")}
                 </Link>
                 <button
                   onClick={() => signOut({ redirectTo: "/login" })}
                   className="w-full rounded-lg px-4 py-3 text-left text-sm font-semibold text-red-600 hover:bg-gray-50"
                 >
-                  🚪 Logout
+                  🚪 {t("logout")}
                 </button>
               </>
             ) : (
@@ -184,7 +253,7 @@ export default function Header() {
                 href="/login"
                 className="block rounded-lg bg-emerald-600 px-4 py-3 text-center text-sm font-semibold text-white hover:bg-emerald-700"
               >
-                Sign in
+                {t("signIn")}
               </Link>
             )}
           </nav>

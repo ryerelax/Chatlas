@@ -5,11 +5,13 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useReviews } from "@/presentation/contexts/ReviewsContext";
+import { useLanguage } from "@/presentation/contexts/LanguageContext";
 
 export default function ProfilePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const { reviews, isLoading, loadReviews, refreshReviews } = useReviews();
+  const { t } = useLanguage();
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [statsLoading, setStatsLoading] = useState(true);
@@ -63,25 +65,21 @@ export default function ProfilePage() {
     const refreshIfNeeded = () => {
       if (localStorage.getItem("reviewDeleted") === "true") {
         localStorage.removeItem("reviewDeleted");
-        console.log("Refreshing profile after delete...");
         refreshReviews();
         fetchCollectionStats();
       }
       if (localStorage.getItem("reviewAdded") === "true") {
         localStorage.removeItem("reviewAdded");
-        console.log("Refreshing profile after add...");
         refreshReviews();
         fetchCollectionStats();
       }
       if (localStorage.getItem("photoDeleted") === "true") {
         localStorage.removeItem("photoDeleted");
-        console.log("Refreshing profile after photo deleted...");
         refreshReviews();
         fetchCollectionStats();
       }
       if (localStorage.getItem("profileUpdated") === "true") {
         localStorage.removeItem("profileUpdated");
-        console.log("Refreshing profile after profile update...");
         refreshReviews();
         fetchCollectionStats();
       }
@@ -147,7 +145,7 @@ export default function ProfilePage() {
   if (status === "loading" || loading || isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#F7F9FB]">
-        <div className="text-[#006C56]">Loading...</div>
+        <div className="text-[#006C56]">{t("loading")}</div>
       </div>
     );
   }
@@ -191,10 +189,12 @@ export default function ProfilePage() {
               </h1>
               <p className="text-[#65748A]">{email}</p>
               {location && (
-                <p className="text-sm text-[#65748A]">Location: {location}</p>
+                <p className="text-sm text-[#65748A]">
+                  {t("locationLabel")}: {location}
+                </p>
               )}
               <p className="text-sm text-[#65748A]">
-                Member since{" "}
+                {t("memberSince")}{" "}
                 {new Date().toLocaleDateString("en-US", {
                   month: "long",
                   year: "numeric",
@@ -206,7 +206,7 @@ export default function ProfilePage() {
               href="/profile/edit"
               className="rounded-lg border border-[#006C56] px-6 py-2 text-[#006C56] transition hover:bg-[#006C56] hover:text-white"
             >
-              Edit Profile
+              {t("editProfile")}
             </Link>
           </div>
         </div>
@@ -216,25 +216,25 @@ export default function ProfilePage() {
             <p className="text-2xl font-bold text-[#006C56]">
               {statsLoading ? "..." : stats.placesVisited}
             </p>
-            <p className="text-sm text-[#65748A]">Places visited</p>
+            <p className="text-sm text-[#65748A]">{t("placesVisited")}</p>
           </div>
           <div className="rounded-lg bg-white p-4 text-center shadow-md">
             <p className="text-2xl font-bold text-[#006C56]">
               {statsLoading ? "..." : reviewsWritten}
             </p>
-            <p className="text-sm text-[#65748A]">Reviews written</p>
+            <p className="text-sm text-[#65748A]">{t("reviewsWritten")}</p>
           </div>
           <div className="rounded-lg bg-white p-4 text-center shadow-md">
             <p className="text-2xl font-bold text-[#006C56]">
               {statsLoading ? "..." : photosCount}
             </p>
-            <p className="text-sm text-[#65748A]">Photos uploaded</p>
+            <p className="text-sm text-[#65748A]">{t("photosUploaded")}</p>
           </div>
           <div className="rounded-lg bg-white p-4 text-center shadow-md">
             <p className="text-2xl font-bold text-[#006C56]">
               {statsLoading ? "..." : stats.savedPlaces}
             </p>
-            <p className="text-sm text-[#65748A]">Saved places</p>
+            <p className="text-sm text-[#65748A]">{t("savedPlaces")}</p>
           </div>
         </div>
 
@@ -253,7 +253,9 @@ export default function ProfilePage() {
                 d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
               />
             </svg>
-            <h2 className="text-lg font-bold text-[#10213B]">Your Collection</h2>
+            <h2 className="text-lg font-bold text-[#10213B]">
+              {t("yourCollection")}
+            </h2>
           </div>
 
           <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
@@ -277,15 +279,15 @@ export default function ProfilePage() {
                 </svg>
               </div>
               <p className="mt-3 text-base font-bold text-[#10213B]">
-                Wishlist
+                {t("wishlist")}
               </p>
               <p className="text-sm text-[#65748A]">
                 {statsLoading
                   ? "..."
-                  : `${stats.wishlistCount || 0} items saved`}
+                  : `${stats.wishlistCount || 0} ${t("itemsSaved")}`}
               </p>
               <div className="mt-3 text-sm font-medium text-[#C2413B] opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-                View
+                {t("view")}
               </div>
             </Link>
 
@@ -309,15 +311,15 @@ export default function ProfilePage() {
                 </svg>
               </div>
               <p className="mt-3 text-base font-bold text-[#10213B]">
-                Favourites
+                {t("favourites")}
               </p>
               <p className="text-sm text-[#65748A]">
                 {statsLoading
                   ? "..."
-                  : `${stats.favouritesCount || 0} items saved`}
+                  : `${stats.favouritesCount || 0} ${t("itemsSaved")}`}
               </p>
               <div className="mt-3 text-sm font-medium text-[#FFAB00] opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-                View
+                {t("view")}
               </div>
             </Link>
 
@@ -341,15 +343,15 @@ export default function ProfilePage() {
                 </svg>
               </div>
               <p className="mt-3 text-base font-bold text-[#10213B]">
-                My Reviews
+                {t("myReviews")}
               </p>
               <p className="text-sm text-[#65748A]">
                 {statsLoading
                   ? "..."
-                  : `${reviewsWritten || 0} reviews written`}
+                  : `${reviewsWritten || 0} ${t("reviewsWrittenCount")}`}
               </p>
               <div className="mt-3 text-sm font-medium text-[#2F6DA1] opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-                View
+                {t("view")}
               </div>
             </Link>
 
@@ -373,15 +375,15 @@ export default function ProfilePage() {
                 </svg>
               </div>
               <p className="mt-3 text-base font-bold text-[#10213B]">
-                My Photos
+                {t("myPhotos")}
               </p>
               <p className="text-sm text-[#65748A]">
                 {statsLoading
                   ? "..."
-                  : `${photosCount || 0} photos uploaded`}
+                  : `${photosCount || 0} ${t("photosUploadedCount")}`}
               </p>
               <div className="mt-3 text-sm font-medium text-[#7C3AED] opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-                View
+                {t("view")}
               </div>
             </Link>
 
@@ -405,11 +407,11 @@ export default function ProfilePage() {
                 </svg>
               </div>
               <p className="mt-3 text-base font-bold text-[#10213B]">
-                Travel History
+                {t("travelHistory")}
               </p>
               <p className="text-sm text-[#65748A]">0 attractions</p>
               <div className="mt-3 text-sm font-medium text-[#16845B] opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-                View
+                {t("view")}
               </div>
             </Link>
           </div>
@@ -417,17 +419,15 @@ export default function ProfilePage() {
 
         <div className="rounded-lg bg-white p-8 shadow-md">
           <h2 className="mb-4 text-xl font-bold text-[#10213B]">
-            Recent Reviews
+            {t("recentReviews")}
           </h2>
           {statsLoading ? (
-            <p className="text-[#65748A]">Loading reviews...</p>
+            <p className="text-[#65748A]">{t("loading")}</p>
           ) : reviewsWritten === 0 ? (
-            <p className="text-[#65748A]">
-              You haven&apos;t written any reviews yet.
-            </p>
+            <p className="text-[#65748A]">{t("noReviewsYet")}</p>
           ) : (
             <p className="text-[#65748A]">
-              You have {reviewsWritten} reviews.
+              {t("youHaveReviews", { count: reviewsWritten })}
             </p>
           )}
         </div>

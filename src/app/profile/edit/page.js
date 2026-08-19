@@ -3,10 +3,12 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useLanguage } from "@/presentation/contexts/LanguageContext";
 
 export default function EditProfilePage() {
   const { data: session, status, update } = useSession();
   const router = useRouter();
+  const { t } = useLanguage();
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
   const [location, setLocation] = useState("");
@@ -63,14 +65,14 @@ export default function EditProfilePage() {
       if (file.size > 5 * 1024 * 1024) {
         setMessage({
           type: "error",
-          text: "File is too large. Maximum size is 5MB.",
+          text: t("fileTooLarge"),
         });
         return;
       }
       if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
         setMessage({
           type: "error",
-          text: "Unsupported file format. Please upload JPG, PNG, or WEBP.",
+          text: t("unsupportedFormat"),
         });
         return;
       }
@@ -144,7 +146,7 @@ export default function EditProfilePage() {
         setProfilePicture(newImageUrl);
       }
 
-      setMessage({ type: "success", text: "Profile updated successfully!" });
+      setMessage({ type: "success", text: t("profileUpdated") });
 
       setTimeout(() => {
         router.push("/profile");
@@ -163,7 +165,7 @@ export default function EditProfilePage() {
   if (status === "loading" || loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#F7F9FB]">
-        <div className="text-[#006C56]">Loading...</div>
+        <div className="text-[#006C56]">{t("loading")}</div>
       </div>
     );
   }
@@ -177,7 +179,9 @@ export default function EditProfilePage() {
   return (
     <div className="min-h-screen bg-[#F7F9FB] px-4 py-10">
       <div className="mx-auto max-w-2xl rounded-lg bg-white p-8 shadow-md">
-        <h1 className="mb-6 text-2xl font-bold text-black">Edit Profile</h1>
+        <h1 className="mb-6 text-2xl font-bold text-black">
+          {t("editProfile")}
+        </h1>
 
         {message && (
           <div
@@ -227,14 +231,12 @@ export default function EditProfilePage() {
                 />
               </label>
             </div>
-            <p className="mt-2 text-xs text-gray-500">
-              JPG, PNG or WEBP, max 5MB
-            </p>
+            <p className="mt-2 text-xs text-gray-500">{t("uploadHint")}</p>
           </div>
 
           <div>
             <label className="mb-1 block text-sm font-medium text-black">
-              Display name
+              {t("displayName")}
             </label>
             <input
               type="text"
@@ -251,7 +253,7 @@ export default function EditProfilePage() {
 
           <div>
             <label className="mb-1 block text-sm font-medium text-black">
-              Email
+              {t("email")}
             </label>
             <input
               type="email"
@@ -263,26 +265,26 @@ export default function EditProfilePage() {
 
           <div>
             <label className="mb-1 block text-sm font-medium text-black">
-              Location
+              {t("location")}
             </label>
             <input
               type="text"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
-              placeholder="City or region you explore from"
+              placeholder={t("locationPlaceholder")}
               className="w-full rounded border border-[#D8E1E7] px-4 py-2 text-black focus:border-[#006C56] focus:outline-none"
             />
           </div>
 
           <div>
             <label className="mb-1 block text-sm font-medium text-black">
-              Bio
+              {t("bio")}
             </label>
             <textarea
               value={bio}
               onChange={(e) => setBio(e.target.value)}
               rows="4"
-              placeholder="A short introduction shown on your public profile"
+              placeholder={t("bioPlaceholder")}
               className="w-full rounded border border-[#D8E1E7] px-4 py-2 text-black focus:border-[#006C56] focus:outline-none"
               maxLength="200"
             />
@@ -295,13 +297,13 @@ export default function EditProfilePage() {
               disabled={isLoading}
               className="flex-1 rounded bg-[#006C56] px-6 py-2 text-white transition hover:bg-[#005E4B] disabled:opacity-50"
             >
-              {isLoading ? "Saving..." : "Save changes"}
+              {isLoading ? t("saving") : t("saveChanges")}
             </button>
             <Link
               href="/profile"
               className="rounded border border-gray-300 px-6 py-2 text-center text-black transition hover:bg-gray-50"
             >
-              Cancel
+              {t("cancel")}
             </Link>
           </div>
         </form>
