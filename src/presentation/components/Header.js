@@ -54,6 +54,12 @@ export default function Header() {
             {t("map")}
           </Link>
           <Link
+            href="/profiles"
+            className="rounded-lg px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-emerald-50 hover:text-emerald-700"
+          >
+            {t("travellers")}
+          </Link>
+          <Link
             href="/reviews"
             className="rounded-lg px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-emerald-50 hover:text-emerald-700"
           >
@@ -224,6 +230,12 @@ export default function Header() {
               className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700"
             >
               {t("map")}
+            </Link>
+            <Link
+              href="/profiles"
+              className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700"
+            >
+              {t("travellers")}
             </Link>
             <Link
               href="/reviews"
