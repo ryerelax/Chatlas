@@ -21,6 +21,17 @@ export async function findAllActiveMelakaMapAttractions() {
   return explorationMapAttractionsRepository.findAllActiveMelakaMapAttractions();
 }
 
+// Sorts findAttractions can apply directly in MongoDB, since the field
+// already lives on the document. "rating" and "mostReviewed" are NOT here -
+// combinedRating and chatlasReviewCount only exist after attractionService
+// joins in Review stats per attraction, so those sorts happen there instead
+// (see getAttractions) and this repository returns every filtered match
+// unpaginated for the service to sort and slice.
+const DB_SORTS = {
+  name: { name: 1 },
+  newest: { createdAt: -1 },
+};
+
 export async function findAttractions({
   search = "",
   category = "",
@@ -29,6 +40,7 @@ export async function findAttractions({
   communitySubmitted = false,
   page = 1,
   limit = 15,
+  sort = "name",
 }) {
   const query = {
     state: "Melaka",
@@ -56,14 +68,21 @@ export async function findAttractions({
     query.submittedBy = { $exists: true };
   }
 
-  const skip = (page - 1) * limit;
+  const dbSort = DB_SORTS[sort];
+
+  if (dbSort) {
+    const skip = (page - 1) * limit;
+
+    const [items, total] = await Promise.all([
+      Attraction.find(query).sort(dbSort).skip(skip).limit(limit).lean(),
+      Attraction.countDocuments(query),
+    ]);
+
+    return { items, total };
+  }
 
   const [items, total] = await Promise.all([
-    Attraction.find(query)
-      .sort({ name: 1 })
-      .skip(skip)
-      .limit(limit)
-      .lean(),
+    Attraction.find(query).sort(DB_SORTS.name).lean(),
     Attraction.countDocuments(query),
   ]);
 
