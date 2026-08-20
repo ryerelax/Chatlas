@@ -11,10 +11,14 @@ export const runtime = "nodejs";
 
 export async function GET(request) {
   try {
+    const session = await auth();
     await connectToDatabase();
 
     const attractionId = request.nextUrl.searchParams.get("attractionId");
-    const reviews = await getReviewsByAttraction(attractionId);
+    const reviews = await getReviewsByAttraction(
+      attractionId,
+      session?.user?.email
+    );
 
     if (reviews === null) {
       return NextResponse.json(
