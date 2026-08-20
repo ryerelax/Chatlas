@@ -10,7 +10,13 @@ const MAX_DESCRIPTION_LENGTH = 2000;
 // user can edit any existing attraction's description, direct and
 // published immediately, no approval queue. Separate from the Reviews
 // module; doesn't touch or depend on its components/schema.
-export default function CommunityDescriptionEdit({ attractionId, description, onDescriptionUpdated }) {
+export default function CommunityDescriptionEdit({
+  attractionId,
+  description,
+  descriptionSource,
+  descriptionLastEditedBy,
+  onDescriptionUpdated,
+}) {
   const { data: session } = useSession();
   const isEligible = isMelakaBasedUser(session);
 
@@ -20,6 +26,10 @@ export default function CommunityDescriptionEdit({ attractionId, description, on
   const [isSaving, setIsSaving] = useState(false);
 
   const hasDescription = description && description.trim().length > 0;
+
+  // The moment a community edit sets descriptionLastEditedBy, this stops
+  // rendering on its own - no separate "clear the caption" logic needed.
+  const showWikidataCaption = descriptionSource === "wikidata" && !descriptionLastEditedBy;
 
   function handleStartEditing() {
     setDraftText(description || "");
@@ -55,7 +65,11 @@ export default function CommunityDescriptionEdit({ attractionId, description, on
         throw new Error(result.message || "Unable to update description.");
       }
 
-      onDescriptionUpdated?.(result.data.description);
+      onDescriptionUpdated?.({
+        description: result.data.description,
+        descriptionSource: result.data.descriptionSource,
+        descriptionLastEditedBy: result.data.descriptionLastEditedBy,
+      });
       setIsEditing(false);
     } catch (error) {
       console.error("Failed to update attraction description:", error);
@@ -135,6 +149,10 @@ export default function CommunityDescriptionEdit({ attractionId, description, on
         >
           {hasDescription ? description : "No description available for this attraction yet."}
         </p>
+      )}
+
+      {!isEditing && showWikidataCaption && (
+        <p className="mt-2 text-xs text-attraction-muted">Source: Wikipedia</p>
       )}
     </div>
   );

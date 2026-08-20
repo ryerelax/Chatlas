@@ -191,8 +191,10 @@ export default function AttractionDetailsPage() {
             <CommunityDescriptionEdit
               attractionId={attractionId}
               description={attraction.description}
-              onDescriptionUpdated={(newDescription) =>
-                setAttraction((current) => ({ ...current, description: newDescription }))
+              descriptionSource={attraction.descriptionSource}
+              descriptionLastEditedBy={attraction.descriptionLastEditedBy}
+              onDescriptionUpdated={(updates) =>
+                setAttraction((current) => ({ ...current, ...updates }))
               }
             />
 

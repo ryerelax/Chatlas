@@ -8,6 +8,13 @@ import { useLanguage } from "@/presentation/contexts/LanguageContext";
 
 const CATEGORIES = ["All", ...ATTRACTION_CATEGORIES];
 
+const SORT_OPTIONS = [
+  { value: "name", labelKey: "sortNameAsc" },
+  { value: "rating", labelKey: "sortRating" },
+  { value: "newest", labelKey: "sortNewest" },
+  { value: "mostReviewed", labelKey: "sortMostReviewed" },
+];
+
 export default function AttractionList() {
   const { t, translateCategory } = useLanguage();
 
@@ -30,6 +37,8 @@ export default function AttractionList() {
   const [communitySubmitted, setCommunitySubmitted] = useState(false);
   const [appliedCommunitySubmitted, setAppliedCommunitySubmitted] =
     useState(false);
+
+  const [sort, setSort] = useState("name");
 
   const [page, setPage] = useState(1);
 
@@ -65,6 +74,10 @@ export default function AttractionList() {
           query.set("communitySubmitted", "true");
         }
 
+        if (sort !== "name") {
+          query.set("sort", sort);
+        }
+
         query.set("page", String(page));
 
         const response = await fetch(`/api/attractions?${query.toString()}`);
@@ -92,6 +105,7 @@ export default function AttractionList() {
     appliedLocationArea,
     appliedMinRating,
     appliedCommunitySubmitted,
+    sort,
     page,
   ]);
 
@@ -122,6 +136,8 @@ export default function AttractionList() {
     setCommunitySubmitted(false);
     setAppliedCommunitySubmitted(false);
 
+    setSort("name");
+
     setPage(1);
     setShowMoreFilters(false);
   }
@@ -129,6 +145,11 @@ export default function AttractionList() {
   function handleCategorySelect(item) {
     setCategory(item);
     setAppliedCategory(item);
+    setPage(1);
+  }
+
+  function handleSortChange(event) {
+    setSort(event.target.value);
     setPage(1);
   }
 
@@ -316,8 +337,26 @@ export default function AttractionList() {
         })}
       </div>
 
-      <div className="mb-5">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-gray-600">{getResultMessage()}</p>
+
+        <div className="flex items-center gap-2">
+          <label htmlFor="attraction-sort" className="text-sm font-semibold text-gray-700">
+            {t("sortBy")}
+          </label>
+          <select
+            id="attraction-sort"
+            value={sort}
+            onChange={handleSortChange}
+            className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-emerald-500"
+          >
+            {SORT_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {t(option.labelKey)}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {isLoading && (

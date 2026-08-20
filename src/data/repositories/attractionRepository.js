@@ -21,6 +21,17 @@ export async function findAllActiveMelakaMapAttractions() {
   return explorationMapAttractionsRepository.findAllActiveMelakaMapAttractions();
 }
 
+// Sorts findAttractions can apply directly in MongoDB, since the field
+// already lives on the document. "rating" and "mostReviewed" are NOT here -
+// combinedRating and chatlasReviewCount only exist after attractionService
+// joins in Review stats per attraction, so those sorts happen there instead
+// (see getAttractions) and this repository returns every filtered match
+// unpaginated for the service to sort and slice.
+const DB_SORTS = {
+  name: { name: 1 },
+  newest: { createdAt: -1 },
+};
+
 export async function findAttractions({
   search = "",
   category = "",
@@ -29,6 +40,7 @@ export async function findAttractions({
   communitySubmitted = false,
   page = 1,
   limit = 15,
+  sort = "name",
 }) {
   const query = {
     state: "Melaka",
@@ -56,14 +68,21 @@ export async function findAttractions({
     query.submittedBy = { $exists: true };
   }
 
-  const skip = (page - 1) * limit;
+  const dbSort = DB_SORTS[sort];
+
+  if (dbSort) {
+    const skip = (page - 1) * limit;
+
+    const [items, total] = await Promise.all([
+      Attraction.find(query).sort(dbSort).skip(skip).limit(limit).lean(),
+      Attraction.countDocuments(query),
+    ]);
+
+    return { items, total };
+  }
 
   const [items, total] = await Promise.all([
-    Attraction.find(query)
-      .sort({ name: 1 })
-      .skip(skip)
-      .limit(limit)
-      .lean(),
+    Attraction.find(query).sort(DB_SORTS.name).lean(),
     Attraction.countDocuments(query),
   ]);
 
@@ -140,7 +159,7 @@ export async function findAttractionsMissingDescription({ force = false } = {}) 
   }
 
   return Attraction.find(query)
-    .select("_id name googlePlaceId description")
+    .select("_id name googlePlaceId description latitude longitude category locationArea")
     .sort({ name: 1 })
     .lean();
 }
@@ -151,6 +170,38 @@ export async function updateAttractionDescription(attractionId, description) {
     { $set: { description } },
     { returnDocument: "after" }
   ).lean();
+}
+
+// Shared by the Wikidata and generic-template description backfills - both
+// need the same descriptionLastEditedBy: { $exists: false } guard so a
+// re-run never overwrites a description a community member has since
+// edited via the wiki-style editing feature (matching returns null).
+function updateAttractionDescriptionWithSource(attractionId, description, descriptionSource) {
+  return Attraction.findOneAndUpdate(
+    { _id: attractionId, isActive: true, descriptionLastEditedBy: { $exists: false } },
+    { $set: { description, descriptionSource } },
+    { returnDocument: "after" }
+  ).lean();
+}
+
+// scripts/backfillWikidataDescriptions.mjs
+export async function updateAttractionDescriptionFromWikidata(attractionId, description) {
+  return updateAttractionDescriptionWithSource(attractionId, description, "wikidata");
+}
+
+// scripts/backfillGenericDescriptions.mjs - template-based fallback for
+// attractions no Wikidata match covered. Never gets the "Source: Wikipedia"
+// caption (that checks descriptionSource === "wikidata" specifically).
+export async function updateAttractionDescriptionGeneric(attractionId, description) {
+  return updateAttractionDescriptionWithSource(attractionId, description, "generic");
+}
+
+// scripts/importNewAttractions.mjs's pre-filter against candidates already
+// in the dataset. Includes inactive (soft-deleted) records too, since
+// googlePlaceId stays globally unique in the schema regardless of isActive.
+export async function findAllGooglePlaceIds() {
+  const docs = await Attraction.find({}).select("googlePlaceId").lean();
+  return docs.map((doc) => doc.googlePlaceId);
 }
 
 export async function findActiveAttractionByGooglePlaceId(googlePlaceId) {

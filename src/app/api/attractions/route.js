@@ -8,22 +8,16 @@ export async function GET(request) {
 
     const { searchParams } = new URL(request.url);
 
-    const filters = {
-      search: searchParams.get("search") || "",
-      category: searchParams.get("category") || "",
-      minRating: searchParams.get("minRating") || "0",
-    };
-
-    const attractions = await getAttractions(filters);
     const search = searchParams.get("search") || "";
     const category = searchParams.get("category") || "";
     const locationArea = searchParams.get("locationArea") || "";
     const minRating = searchParams.get("minRating") || 0;
     const communitySubmitted = searchParams.get("communitySubmitted") || false;
     const page = searchParams.get("page") || 1;
+    const sort = searchParams.get("sort") || "name";
 
     const { items, total, page: currentPage, limit, totalPages } =
-      await getAttractions({ search, category, locationArea, minRating, communitySubmitted, page });
+      await getAttractions({ search, category, locationArea, minRating, communitySubmitted, page, sort });
 
     return NextResponse.json({
       success: true,
@@ -47,6 +41,4 @@ export async function GET(request) {
       { status: 500 }
     );
   }
-
-  // TODO: Add pagination parameters when the attraction dataset becomes large enough to require paginated results.
 }
