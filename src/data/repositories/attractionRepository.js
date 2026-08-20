@@ -140,7 +140,7 @@ export async function findAttractionsMissingDescription({ force = false } = {}) 
   }
 
   return Attraction.find(query)
-    .select("_id name googlePlaceId description")
+    .select("_id name googlePlaceId description latitude longitude")
     .sort({ name: 1 })
     .lean();
 }
@@ -149,6 +149,19 @@ export async function updateAttractionDescription(attractionId, description) {
   return Attraction.findByIdAndUpdate(
     attractionId,
     { $set: { description } },
+    { returnDocument: "after" }
+  ).lean();
+}
+
+// Wikidata coordinate-matched description backfill (see
+// wikidataDescriptionMatchService.js / scripts/backfillWikidataDescriptions.mjs).
+// The descriptionLastEditedBy: { $exists: false } filter makes this safe to
+// re-run - it will never overwrite a description a community member has
+// since edited via the wiki-style editing feature, matching returns null.
+export async function updateAttractionDescriptionFromWikidata(attractionId, description) {
+  return Attraction.findOneAndUpdate(
+    { _id: attractionId, isActive: true, descriptionLastEditedBy: { $exists: false } },
+    { $set: { description, descriptionSource: "wikidata" } },
     { returnDocument: "after" }
   ).lean();
 }

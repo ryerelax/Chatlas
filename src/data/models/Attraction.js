@@ -76,6 +76,17 @@ const attractionSchema = new mongoose.Schema(
       trim: true,
     },
 
+    // Set to "wikidata" only when `description` was written by
+    // scripts/backfillWikidataDescriptions.mjs (coordinate-matched Wikidata/
+    // Wikipedia extract). Absent for Places-editorialSummary and Decision-4
+    // submission-time descriptions. Drives the "Source: Wikipedia" caption on
+    // the attraction detail page - cleared implicitly the moment a community
+    // edit sets descriptionLastEditedBy, since the caption checks both.
+    descriptionSource: {
+      type: String,
+      trim: true,
+    },
+
     // Stable Cloudinary URLs, populated by scripts/syncAttractionPhotos.js.
     // Not all attractions have Places photos, so this stays empty for some records.
     photos: {

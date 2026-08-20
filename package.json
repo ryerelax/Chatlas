@@ -12,6 +12,8 @@
     "classify:areas": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/classifyLocationAreas.mjs",
     "fix:address": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/fixAttractionAddress.mjs",
     "sync:descriptions": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/syncAttractionDescriptions.mjs",
+    "preview:wikidata-descriptions": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/previewWikidataDescriptionMatches.mjs",
+    "backfill:wikidata-descriptions": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/backfillWikidataDescriptions.mjs",
     "test": "node --import ./scripts/register-aliases.mjs --test tests/**/*.test.js"
   },
   "dependencies": {
