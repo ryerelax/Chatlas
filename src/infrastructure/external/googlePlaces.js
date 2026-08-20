@@ -109,6 +109,50 @@ const MELAKA_LOCATION_BIAS = {
   },
 };
 
+// Places Text Search (New) - used by the new-attraction-candidate
+// investigation and scripts/importNewAttractions.mjs. Unlike Autocomplete,
+// this returns full place details (location, types, rating) directly, no
+// session token or separate Details call needed.
+export async function searchPlacesText(textQuery, { apiKey, maxResultCount = 20 } = {}) {
+  if (!apiKey) {
+    throw new Error("Google Places API key is not configured.");
+  }
+
+  const response = await fetch(`${PLACES_API_BASE}/places:searchText`, {
+    method: "POST",
+    headers: {
+      "X-Goog-Api-Key": apiKey,
+      "X-Goog-FieldMask":
+        "places.id,places.displayName,places.formattedAddress,places.location,places.types,places.rating,places.userRatingCount,places.businessStatus,places.googleMapsUri",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      textQuery,
+      locationBias: MELAKA_LOCATION_BIAS,
+      maxResultCount,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Places Text Search request failed with status ${response.status}`);
+  }
+
+  const data = await response.json();
+
+  return (data.places || []).map((place) => ({
+    googlePlaceId: place.id,
+    name: place.displayName?.text || "",
+    address: place.formattedAddress || "",
+    latitude: place.location?.latitude,
+    longitude: place.location?.longitude,
+    types: place.types || [],
+    rating: place.rating || 0,
+    totalReviews: place.userRatingCount || 0,
+    businessStatus: place.businessStatus || "OPERATIONAL",
+    googleMapsUrl: place.googleMapsUri || "",
+  }));
+}
+
 // Places Autocomplete (New) for Decision 4's "Add Attraction" search. The
 // sessionToken must be the same value across every keystroke of one search,
 // and again on the following fetchPlaceDetailsForSubmission call, so Google

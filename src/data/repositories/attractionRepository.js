@@ -196,6 +196,14 @@ export async function updateAttractionDescriptionGeneric(attractionId, descripti
   return updateAttractionDescriptionWithSource(attractionId, description, "generic");
 }
 
+// scripts/importNewAttractions.mjs's pre-filter against candidates already
+// in the dataset. Includes inactive (soft-deleted) records too, since
+// googlePlaceId stays globally unique in the schema regardless of isActive.
+export async function findAllGooglePlaceIds() {
+  const docs = await Attraction.find({}).select("googlePlaceId").lean();
+  return docs.map((doc) => doc.googlePlaceId);
+}
+
 export async function findActiveAttractionByGooglePlaceId(googlePlaceId) {
   return Attraction.findOne({
     googlePlaceId,

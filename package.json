@@ -15,6 +15,7 @@
     "preview:wikidata-descriptions": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/previewWikidataDescriptionMatches.mjs",
     "backfill:wikidata-descriptions": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/backfillWikidataDescriptions.mjs",
     "backfill:generic-descriptions": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/backfillGenericDescriptions.mjs",
+    "import:new-attractions": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/importNewAttractions.mjs",
     "test": "node --import ./scripts/register-aliases.mjs --test tests/**/*.test.js"
   },
   "dependencies": {
