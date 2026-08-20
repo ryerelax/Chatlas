@@ -6,12 +6,19 @@ export const LOCATION_AREAS = [
   "Melaka Raya / Central Melaka",
   "Ayer Keroh",
   "Klebang & Coastal Melaka",
+  "Alor Gajah",
+  "Jasin",
   "Other / Greater Melaka",
 ];
 
-// Catch-all for anything within Melaka state that isn't one of the four named
-// tourist zones above (outskirts like Bukit Serindit/Batu Berendam, and Jasin
-// district — still within Melaka state, just not a designated tourist zone).
+// Split out of the catch-all once the new-attraction import (STEP 2) landed
+// 24 real Alor Gajah and 25 real Jasin attractions there — Decision 2
+// originally folded both into "Other / Greater Melaka" because neither had
+// any real attractions at the time.
+//
+// Catch-all for anything within Melaka state that isn't one of the six named
+// zones above (outskirts like Bukit Serindit/Batu Berendam that don't belong
+// to a specific district zone).
 const CATCH_ALL_ZONE = "Other / Greater Melaka";
 
 // Ordered rule list: first matching rule wins. Keyword rules are checked before
@@ -39,6 +46,14 @@ const RULES = [
   {
     zone: "Melaka Raya / Central Melaka",
     test: (text) => /melaka raya|kota laksamana|bukit baru/i.test(text) || /\b751\d{2}\b|\b752\d{2}\b|\b7530\d\b/.test(text),
+  },
+  {
+    zone: "Alor Gajah",
+    test: (text) => /alor gajah/i.test(text) || /\b78\d{3}\b/.test(text),
+  },
+  {
+    zone: "Jasin",
+    test: (text) => /\bjasin\b/i.test(text) || /\b77\d{3}\b/.test(text),
   },
 ];
 
