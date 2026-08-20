@@ -140,7 +140,7 @@ export async function findAttractionsMissingDescription({ force = false } = {}) 
   }
 
   return Attraction.find(query)
-    .select("_id name googlePlaceId description latitude longitude")
+    .select("_id name googlePlaceId description latitude longitude category locationArea")
     .sort({ name: 1 })
     .lean();
 }
@@ -153,17 +153,28 @@ export async function updateAttractionDescription(attractionId, description) {
   ).lean();
 }
 
-// Wikidata coordinate-matched description backfill (see
-// wikidataDescriptionMatchService.js / scripts/backfillWikidataDescriptions.mjs).
-// The descriptionLastEditedBy: { $exists: false } filter makes this safe to
-// re-run - it will never overwrite a description a community member has
-// since edited via the wiki-style editing feature, matching returns null.
-export async function updateAttractionDescriptionFromWikidata(attractionId, description) {
+// Shared by the Wikidata and generic-template description backfills - both
+// need the same descriptionLastEditedBy: { $exists: false } guard so a
+// re-run never overwrites a description a community member has since
+// edited via the wiki-style editing feature (matching returns null).
+function updateAttractionDescriptionWithSource(attractionId, description, descriptionSource) {
   return Attraction.findOneAndUpdate(
     { _id: attractionId, isActive: true, descriptionLastEditedBy: { $exists: false } },
-    { $set: { description, descriptionSource: "wikidata" } },
+    { $set: { description, descriptionSource } },
     { returnDocument: "after" }
   ).lean();
+}
+
+// scripts/backfillWikidataDescriptions.mjs
+export async function updateAttractionDescriptionFromWikidata(attractionId, description) {
+  return updateAttractionDescriptionWithSource(attractionId, description, "wikidata");
+}
+
+// scripts/backfillGenericDescriptions.mjs - template-based fallback for
+// attractions no Wikidata match covered. Never gets the "Source: Wikipedia"
+// caption (that checks descriptionSource === "wikidata" specifically).
+export async function updateAttractionDescriptionGeneric(attractionId, description) {
+  return updateAttractionDescriptionWithSource(attractionId, description, "generic");
 }
 
 export async function findActiveAttractionByGooglePlaceId(googlePlaceId) {
