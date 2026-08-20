@@ -32,7 +32,7 @@ export async function updateCommunityDescription({ attractionId, session, descri
   }
 
   const editedBy = {
-    googleId: session.user.id,
+    googleId: session.user.googleId,
     email: session.user.email,
     name: session.user.name,
     editedAt: new Date(),

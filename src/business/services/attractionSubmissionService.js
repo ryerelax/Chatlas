@@ -121,7 +121,7 @@ export async function submitAttraction({
     locationArea,
     photos,
     submittedBy: {
-      googleId: session.user.id,
+      googleId: session.user.googleId,
       email: session.user.email,
       name: session.user.name,
     },
