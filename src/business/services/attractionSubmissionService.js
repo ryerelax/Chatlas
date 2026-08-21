@@ -114,16 +114,32 @@ export async function submitAttraction({
     photos.push(photoUrl);
   }
 
-  return createAttraction({
-    ...placeDetails,
-    category,
-    description: normalizedDescription,
-    locationArea,
-    photos,
-    submittedBy: {
-      googleId: session.user.googleId,
-      email: session.user.email,
-      name: session.user.name,
-    },
-  });
+  try {
+    return await createAttraction({
+      ...placeDetails,
+      category,
+      description: normalizedDescription,
+      locationArea,
+      photos,
+      submittedBy: {
+        googleId: session.user.googleId,
+        email: session.user.email,
+        name: session.user.name,
+      },
+    });
+  } catch (error) {
+    // googlePlaceId is unique at the DB level regardless of isActive, so a
+    // place that was soft-deleted (e.g. old test data) still occupies the
+    // index. findActiveAttractionByGooglePlaceId above only checks
+    // isActive: true and won't see it, so this is the only place that
+    // catches that case - translate it into the same DuplicateAttractionError
+    // the isActive: true check above throws, rather than letting a raw
+    // MongoServerError surface as a generic 500.
+    if (error.code === 11000) {
+      throw new DuplicateAttractionError(
+        "This place has already been added to Chatlas before (it may have been removed). Contact an admin if you'd like it restored."
+      );
+    }
+    throw error;
+  }
 }
