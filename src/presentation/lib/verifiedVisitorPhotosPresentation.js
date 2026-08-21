@@ -2,6 +2,8 @@ export const VERIFIED_PHOTOS_LOAD_ERROR =
   "Verified visitor photos could not be loaded.";
 export const VERIFIED_PHOTO_DELETE_ERROR =
   "The verified photo could not be deleted. Please try again.";
+export const VERIFIED_VISITOR_PHOTOS_INVALIDATED_EVENT =
+  "chatlas:verified-visitor-photos-invalidated";
 
 function requirePublicCard(card) {
   const visitId = normaliseRequiredString(card?.visitId);
@@ -136,4 +138,35 @@ export function getVerifiedPhotoLoadFailureDecision(requestKind) {
     preservePhotos: false,
     showRefreshError: false,
   };
+}
+
+export function isMatchingVerifiedVisitorPhotosInvalidation(
+  event,
+  attractionId
+) {
+  const expectedAttractionId = normaliseRequiredString(attractionId);
+  return Boolean(
+    expectedAttractionId &&
+    normaliseRequiredString(event?.detail?.attractionId) ===
+      expectedAttractionId
+  );
+}
+
+export function publishVerifiedVisitorPhotosInvalidation(
+  attractionId,
+  {
+    eventTarget = globalThis.window,
+    eventFactory = (type, init) => new CustomEvent(type, init),
+  } = {}
+) {
+  const safeAttractionId = normaliseRequiredString(attractionId);
+  if (!safeAttractionId || typeof eventTarget?.dispatchEvent !== "function") {
+    return false;
+  }
+
+  const event = eventFactory(VERIFIED_VISITOR_PHOTOS_INVALIDATED_EVENT, {
+    detail: { attractionId: safeAttractionId },
+  });
+  eventTarget.dispatchEvent(event);
+  return true;
 }

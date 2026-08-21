@@ -10,34 +10,41 @@ import {
   useRef,
   useState,
 } from "react";
-import { MAX_VISIT_DISTANCE_METRES } from "@/business/services/visitVerificationRules";
 import {
+  canSubmitVerifiedVisitPhoto,
+  completeVerifiedVisitCanvasCapture,
+  createVerifiedVisitSubmissionKeyStore,
   createVisitVerificationOperationController,
   createVerifiedVisitFormData,
+  buildVerifiedVisitCapacityUrl,
   getCameraErrorMessage,
   getCandidateSelectionMode,
   getGeolocationErrorMessage,
   getNearbyCandidatePresentations,
+  getNoNearbyAttractionMessage,
   getVisitVerificationAuthenticationTransition,
   getVisitVerificationResponseDecision,
+  getVerifiedVisitLimitReachedMessage,
+  getVerifiedVisitUploadLabel,
+  normaliseVerifiedVisitCapacity,
   normaliseBrowserPosition,
+  refreshVerifiedVisitConsumers,
+  requestCurrentBrowserPosition,
 } from "@/presentation/lib/visitVerificationPresentation";
+import { publishVerifiedVisitorPhotosInvalidation } from "@/presentation/lib/verifiedVisitorPhotosPresentation";
 
 const FLOW_STATE = Object.freeze({
   IDLE: "idle",
   LOCATING: "locating",
   CHOOSING: "choosing",
+  CAPACITY: "capacity",
+  LIMIT_REACHED: "limit-reached",
   CAMERA: "camera",
   PREVIEW: "preview",
   SUBMITTING: "submitting",
+  UPLOAD_ERROR: "upload-error",
   SUCCESS: "success",
   ERROR: "error",
-});
-
-const GEOLOCATION_OPTIONS = Object.freeze({
-  enableHighAccuracy: true,
-  timeout: 15000,
-  maximumAge: 0,
 });
 
 const CAMERA_CONSTRAINTS = Object.freeze({
@@ -49,6 +56,8 @@ const VERIFY_ERROR_MESSAGE =
   "We could not verify this visit. Please try again.";
 const AUTHENTICATION_ERROR_MESSAGE =
   "Your session has expired. Sign in and try again.";
+const CAPACITY_ERROR_MESSAGE =
+  "We could not check today's photo limit. Please try again.";
 const BUTTON_CLASS =
   "inline-flex min-h-11 items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors motion-reduce:transition-none focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#006C56] disabled:cursor-not-allowed disabled:opacity-60";
 
@@ -63,12 +72,17 @@ export default function VisitVerificationFlow({
   onVerified,
 }) {
   const videoRef = useRef(null);
+  const captureButtonRef = useRef(null);
+  const uploadButtonRef = useRef(null);
   const operationTokenRef = useRef(null);
   const flowStateRef = useRef(FLOW_STATE.IDLE);
   const [operationController] = useState(() =>
     createVisitVerificationOperationController({
       authenticationConfirmed,
     })
+  );
+  const [submissionKeyStore] = useState(() =>
+    createVerifiedVisitSubmissionKeyStore()
   );
   const [flowState, setFlowState] = useState(FLOW_STATE.IDLE);
   const [position, setPosition] = useState(null);
@@ -77,8 +91,8 @@ export default function VisitVerificationFlow({
   const [cameraStream, setCameraStream] = useState(null);
   const [cameraReady, setCameraReady] = useState(false);
   const [capturePending, setCapturePending] = useState(false);
-  const [photoBlob, setPhotoBlob] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState("");
+  const [capacity, setCapacity] = useState(null);
+  const [currentCapture, setCurrentCapture] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [authenticationPromptVisible, setAuthenticationPromptVisible] =
     useState(false);
@@ -106,12 +120,6 @@ export default function VisitVerificationFlow({
     [candidates, selectedAttractionId]
   );
 
-  const releaseActiveStream = useCallback(() => {
-    operationController.releaseStream();
-    setCameraStream(null);
-    setCameraReady(false);
-  }, [operationController]);
-
   const failFlow = useCallback(
     (operationId, message, { requireSignIn = false } = {}) => {
       if (!operationController.isCurrent(operationId)) {
@@ -124,10 +132,11 @@ export default function VisitVerificationFlow({
         operationController.invalidate("error");
       }
       operationTokenRef.current = null;
+      submissionKeyStore.reset();
       setCameraStream(null);
       setCameraReady(false);
-      setPreviewUrl("");
-      setPhotoBlob(null);
+      setCapacity(null);
+      setCurrentCapture(null);
       setCapturePending(false);
       setErrorMessage(message);
       setSessionAuthenticationRequired(requireSignIn);
@@ -135,7 +144,7 @@ export default function VisitVerificationFlow({
       setAuthenticationUnavailableVisible(false);
       transitionToFlowState(FLOW_STATE.ERROR);
     },
-    [operationController, transitionToFlowState]
+    [operationController, submissionKeyStore, transitionToFlowState]
   );
 
   const openCamera = useCallback(
@@ -174,6 +183,84 @@ export default function VisitVerificationFlow({
     [failFlow, operationController, transitionToFlowState]
   );
 
+  const checkCapacity = useCallback(
+    async (operationId, attractionId) => {
+      const requestController = new AbortController();
+      if (
+        !operationController.claimCapacity(operationId, requestController)
+      ) {
+        return;
+      }
+
+      setSelectedAttractionId(attractionId);
+      setCapacity(null);
+      transitionToFlowState(FLOW_STATE.CAPACITY);
+
+      let response;
+      try {
+        response = await fetch(buildVerifiedVisitCapacityUrl(attractionId), {
+          cache: "no-store",
+          signal: requestController.signal,
+        });
+      } catch (error) {
+        if (
+          error?.name === "AbortError" ||
+          !operationController.isCurrent(operationId)
+        ) {
+          return;
+        }
+
+        failFlow(operationId, CAPACITY_ERROR_MESSAGE);
+        return;
+      }
+
+      const result = await response.json().catch(() => null);
+      if (!operationController.isCurrent(operationId)) return;
+
+      const responseDecision = getVisitVerificationResponseDecision(
+        response,
+        result,
+        {
+          authentication: AUTHENTICATION_ERROR_MESSAGE,
+          verification: CAPACITY_ERROR_MESSAGE,
+        }
+      );
+      if (responseDecision.type !== "success") {
+        failFlow(operationId, responseDecision.message, {
+          requireSignIn: responseDecision.authenticationRequired,
+        });
+        return;
+      }
+
+      let nextCapacity;
+      try {
+        nextCapacity = normaliseVerifiedVisitCapacity(result, attractionId);
+      } catch {
+        failFlow(operationId, CAPACITY_ERROR_MESSAGE);
+        return;
+      }
+
+      if (
+        !operationController.completeCapacity(
+          operationId,
+          requestController,
+          nextCapacity.remainingSlots
+        )
+      ) {
+        return;
+      }
+
+      setCapacity(nextCapacity);
+      if (nextCapacity.remainingSlots === 0) {
+        transitionToFlowState(FLOW_STATE.LIMIT_REACHED);
+        return;
+      }
+
+      void openCamera(operationId, attractionId);
+    },
+    [failFlow, openCamera, operationController, transitionToFlowState]
+  );
+
   const handleLocatedPosition = useCallback(
     (operationId, browserPosition) => {
       if (!operationController.completeLocation(operationId)) {
@@ -206,7 +293,7 @@ export default function VisitVerificationFlow({
       if (selectionMode === "none") {
         failFlow(
           operationId,
-          `No supported attraction is within ${MAX_VISIT_DISTANCE_METRES} metres of your current location.`
+          getNoNearbyAttractionMessage(supportedAttractions, currentPosition)
         );
         return;
       }
@@ -214,7 +301,7 @@ export default function VisitVerificationFlow({
       if (selectionMode === "automatic") {
         const attractionId = nearbyCandidates[0].attraction.id;
         setSelectedAttractionId(attractionId);
-        void openCamera(operationId, attractionId);
+        void checkCapacity(operationId, attractionId);
         return;
       }
 
@@ -223,7 +310,7 @@ export default function VisitVerificationFlow({
     },
     [
       failFlow,
-      openCamera,
+      checkCapacity,
       operationController,
       supportedAttractions,
       transitionToFlowState,
@@ -256,13 +343,14 @@ export default function VisitVerificationFlow({
     }
 
     operationTokenRef.current = operationId;
+    submissionKeyStore.reset();
     setCameraStream(null);
     setCameraReady(false);
-    setPreviewUrl("");
+    setCapacity(null);
+    setCurrentCapture(null);
     setPosition(null);
     setCandidates([]);
     setSelectedAttractionId("");
-    setPhotoBlob(null);
     setErrorMessage("");
     setSessionAuthenticationRequired(false);
     setCapturePending(false);
@@ -276,11 +364,11 @@ export default function VisitVerificationFlow({
       return;
     }
 
-    navigator.geolocation.getCurrentPosition(
+    requestCurrentBrowserPosition(
+      navigator.geolocation,
       (browserPosition) =>
         handleLocatedPosition(operationId, browserPosition),
-      (error) => failFlow(operationId, getGeolocationErrorMessage(error)),
-      GEOLOCATION_OPTIONS
+      (error) => failFlow(operationId, getGeolocationErrorMessage(error))
     );
   }, [
     authenticationConfirmed,
@@ -291,40 +379,43 @@ export default function VisitVerificationFlow({
     handleLocatedPosition,
     operationController,
     sessionAuthenticationRequired,
+    submissionKeyStore,
     transitionToFlowState,
   ]);
 
   const closeFlow = useCallback(() => {
     operationController.invalidate("close");
     operationTokenRef.current = null;
+    submissionKeyStore.reset();
     setCameraStream(null);
     setCameraReady(false);
-    setPreviewUrl("");
+    setCapacity(null);
+    setCurrentCapture(null);
     setPosition(null);
     setCandidates([]);
     setSelectedAttractionId("");
-    setPhotoBlob(null);
     setErrorMessage("");
     setAuthenticationPromptVisible(false);
     setAuthenticationUnavailableVisible(false);
     setSessionAuthenticationRequired(false);
     setCapturePending(false);
     transitionToFlowState(FLOW_STATE.IDLE);
-  }, [operationController, transitionToFlowState]);
+  }, [operationController, submissionKeyStore, transitionToFlowState]);
 
   const continueWithSelectedAttraction = useCallback(() => {
     if (!selectedAttractionId) {
       return;
     }
 
-    void openCamera(operationTokenRef.current, selectedAttractionId);
-  }, [openCamera, selectedAttractionId]);
+    void checkCapacity(operationTokenRef.current, selectedAttractionId);
+  }, [checkCapacity, selectedAttractionId]);
 
   const capturePhoto = useCallback(() => {
     if (
       flowState !== FLOW_STATE.CAMERA ||
       capturePending ||
-      !cameraReady
+      !cameraReady ||
+      !capacity
     ) {
       return;
     }
@@ -359,33 +450,24 @@ export default function VisitVerificationFlow({
             return;
           }
 
-          if (!blob) {
-            failFlow(
-              operationId,
-              "The camera image could not be captured. Please try again."
-            );
-            return;
-          }
-
-          let objectUrl;
-          try {
-            objectUrl = URL.createObjectURL(blob);
-          } catch {
-            failFlow(
-              operationId,
-              "The photo preview could not be created. Please try again."
-            );
-            return;
-          }
-
-          if (!operationController.setPreview(operationId, objectUrl)) {
-            return;
-          }
-
-          setPreviewUrl(objectUrl);
-          setPhotoBlob(blob);
-          setCapturePending(false);
-          transitionToFlowState(FLOW_STATE.PREVIEW);
+          completeVerifiedVisitCanvasCapture({
+            operationController,
+            operationToken: operationId,
+            blob,
+            createObjectUrl: (capturedBlob) =>
+              URL.createObjectURL(capturedBlob),
+            onAccepted: (capture) => {
+              setCurrentCapture(capture);
+              setCapturePending(false);
+              transitionToFlowState(FLOW_STATE.PREVIEW);
+            },
+            onFailure: (message) => failFlow(operationId, message),
+            onSettled: () => {
+              if (flowStateRef.current === FLOW_STATE.CAMERA) {
+                setCapturePending(false);
+              }
+            },
+          });
         },
         "image/jpeg",
         0.85
@@ -397,42 +479,33 @@ export default function VisitVerificationFlow({
           ? error.message
           : "The camera image could not be captured. Please try again."
       );
-    } finally {
-      releaseActiveStream();
     }
   }, [
     cameraReady,
+    capacity,
     capturePending,
     failFlow,
     flowState,
     operationController,
-    releaseActiveStream,
     transitionToFlowState,
   ]);
 
   const retakePhoto = useCallback(() => {
-    const operationId = operationController.restartOperation("retake");
-
-    if (operationId === null) {
-      setAuthenticationUnavailableVisible(true);
-      return;
-    }
-
-    operationTokenRef.current = operationId;
-    setCameraStream(null);
-    setCameraReady(false);
-    setPreviewUrl("");
-    setPhotoBlob(null);
-    void openCamera(operationId, selectedAttractionId);
-  }, [openCamera, operationController, selectedAttractionId]);
+    const operationId = operationTokenRef.current;
+    if (!operationController.retakeCurrentCapture(operationId)) return;
+    setCurrentCapture(null);
+    setCapturePending(false);
+    transitionToFlowState(FLOW_STATE.CAMERA);
+  }, [operationController, transitionToFlowState]);
 
   const submitPhoto = useCallback(async () => {
-    if (
-      flowState !== FLOW_STATE.PREVIEW ||
-      !photoBlob ||
-      !position ||
-      !selectedAttractionId
-    ) {
+    if (!canSubmitVerifiedVisitPhoto({
+      flowState,
+      currentCapture,
+      capturePending,
+      position,
+      attractionId: selectedAttractionId,
+    })) {
       return;
     }
 
@@ -442,12 +515,28 @@ export default function VisitVerificationFlow({
     if (
       !operationController.claimSubmission(
         operationId,
-        requestController
+        requestController,
+        { capturePending }
       )
     ) {
       return;
     }
 
+    let submissionKey;
+    try {
+      submissionKey = submissionKeyStore.getOrCreate();
+    } catch {
+      operationController.completeSubmission(operationId, requestController);
+      failFlow(
+        operationId,
+        "A secure upload could not be prepared in this browser. Please try again."
+      );
+      return;
+    }
+
+    setCameraStream(null);
+    setCameraReady(false);
+    setErrorMessage("");
     transitionToFlowState(FLOW_STATE.SUBMITTING);
 
     let response;
@@ -455,9 +544,10 @@ export default function VisitVerificationFlow({
       response = await fetch("/api/exploration-map/verified-visits", {
         method: "POST",
         body: createVerifiedVisitFormData({
-          photoBlob,
+          photoBlob: currentCapture.blob,
           attractionId: selectedAttractionId,
           position,
+          submissionKey,
         }),
         signal: requestController.signal,
       });
@@ -469,7 +559,9 @@ export default function VisitVerificationFlow({
         return;
       }
 
-      failFlow(operationId, VERIFY_ERROR_MESSAGE);
+      operationController.completeSubmission(operationId, requestController);
+      setErrorMessage(VERIFY_ERROR_MESSAGE);
+      transitionToFlowState(FLOW_STATE.UPLOAD_ERROR);
       return;
     }
 
@@ -499,37 +591,50 @@ export default function VisitVerificationFlow({
     );
 
     if (responseDecision.type !== "success") {
-      failFlow(
-        operationId,
-        responseDecision.message,
-        { requireSignIn: responseDecision.authenticationRequired }
-      );
+      if (responseDecision.authenticationRequired) {
+        failFlow(operationId, responseDecision.message, {
+          requireSignIn: true,
+        });
+      } else if (responseDecision.retryable) {
+        setErrorMessage(responseDecision.message);
+        transitionToFlowState(FLOW_STATE.UPLOAD_ERROR);
+      } else {
+        failFlow(operationId, responseDecision.message);
+      }
       return;
     }
 
     operationController.invalidate("success");
     operationTokenRef.current = null;
+    submissionKeyStore.reset();
     setCameraStream(null);
     setCameraReady(false);
-    setPreviewUrl("");
-    setPhotoBlob(null);
+    setCapacity(null);
+    setCurrentCapture(null);
     setCapturePending(false);
     setErrorMessage("");
     transitionToFlowState(FLOW_STATE.SUCCESS);
 
     try {
-      await onVerified?.();
+      await refreshVerifiedVisitConsumers({
+        attractionId: selectedAttractionId,
+        refreshVisitedAttractions: onVerified,
+        publishPublicPhotoInvalidation:
+          publishVerifiedVisitorPhotosInvalidation,
+      });
     } catch {
-      // The canonical visited adapter owns and presents refresh failures.
+      // Canonical consumers own and present refresh failures.
     }
   }, [
+    capturePending,
     failFlow,
     flowState,
     onVerified,
     operationController,
-    photoBlob,
+    currentCapture,
     position,
     selectedAttractionId,
+    submissionKeyStore,
     transitionToFlowState,
   ]);
 
@@ -553,15 +658,16 @@ export default function VisitVerificationFlow({
     }
 
     operationTokenRef.current = null;
+    submissionKeyStore.reset();
 
     if (transition.resetFlowData) {
       setCameraStream(null);
       setCameraReady(false);
-      setPreviewUrl("");
+      setCapacity(null);
+      setCurrentCapture(null);
       setPosition(null);
       setCandidates([]);
       setSelectedAttractionId("");
-      setPhotoBlob(null);
       setErrorMessage("");
       setCapturePending(false);
       setSessionAuthenticationRequired(false);
@@ -572,6 +678,7 @@ export default function VisitVerificationFlow({
     authenticationConfirmed,
     authenticationState,
     operationController,
+    submissionKeyStore,
     transitionToFlowState,
   ]);
 
@@ -579,8 +686,9 @@ export default function VisitVerificationFlow({
     return () => {
       operationController.invalidate("unmount");
       operationTokenRef.current = null;
+      submissionKeyStore.reset();
     };
-  }, [operationController]);
+  }, [operationController, submissionKeyStore]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -608,6 +716,31 @@ export default function VisitVerificationFlow({
       }
     };
   }, [cameraStream, failFlow, operationController]);
+
+  useEffect(() => {
+    if (flowState === FLOW_STATE.PREVIEW) {
+      uploadButtonRef.current?.focus();
+      return;
+    }
+
+    if (flowState === FLOW_STATE.UPLOAD_ERROR) {
+      uploadButtonRef.current?.focus();
+      return;
+    }
+
+    if (flowState === FLOW_STATE.CAMERA && cameraReady) {
+      captureButtonRef.current?.focus();
+    }
+  }, [cameraReady, flowState]);
+
+  const uploadLabel = getVerifiedVisitUploadLabel();
+  const uploadEnabled = canSubmitVerifiedVisitPhoto({
+    flowState,
+    currentCapture,
+    capturePending,
+    position,
+    attractionId: selectedAttractionId,
+  });
 
   return (
     <section
@@ -786,7 +919,50 @@ export default function VisitVerificationFlow({
         </div>
       )}
 
-      {flowState === FLOW_STATE.CAMERA && (
+      {flowState === FLOW_STATE.CAPACITY && (
+        <div
+          className="border-t border-[#B7E5D2] bg-white px-5 py-5 sm:px-6"
+          role="status"
+          aria-live="polite"
+        >
+          <p className="font-semibold text-[#10213B]">
+            Checking today&apos;s photo limit...
+          </p>
+          <p className="mt-1 text-sm leading-6 text-[#65748A]">
+            The camera will open only when this attraction has an available
+            photo slot.
+          </p>
+          <button
+            type="button"
+            onClick={closeFlow}
+            className={`${BUTTON_CLASS} mt-4 w-full border border-[#BBC8D0] bg-white text-[#405066] hover:bg-[#F1F4F6] sm:w-auto`}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {flowState === FLOW_STATE.LIMIT_REACHED && capacity && (
+        <div
+          className="border-t border-[#E9B949] bg-[#FFF7DD] px-5 py-5 sm:px-6"
+          role="status"
+          aria-live="polite"
+        >
+          <p className="font-bold text-[#704A00]">Today&apos;s limit is full</p>
+          <p className="mt-1 text-sm leading-6 text-[#704A00]">
+            {getVerifiedVisitLimitReachedMessage()}
+          </p>
+          <button
+            type="button"
+            onClick={closeFlow}
+            className={`${BUTTON_CLASS} mt-4 w-full border border-[#B88924] bg-white text-[#704A00] hover:bg-[#FFF1C2] sm:w-auto`}
+          >
+            Close
+          </button>
+        </div>
+      )}
+
+      {[FLOW_STATE.CAMERA, FLOW_STATE.PREVIEW].includes(flowState) && (
         <div className="border-t border-[#B7E5D2] bg-[#10213B] p-4 sm:p-5">
           {selectedCandidate && (
             <p className="mb-3 text-sm font-semibold text-[#E6F7F0]">
@@ -814,7 +990,19 @@ export default function VisitVerificationFlow({
             >
               Your browser does not support live camera preview.
             </video>
-            {!cameraReady && (
+            {currentCapture && (
+              <Image
+                src={currentCapture.url}
+                alt={`Current photo preview for ${
+                  selectedCandidate?.attraction.name || "the selected attraction"
+                }`}
+                fill
+                sizes="(max-width: 1280px) 100vw, 1100px"
+                unoptimized
+                className="object-contain"
+              />
+            )}
+            {flowState === FLOW_STATE.CAMERA && !cameraReady && (
               <div
                 className="absolute inset-0 flex items-center justify-center bg-[#10213B] px-4 text-center text-sm font-semibold text-white"
                 role="status"
@@ -824,76 +1012,103 @@ export default function VisitVerificationFlow({
               </div>
             )}
           </div>
+          {flowState === FLOW_STATE.PREVIEW && (
+            <p className="mt-4 rounded-2xl border border-[#E9B949] bg-[#FFF7DD] px-4 py-3 text-sm font-semibold leading-6 text-[#704A00]">
+              This photo will be publicly visible. Avoid capturing faces or
+              private information.
+            </p>
+          )}
           <div className="mt-4 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-            <button
-              type="button"
-              onClick={closeFlow}
-              className={`${BUTTON_CLASS} border border-[#8390A2] bg-transparent text-white hover:bg-white/10 focus-visible:outline-white`}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={capturePhoto}
-              disabled={!cameraReady || capturePending}
-              className={`${BUTTON_CLASS} bg-white text-[#004638] hover:bg-[#E6F7F0] focus-visible:outline-white`}
-            >
-              {capturePending ? "Capturing..." : "Capture photo"}
-            </button>
+            {flowState === FLOW_STATE.PREVIEW ? (
+              <>
+                <button
+                  type="button"
+                  onClick={retakePhoto}
+                  className={`${BUTTON_CLASS} border border-[#8390A2] bg-transparent text-white hover:bg-white/10 focus-visible:outline-white`}
+                >
+                  Retake
+                </button>
+                <button
+                  ref={uploadButtonRef}
+                  type="button"
+                  onClick={submitPhoto}
+                  disabled={!uploadEnabled}
+                  className={`${BUTTON_CLASS} bg-[#50D6A1] text-[#10213B] hover:bg-[#72E0B5] focus-visible:outline-white`}
+                >
+                  {uploadLabel}
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={closeFlow}
+                  className={`${BUTTON_CLASS} border border-[#8390A2] bg-transparent text-white hover:bg-white/10 focus-visible:outline-white`}
+                >
+                  Cancel
+                </button>
+                <button
+                  ref={captureButtonRef}
+                  type="button"
+                  onClick={capturePhoto}
+                  disabled={!cameraReady || capturePending}
+                  className={`${BUTTON_CLASS} bg-white text-[#004638] hover:bg-[#E6F7F0] focus-visible:outline-white`}
+                >
+                  {capturePending ? "Capturing..." : "Capture Photo"}
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
 
-      {[FLOW_STATE.PREVIEW, FLOW_STATE.SUBMITTING].includes(flowState) &&
-        previewUrl && (
-          <div className="border-t border-[#B7E5D2] bg-white p-4 sm:p-5">
-            <p className="mb-3 text-sm font-semibold text-[#10213B]">
-              Photo preview for {selectedCandidate?.attraction.name || "your visit"}
-            </p>
-            <div className="relative aspect-video w-full overflow-hidden rounded-2xl bg-[#10213B]">
-              <Image
-                src={previewUrl}
-                alt={`Preview of live photo for ${
-                  selectedCandidate?.attraction.name || "the selected attraction"
-                }`}
-                fill
-                sizes="(max-width: 1280px) 100vw, 1100px"
-                unoptimized
-                className="object-contain"
-              />
-            </div>
-            <p className="mt-4 rounded-2xl border border-[#E9B949] bg-[#FFF7DD] px-4 py-3 text-sm font-semibold leading-6 text-[#704A00]">
-              This photo will be publicly visible. Avoid capturing faces or private information.
-            </p>
-            <div className="mt-4 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+      {flowState === FLOW_STATE.SUBMITTING && (
+        <div
+          className="border-t border-[#B7E5D2] bg-white p-5 sm:p-6"
+          role="status"
+          aria-live="polite"
+        >
+          <p className="font-bold text-[#10213B]">Uploading photo...</p>
+          <p className="mt-1 text-sm leading-6 text-[#65748A]">
+            Keep this page open while Chatlas verifies and saves the photo.
+            Closing the page cannot undo an upload the server has already
+            received.
+          </p>
+        </div>
+      )}
+
+      {flowState === FLOW_STATE.UPLOAD_ERROR && (
+        <div
+          className="border-t border-[#F0C8C5] bg-[#FFF8F7] p-5 sm:p-6"
+          role="alert"
+          aria-live="assertive"
+        >
+          <p className="font-bold text-[#8A2520]">Upload paused</p>
+          <p className="mt-1 break-words text-sm leading-6 text-[#63312E]">
+            {errorMessage} Your selected photo is still ready to retry.
+          </p>
+          <div className="mt-4 flex flex-col-reverse gap-3 sm:flex-row">
+            <button
+              type="button"
+              onClick={closeFlow}
+              className={`${BUTTON_CLASS} border border-[#D8B3AF] bg-white text-[#63312E] hover:bg-[#FBE9E8]`}
+            >
+              Cancel
+            </button>
+            {currentCapture && (
               <button
-                type="button"
-                onClick={closeFlow}
-                className={`${BUTTON_CLASS} border border-[#BBC8D0] bg-white text-[#405066] hover:bg-[#F1F4F6]`}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={retakePhoto}
-                disabled={flowState === FLOW_STATE.SUBMITTING}
-                className={`${BUTTON_CLASS} border border-[#BBC8D0] bg-white text-[#405066] hover:bg-[#F1F4F6]`}
-              >
-                Retake
-              </button>
-              <button
+                ref={uploadButtonRef}
                 type="button"
                 onClick={submitPhoto}
-                disabled={flowState === FLOW_STATE.SUBMITTING}
+                disabled={!uploadEnabled}
                 className={`${BUTTON_CLASS} bg-[#006C56] text-white hover:bg-[#005E4B]`}
               >
-                {flowState === FLOW_STATE.SUBMITTING
-                  ? "Verifying visit..."
-                  : "Use Photo"}
+                {uploadLabel}
               </button>
-            </div>
+            )}
           </div>
-        )}
+        </div>
+      )}
 
       {flowState === FLOW_STATE.SUCCESS && (
         <div
@@ -903,7 +1118,8 @@ export default function VisitVerificationFlow({
         >
           <p className="font-bold text-[#004638]">Visit verified</p>
           <p className="mt-1 text-sm leading-6 text-[#31463F]">
-            Your public photo was saved. Your exploration progress is refreshing.
+            Your public photo was saved. Your exploration progress is
+            refreshing.
           </p>
           <button
             type="button"

@@ -120,6 +120,7 @@ test("normaliseMapAttractions keeps supported attractions with valid coordinates
       latitude: "2.1918",
       longitude: 102.2504,
       rating: "4.6",
+      verificationRadiusMeters: "50",
     },
   ]);
 
@@ -132,6 +133,7 @@ test("normaliseMapAttractions keeps supported attractions with valid coordinates
       latitude: 2.1918,
       longitude: 102.2504,
       rating: 4.6,
+      verificationRadiusMeters: 50,
     },
   ]);
 });
@@ -1145,6 +1147,77 @@ test("loading completion synchronises dynamic marker, list, and progress totals"
   );
   assert.equal(successState.viewModel.progress.totalCount, 7);
   assert.equal(successState.viewModel.progress.percentage, 28.6);
+});
+
+test("one successful batch refreshes canonical visited IDs and invalidates one matching photo collection", async () => {
+  const { refreshVerifiedVisitConsumers } = await import(
+    "../src/presentation/lib/visitVerificationPresentation.js"
+  );
+  let canonicalVisitedIds = ["melaka-1"];
+  let refreshCount = 0;
+  const invalidatedAttractionIds = [];
+
+  await refreshVerifiedVisitConsumers({
+    attractionId: "melaka-1",
+    refreshVisitedAttractions: async () => {
+      refreshCount += 1;
+      canonicalVisitedIds = explorationMapService.normaliseVisitedAttractionIds([
+        "melaka-1",
+        "melaka-1",
+      ]);
+    },
+    publishPublicPhotoInvalidation: (attractionId) => {
+      invalidatedAttractionIds.push(attractionId);
+    },
+  });
+
+  assert.equal(refreshCount, 1);
+  assert.deepEqual(canonicalVisitedIds, ["melaka-1"]);
+  assert.deepEqual(invalidatedAttractionIds, ["melaka-1"]);
+});
+
+test("public-photo invalidation publishes even while visited refresh is still pending", async () => {
+  const { refreshVerifiedVisitConsumers } = await import(
+    "../src/presentation/lib/visitVerificationPresentation.js"
+  );
+  let finishRefresh;
+  const invalidatedAttractionIds = [];
+  const refreshPromise = refreshVerifiedVisitConsumers({
+    attractionId: "melaka-1",
+    refreshVisitedAttractions: () => new Promise((resolve) => {
+      finishRefresh = resolve;
+    }),
+    publishPublicPhotoInvalidation: (attractionId) => {
+      invalidatedAttractionIds.push(attractionId);
+    },
+  });
+
+  await Promise.resolve();
+  assert.deepEqual(invalidatedAttractionIds, ["melaka-1"]);
+  finishRefresh();
+  await refreshPromise;
+});
+
+test("visited refresh rejection still publishes invalidation and preserves the rejection", async () => {
+  const { refreshVerifiedVisitConsumers } = await import(
+    "../src/presentation/lib/visitVerificationPresentation.js"
+  );
+  const refreshError = new Error("visited refresh unavailable");
+  const invalidatedAttractionIds = [];
+
+  await assert.rejects(
+    refreshVerifiedVisitConsumers({
+      attractionId: "melaka-1",
+      refreshVisitedAttractions: async () => {
+        throw refreshError;
+      },
+      publishPublicPhotoInvalidation: (attractionId) => {
+        invalidatedAttractionIds.push(attractionId);
+      },
+    }),
+    (error) => error === refreshError
+  );
+  assert.deepEqual(invalidatedAttractionIds, ["melaka-1"]);
 });
 
 test("PB34 development preview query modes are exact and development-only", () => {

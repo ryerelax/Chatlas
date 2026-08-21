@@ -4,17 +4,19 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   buildVerifiedPhotoDeleteUrl,
   formatMalaysiaDisplayDate,
   getVerifiedPhotoDeleteActionState,
   getVerifiedPhotoDeleteResponseDecision,
   getVerifiedPhotoLoadFailureDecision,
+  isMatchingVerifiedVisitorPhotosInvalidation,
   normaliseVerifiedPhotosPayload,
   removeConfirmedVerifiedPhoto,
   VERIFIED_PHOTO_DELETE_ERROR,
   VERIFIED_PHOTOS_LOAD_ERROR,
+  VERIFIED_VISITOR_PHOTOS_INVALIDATED_EVENT,
 } from "@/presentation/lib/verifiedVisitorPhotosPresentation";
 
 function createRequestController() {
@@ -88,12 +90,29 @@ export default function VerifiedVisitorPhotos({ attractionId }) {
     setRefreshVersion((version) => version + 1);
   }
 
-  function requestCanonicalRefresh() {
+  const requestCanonicalRefresh = useCallback(() => {
     setRequestKind("refresh");
     setRefreshPending(true);
     setRefreshError(false);
     setRefreshVersion((version) => version + 1);
-  }
+  }, []);
+
+  useEffect(() => {
+    function refreshInvalidatedAttraction(event) {
+      if (isMatchingVerifiedVisitorPhotosInvalidation(event, attractionId)) {
+        requestCanonicalRefresh();
+      }
+    }
+
+    window.addEventListener(
+      VERIFIED_VISITOR_PHOTOS_INVALIDATED_EVENT,
+      refreshInvalidatedAttraction
+    );
+    return () => window.removeEventListener(
+      VERIFIED_VISITOR_PHOTOS_INVALIDATED_EVENT,
+      refreshInvalidatedAttraction
+    );
+  }, [attractionId, requestCanonicalRefresh]);
 
   async function deletePhoto(photo) {
     const confirmed = window.confirm(

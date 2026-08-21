@@ -14,6 +14,10 @@ const NOW = new Date("2026-08-15T16:30:00.000Z");
 const PHOTO_URL = "https://res.cloudinary.com/demo/image/upload/verified.jpg";
 const CLOUDINARY_PUBLIC_ID = "chatlas/verified-visits/new-private-id";
 const JPEG_DATA_URI = "data:image/jpeg;base64,/9j/2Q==";
+const BATCH_SIZE_MESSAGE = "Add exactly one verified visit photo.";
+const CAPACITY_MESSAGE =
+  "You have already verified this attraction today. You can add a new photo on another Malaysia date.";
+const SUBMISSION_KEY = "11111111-1111-4111-8111-111111111111";
 const METRES_PER_RADIAN = 6371000;
 
 function latitudeOffset(metres) {
@@ -25,6 +29,8 @@ function createHarness(overrides = {}) {
     uploads: [],
     deletes: [],
     appends: [],
+    photoCounts: [],
+    submissionLookups: [],
     ownershipLookups: [],
     removals: [],
     emptyDeletes: [],
@@ -41,6 +47,7 @@ function createHarness(overrides = {}) {
     longitude: 102,
     state: "Melaka",
     isActive: true,
+    category: "Gallery",
   };
   const uploaded = {
     photoUrl: PHOTO_URL,
@@ -66,7 +73,7 @@ function createHarness(overrides = {}) {
     now: () => new Date(NOW),
     randomUUID: () => uuids[uuidIndex++] ?? `uuid-${uuidIndex}`,
     findUserByGoogleId: async () => user,
-    findAttractionById: async () => attraction,
+    findAttractionByIdForVerifiedVisit: async () => attraction,
     uploadVerifiedVisitImage: async (dataUri, options) => {
       calls.uploads.push({ dataUri, options });
       return uploaded;
@@ -74,9 +81,25 @@ function createHarness(overrides = {}) {
     deleteCloudinaryImage: async (publicId) => {
       calls.deletes.push(publicId);
     },
-    appendPhotoToDatedVisit: async (input) => {
+    appendPhotosToDatedVisit: async (input) => {
       calls.appends.push(input);
-      return appendedVisit;
+      if (input.photos.length === 1) return appendedVisit;
+      return {
+        ...appendedVisit,
+        photos: input.photos.map((savedPhoto, index) => ({
+          _id: index === 0 ? PHOTO_ID : `photo-${index + 1}`,
+          photoUrl: savedPhoto.photoUrl,
+          capturedAt: savedPhoto.capturedAt,
+        })),
+      };
+    },
+    findDatedVisitPhotoCount: async (input) => {
+      calls.photoCounts.push(input);
+      return 0;
+    },
+    findDatedVisitBySubmissionKey: async (input) => {
+      calls.submissionLookups.push(input);
+      return null;
     },
     findDistinctVerifiedAttractionIds: async () => [ATTRACTION_ID],
     findPublicVerifiedPhotos: async () => [],
@@ -112,6 +135,15 @@ function validVerifyInput(overrides = {}) {
   };
 }
 
+function validBatchInput(photoCount, overrides = {}) {
+  const { photoDataUri, photoDataUris, ...batchOverrides } = overrides;
+  return {
+    ...validVerifyInput(batchOverrides),
+    photoDataUris: photoDataUris
+      ?? Array.from({ length: photoCount }, () => photoDataUri ?? JPEG_DATA_URI),
+  };
+}
+
 async function expectServiceError(operation, { statusCode, message }) {
   await assert.rejects(operation, (error) => {
     assert.ok(error instanceof VerifiedVisitServiceError);
@@ -141,7 +173,7 @@ test("verify rejects an invalid provider subject before user lookup or upload", 
 test("verify rejects an invalid attraction ObjectId before lookup or upload", async () => {
   let attractionLookups = 0;
   const { service, calls } = createHarness({
-    findAttractionById: async () => {
+    findAttractionByIdForVerifiedVisit: async () => {
       attractionLookups += 1;
       return null;
     },
@@ -175,7 +207,7 @@ test("verify rejects missing, inactive, and unsupported attractions before uploa
   for (const [label, attraction] of rejectedAttractions) {
     await t.test(label, async () => {
       const { service, calls } = createHarness({
-        findAttractionById: async () => attraction,
+        findAttractionByIdForVerifiedVisit: async () => attraction,
       });
 
       await expectServiceError(
@@ -231,33 +263,39 @@ test("verify accepts exactly 5 MiB decoded image data and rejects one byte more"
   assert.equal(rejected.calls.uploads.length, 0);
 });
 
-test("verify rejects distance above 150 before upload", async () => {
+test("verify rejects distance above the canonical attraction radius before upload", async () => {
   const { service, calls } = createHarness();
 
   await expectServiceError(
-    () => service.verifyVisitPhoto(validVerifyInput({ latitude: 2 + latitudeOffset(151) })),
+    () => service.verifyVisitPhoto(validVerifyInput({
+      latitude: 2 + latitudeOffset(50.1),
+      verificationRadiusMeters: 150,
+    })),
     {
       statusCode: 400,
-      message: "You must be within 150 metres of the attraction to verify this visit.",
+      message: "You must be within 50 metres of the attraction to verify this visit.",
     }
   );
   assert.equal(calls.uploads.length, 0);
 });
 
-test("verify rejects accuracy above 100 before upload", async () => {
+test("verify rejects accuracy above 30 before upload with measured guidance", async () => {
   const { service, calls } = createHarness();
 
   await expectServiceError(
-    () => service.verifyVisitPhoto(validVerifyInput({ accuracyMeters: 101 })),
-    { statusCode: 400, message: "Location accuracy must be 100 metres or better." }
+    () => service.verifyVisitPhoto(validVerifyInput({ accuracyMeters: 30.1 })),
+    {
+      statusCode: 400,
+      message: "Location accuracy is currently 30.1 metres. Move outdoors and try again. Accuracy must be within 30 metres.",
+    }
   );
   assert.equal(calls.uploads.length, 0);
 });
 
-test("verify accepts 149 and 150 metre distances with 99 and 100 metre accuracy", async (t) => {
+test("verify accepts canonical distance and accuracy boundaries independently", async (t) => {
   for (const boundary of [
-    { distanceMetres: 149, accuracyMeters: 99 },
-    { distanceMetres: 150, accuracyMeters: 100 },
+    { distanceMetres: 49.9, accuracyMeters: 29.9 },
+    { distanceMetres: 50, accuracyMeters: 30 },
   ]) {
     await t.test(JSON.stringify(boundary), async () => {
       const { service, calls } = createHarness();
@@ -268,9 +306,9 @@ test("verify accepts 149 and 150 metre distances with 99 and 100 metre accuracy"
       }));
 
       assert.equal(calls.uploads.length, 1);
-      assert.ok(calls.appends[0].photo.distanceMeters <= 150);
+      assert.ok(calls.appends[0].photos[0].distanceMeters <= 50.01);
       assert.equal(
-        calls.appends[0].photo.accuracyMeters,
+        calls.appends[0].photos[0].accuracyMeters,
         boundary.accuracyMeters
       );
     });
@@ -325,12 +363,13 @@ test("verify rejects coercible non-numeric evidence before lookup or upload", as
 
 test("verify preserves legitimate numeric zero and non-empty numeric strings", async () => {
   const { service, calls } = createHarness({
-    findAttractionById: async () => ({
+    findAttractionByIdForVerifiedVisit: async () => ({
       _id: ATTRACTION_ID,
       latitude: 0,
       longitude: 0,
       state: "Melaka",
       isActive: true,
+      category: "Gallery",
     }),
   });
 
@@ -342,9 +381,9 @@ test("verify preserves legitimate numeric zero and non-empty numeric strings", a
 
   assert.deepEqual(
     {
-      latitude: calls.appends[0].photo.latitude,
-      longitude: calls.appends[0].photo.longitude,
-      accuracyMeters: calls.appends[0].photo.accuracyMeters,
+      latitude: calls.appends[0].photos[0].latitude,
+      longitude: calls.appends[0].photos[0].longitude,
+      accuracyMeters: calls.appends[0].photos[0].accuracyMeters,
     },
     { latitude: 0, longitude: 0, accuracyMeters: 0 }
   );
@@ -373,7 +412,7 @@ test("verify creates a new dated photo with server evidence and safe output", as
     userId: USER_ID,
     attractionId: ATTRACTION_ID,
     visitDateKey: "2026-08-16",
-    photo: {
+    photos: [{
       photoUrl: PHOTO_URL,
       cloudinaryPublicId: CLOUDINARY_PUBLIC_ID,
       capturedAt: NOW,
@@ -381,10 +420,801 @@ test("verify creates a new dated photo with server evidence and safe output", as
       longitude: 102,
       accuracyMeters: 20,
       distanceMeters: 0,
-    },
+    }],
   }]);
   assert.ok(!JSON.stringify(result).includes("cloudinaryPublicId"));
   assert.ok(!JSON.stringify(result).includes("latitude"));
+});
+
+test("verify uploads and atomically persists exactly one photo with a safe additive response", async () => {
+  const { service, calls } = createHarness();
+
+  const result = await service.verifyVisitPhotos(validBatchInput(1));
+
+  assert.equal(calls.uploads.length, 1);
+  assert.equal(calls.appends.length, 1);
+  assert.equal(calls.appends[0].photos.length, 1);
+  assert.equal(result.photos.length, 1);
+  assert.equal(result.photoId, result.photos[0].photoId);
+  assert.equal(result.photoUrl, result.photos[0].photoUrl);
+  for (const privateField of [
+    "userId",
+    "cloudinaryPublicId",
+    "latitude",
+    "longitude",
+    "accuracyMeters",
+    "distanceMeters",
+  ]) {
+    assert.equal(JSON.stringify(result).includes(privateField), false);
+  }
+});
+
+test("single-photo verify compatibility wrapper preserves the original exact response shape", async () => {
+  const { service } = createHarness();
+
+  const result = await service.verifyVisitPhoto(validVerifyInput());
+
+  assert.deepEqual(Object.keys(result).sort(), [
+    "attractionId",
+    "capturedDate",
+    "photoId",
+    "photoUrl",
+    "verified",
+    "visitId",
+  ]);
+  assert.equal(Object.hasOwn(result, "photos"), false);
+});
+
+test("verify requires exactly one valid image before lookup or upload", async (t) => {
+  const invalidBatches = [
+    [],
+    [JPEG_DATA_URI, JPEG_DATA_URI],
+    ["data:image/gif;base64,R0lGODlh"],
+  ];
+
+  for (const photoDataUris of invalidBatches) {
+    await t.test(`${photoDataUris.length} submitted item(s)`, async () => {
+      let userLookups = 0;
+      const { service, calls } = createHarness({
+        findUserByGoogleId: async () => {
+          userLookups += 1;
+          return { _id: USER_ID };
+        },
+      });
+
+      await expectServiceError(
+        () => service.verifyVisitPhotos(validBatchInput(1, { photoDataUris })),
+        {
+          statusCode: 400,
+          message: photoDataUris.length === 1
+            ? "A JPEG, PNG, or WebP image up to 5 MiB is required."
+            : BATCH_SIZE_MESSAGE,
+        }
+      );
+      assert.equal(userLookups, 0);
+      assert.equal(calls.uploads.length, 0);
+    });
+  }
+});
+
+test("batch verify rejects an unsafe optional submission key before lookup or upload", async () => {
+  let userLookups = 0;
+  const { service, calls } = createHarness({
+    findUserByGoogleId: async () => {
+      userLookups += 1;
+      return { _id: USER_ID };
+    },
+  });
+
+  await expectServiceError(
+    () => service.verifyVisitPhotos(validBatchInput(1, {
+      submissionKey: "unsafe key",
+    })),
+    { statusCode: 400, message: "A valid submission key is required." }
+  );
+  assert.equal(userLookups, 0);
+  assert.equal(calls.uploads.length, 0);
+});
+
+test("lost-response retry replays the original keyed result before capacity or upload", async () => {
+  let persistedVisit = null;
+  const { service, calls } = createHarness({
+    uploadVerifiedVisitImage: async (dataUri, { publicId }) => {
+      calls.uploads.push({ dataUri, options: { publicId } });
+      return {
+        photoUrl: `https://res.cloudinary.com/demo/image/upload/${publicId}.jpg`,
+        cloudinaryPublicId: `chatlas/verified-visits/${publicId}`,
+      };
+    },
+    findDatedVisitBySubmissionKey: async (input) => {
+      calls.submissionLookups.push(input);
+      return persistedVisit;
+    },
+    appendPhotosToDatedVisit: async (input) => {
+      calls.appends.push(input);
+      persistedVisit = {
+        _id: VISIT_ID,
+        attractionId: ATTRACTION_ID,
+        photos: input.photos.map((savedPhoto, index) => ({
+          _id: index === 0 ? PHOTO_ID : `photo-${index + 1}`,
+          photoUrl: savedPhoto.photoUrl,
+          capturedAt: savedPhoto.capturedAt,
+          submissionKey: input.submissionKey,
+        })),
+      };
+      return persistedVisit;
+    },
+  });
+  const input = validBatchInput(1, { submissionKey: SUBMISSION_KEY });
+
+  const firstResult = await service.verifyVisitPhotos(input);
+  const retryResult = await service.verifyVisitPhotos(input);
+
+  assert.deepEqual(retryResult, firstResult);
+  assert.equal(calls.uploads.length, 1);
+  assert.equal(calls.appends.length, 1);
+  assert.equal(calls.photoCounts.length, 1);
+  assert.equal(calls.appends[0].submissionKey, SUBMISSION_KEY);
+  assert.equal(calls.submissionLookups.length, 2);
+  assert.equal(JSON.stringify(retryResult).includes("submissionKey"), false);
+});
+
+test("lost-response retry after Malaysia midnight replays the original key without a second upload", async () => {
+  const requestTimes = [
+    new Date("2026-08-15T15:59:59.000Z"),
+    new Date("2026-08-15T16:00:01.000Z"),
+  ];
+  let timeIndex = 0;
+  let persistedVisit = null;
+  const { service, calls } = createHarness({
+    now: () => new Date(requestTimes[Math.min(timeIndex++, requestTimes.length - 1)]),
+    uploadVerifiedVisitImage: async (dataUri, { publicId }) => {
+      calls.uploads.push({ dataUri, options: { publicId } });
+      return {
+        photoUrl: `https://res.cloudinary.com/demo/image/upload/${publicId}.jpg`,
+        cloudinaryPublicId: `chatlas/verified-visits/${publicId}`,
+      };
+    },
+    findDatedVisitBySubmissionKey: async (input) => {
+      calls.submissionLookups.push(input);
+      if (Object.hasOwn(input, "visitDateKey")) return null;
+      return persistedVisit;
+    },
+    appendPhotosToDatedVisit: async (input) => {
+      calls.appends.push(input);
+      persistedVisit = {
+        _id: VISIT_ID,
+        attractionId: ATTRACTION_ID,
+        visitDateKey: input.visitDateKey,
+        photos: [{
+          _id: PHOTO_ID,
+          photoUrl: input.photos[0].photoUrl,
+          capturedAt: input.photos[0].capturedAt,
+          submissionKey: input.submissionKey,
+        }],
+      };
+      return persistedVisit;
+    },
+  });
+  const input = validBatchInput(1, { submissionKey: SUBMISSION_KEY });
+
+  const firstResult = await service.verifyVisitPhotos(input);
+  const retryResult = await service.verifyVisitPhotos(input);
+
+  assert.deepEqual(retryResult, firstResult);
+  assert.equal(calls.uploads.length, 1);
+  assert.equal(calls.appends.length, 1);
+  assert.equal(calls.photoCounts.length, 1);
+  assert.equal(calls.submissionLookups.length, 2);
+  assert.equal(
+    calls.submissionLookups.every((lookup) => !Object.hasOwn(lookup, "visitDateKey")),
+    true
+  );
+  assert.equal(JSON.stringify(retryResult).includes("submissionKey"), false);
+});
+
+test("concurrent same-key submissions across Malaysia dates have one atomic winner", async () => {
+  const requestTimes = [
+    new Date("2026-08-15T15:59:59.000Z"),
+    new Date("2026-08-15T16:00:01.000Z"),
+  ];
+  let timeIndex = 0;
+  let persistedVisit = null;
+  let initialLookupArrivals = 0;
+  let releaseInitialLookups;
+  const initialLookupBarrier = new Promise((resolve) => {
+    releaseInitialLookups = resolve;
+  });
+  let appendArrivals = 0;
+  let releaseAppends;
+  const appendBarrier = new Promise((resolve) => {
+    releaseAppends = resolve;
+  });
+  const { service, calls } = createHarness({
+    now: () => new Date(requestTimes[Math.min(timeIndex++, requestTimes.length - 1)]),
+    uploadVerifiedVisitImage: async (dataUri, { publicId }) => {
+      calls.uploads.push({ dataUri, options: { publicId } });
+      return {
+        photoUrl: `https://res.cloudinary.com/demo/image/upload/${publicId}.jpg`,
+        cloudinaryPublicId: `chatlas/verified-visits/${publicId}`,
+      };
+    },
+    findDatedVisitBySubmissionKey: async (input) => {
+      calls.submissionLookups.push(input);
+      if (!persistedVisit && initialLookupArrivals < 2) {
+        initialLookupArrivals += 1;
+        if (initialLookupArrivals === 2) releaseInitialLookups();
+        await initialLookupBarrier;
+        return null;
+      }
+      if (
+        Object.hasOwn(input, "visitDateKey")
+        && input.visitDateKey !== persistedVisit?.visitDateKey
+      ) {
+        return null;
+      }
+      return persistedVisit;
+    },
+    appendPhotosToDatedVisit: async (input) => {
+      calls.appends.push(input);
+      if (!persistedVisit && appendArrivals < 2) {
+        appendArrivals += 1;
+        if (appendArrivals === 2) releaseAppends();
+        await appendBarrier;
+      }
+
+      if (persistedVisit) {
+        throw Object.assign(new Error("duplicate private submission key"), {
+          code: 11000,
+        });
+      }
+      persistedVisit = {
+        _id: VISIT_ID,
+        attractionId: ATTRACTION_ID,
+        visitDateKey: input.visitDateKey,
+        photos: [{
+          _id: PHOTO_ID,
+          photoUrl: input.photos[0].photoUrl,
+          cloudinaryPublicId: input.photos[0].cloudinaryPublicId,
+          capturedAt: input.photos[0].capturedAt,
+          submissionKey: input.submissionKey,
+        }],
+      };
+      return persistedVisit;
+    },
+  });
+  const input = validBatchInput(1, { submissionKey: SUBMISSION_KEY });
+
+  const results = await Promise.all([
+    service.verifyVisitPhotos(input),
+    service.verifyVisitPhotos(input),
+  ]);
+
+  assert.deepEqual(results[1], results[0]);
+  assert.equal(calls.uploads.length, 2);
+  assert.equal(new Set(calls.appends.slice(0, 2).map(({ visitDateKey }) => visitDateKey)).size, 2);
+  assert.equal(calls.deletes.length, 1);
+  assert.notEqual(calls.deletes[0], persistedVisit.photos[0].cloudinaryPublicId);
+  assert.equal(
+    calls.submissionLookups.every((lookup) => !Object.hasOwn(lookup, "visitDateKey")),
+    true
+  );
+  assert.equal(JSON.stringify(results).includes("submissionKey"), false);
+});
+
+test("concurrent same-key loser cleans only its request asset and replays the winner", async () => {
+  let persistedVisit = null;
+  let appendArrivals = 0;
+  let releaseAppends;
+  const appendBarrier = new Promise((resolve) => {
+    releaseAppends = resolve;
+  });
+  const { service, calls } = createHarness({
+    uploadVerifiedVisitImage: async (dataUri, { publicId }) => {
+      calls.uploads.push({ dataUri, options: { publicId } });
+      return {
+        photoUrl: `https://res.cloudinary.com/demo/image/upload/${publicId}.jpg`,
+        cloudinaryPublicId: `chatlas/verified-visits/${publicId}`,
+      };
+    },
+    findDatedVisitBySubmissionKey: async (input) => {
+      calls.submissionLookups.push(input);
+      return persistedVisit;
+    },
+    appendPhotosToDatedVisit: async (input) => {
+      calls.appends.push(input);
+      appendArrivals += 1;
+      if (appendArrivals === 2) releaseAppends();
+      await appendBarrier;
+
+      if (persistedVisit) return null;
+      persistedVisit = {
+        _id: VISIT_ID,
+        attractionId: ATTRACTION_ID,
+        photos: [{
+          _id: PHOTO_ID,
+          photoUrl: input.photos[0].photoUrl,
+          cloudinaryPublicId: input.photos[0].cloudinaryPublicId,
+          capturedAt: input.photos[0].capturedAt,
+          submissionKey: input.submissionKey,
+        }],
+      };
+      return persistedVisit;
+    },
+  });
+  const input = validBatchInput(1, { submissionKey: SUBMISSION_KEY });
+
+  const [firstResult, secondResult] = await Promise.all([
+    service.verifyVisitPhotos(input),
+    service.verifyVisitPhotos(input),
+  ]);
+
+  assert.deepEqual(secondResult, firstResult);
+  assert.equal(calls.uploads.length, 2);
+  assert.equal(calls.appends.length, 2);
+  assert.equal(calls.deletes.length, 1);
+  assert.notEqual(
+    calls.deletes[0],
+    persistedVisit.photos[0].cloudinaryPublicId,
+    "the winning request asset must not be deleted"
+  );
+  assert.equal(JSON.stringify(firstResult).includes("submissionKey"), false);
+});
+
+test("keyed append that commits before losing its acknowledgement replays its exact photo without cleanup", async () => {
+  let persistedVisit = null;
+  let appendAttempt = 0;
+  const { service, calls } = createHarness({
+    uploadVerifiedVisitImage: async (dataUri, { publicId }) => {
+      calls.uploads.push({ dataUri, options: { publicId } });
+      return {
+        photoUrl: `https://res.cloudinary.com/demo/image/upload/${publicId}.jpg`,
+        cloudinaryPublicId: `chatlas/verified-visits/${publicId}`,
+      };
+    },
+    findDatedVisitBySubmissionKey: async (input) => {
+      calls.submissionLookups.push(input);
+      return persistedVisit;
+    },
+    appendPhotosToDatedVisit: async (input) => {
+      calls.appends.push(input);
+      appendAttempt += 1;
+      if (appendAttempt === 1) {
+        persistedVisit = {
+          _id: VISIT_ID,
+          attractionId: ATTRACTION_ID,
+          photos: input.photos.map((savedPhoto) => ({
+            _id: PHOTO_ID,
+            photoUrl: savedPhoto.photoUrl,
+            capturedAt: savedPhoto.capturedAt,
+            submissionKey: input.submissionKey,
+          })),
+        };
+        throw new Error("write committed but acknowledgement was lost");
+      }
+      throw new Error("retry outcome was also not acknowledged");
+    },
+  });
+
+  const result = await service.verifyVisitPhotos(validBatchInput(1, {
+    submissionKey: SUBMISSION_KEY,
+  }));
+
+  assert.deepEqual(result, {
+    visitId: VISIT_ID,
+    photoId: PHOTO_ID,
+    attractionId: ATTRACTION_ID,
+    photoUrl: "https://res.cloudinary.com/demo/image/upload/11111111-1111-4111-8111-111111111111.jpg",
+    capturedDate: NOW.toISOString(),
+    verified: true,
+    photos: [
+      {
+        photoId: PHOTO_ID,
+        photoUrl: "https://res.cloudinary.com/demo/image/upload/11111111-1111-4111-8111-111111111111.jpg",
+        capturedDate: NOW.toISOString(),
+        verified: true,
+      },
+    ],
+  });
+  assert.equal(calls.appends.length, 2);
+  assert.deepEqual(calls.appends[1], calls.appends[0]);
+  assert.equal(calls.uploads.length, 1);
+  assert.equal(calls.photoCounts.length, 1);
+  assert.equal(calls.submissionLookups.length, 2);
+  assert.deepEqual(calls.deletes, []);
+  assert.equal(JSON.stringify(result).includes("submissionKey"), false);
+});
+
+test("keyed append retries the identical batch once without reuploading and returns the retry success", async () => {
+  let appendAttempt = 0;
+  const { service, calls } = createHarness({
+    uploadVerifiedVisitImage: async (dataUri, { publicId }) => {
+      calls.uploads.push({ dataUri, options: { publicId } });
+      return {
+        photoUrl: `https://res.cloudinary.com/demo/image/upload/${publicId}.jpg`,
+        cloudinaryPublicId: `chatlas/verified-visits/${publicId}`,
+      };
+    },
+    appendPhotosToDatedVisit: async (input) => {
+      calls.appends.push(input);
+      appendAttempt += 1;
+      if (appendAttempt === 1) {
+        throw new Error("first acknowledgement was lost before commit");
+      }
+      return {
+        _id: VISIT_ID,
+        attractionId: ATTRACTION_ID,
+        photos: [{
+          _id: PHOTO_ID,
+          photoUrl: input.photos[0].photoUrl,
+          capturedAt: input.photos[0].capturedAt,
+          submissionKey: input.submissionKey,
+        }],
+      };
+    },
+  });
+
+  const result = await service.verifyVisitPhotos(validBatchInput(1, {
+    submissionKey: SUBMISSION_KEY,
+  }));
+
+  assert.equal(
+    result.photoUrl,
+    "https://res.cloudinary.com/demo/image/upload/11111111-1111-4111-8111-111111111111.jpg"
+  );
+  assert.equal(calls.appends.length, 2);
+  assert.deepEqual(calls.appends[1], calls.appends[0]);
+  assert.equal(calls.uploads.length, 1);
+  assert.equal(calls.photoCounts.length, 1);
+  assert.equal(calls.submissionLookups.length, 1);
+  assert.deepEqual(calls.deletes, []);
+  assert.equal(JSON.stringify(result).includes("submissionKey"), false);
+});
+
+test("keyed retry waits out delayed first-write visibility before deciding cleanup", async () => {
+  let persistedVisit = null;
+  let pendingFirstAppend = null;
+  let appendAttempt = 0;
+  const { service, calls } = createHarness({
+    uploadVerifiedVisitImage: async (dataUri, { publicId }) => {
+      calls.uploads.push({ dataUri, options: { publicId } });
+      return {
+        photoUrl: `https://res.cloudinary.com/demo/image/upload/${publicId}.jpg`,
+        cloudinaryPublicId: `chatlas/verified-visits/${publicId}`,
+      };
+    },
+    findDatedVisitBySubmissionKey: async (input) => {
+      calls.submissionLookups.push(input);
+      return persistedVisit;
+    },
+    appendPhotosToDatedVisit: async (input) => {
+      calls.appends.push(input);
+      appendAttempt += 1;
+      if (appendAttempt === 1) {
+        pendingFirstAppend = input;
+        throw new Error("first write remains in flight");
+      }
+
+      persistedVisit = {
+        _id: VISIT_ID,
+        attractionId: ATTRACTION_ID,
+        photos: pendingFirstAppend.photos.map((savedPhoto) => ({
+          _id: PHOTO_ID,
+          photoUrl: savedPhoto.photoUrl,
+          capturedAt: savedPhoto.capturedAt,
+          submissionKey: pendingFirstAppend.submissionKey,
+        })),
+      };
+      return null;
+    },
+  });
+
+  const result = await service.verifyVisitPhotos(validBatchInput(1, {
+    submissionKey: SUBMISSION_KEY,
+  }));
+
+  assert.equal(
+    result.photoUrl,
+    "https://res.cloudinary.com/demo/image/upload/11111111-1111-4111-8111-111111111111.jpg"
+  );
+  assert.equal(calls.appends.length, 2);
+  assert.deepEqual(calls.appends[1], calls.appends[0]);
+  assert.equal(calls.uploads.length, 1);
+  assert.equal(calls.photoCounts.length, 1);
+  assert.equal(calls.submissionLookups.length, 2);
+  assert.deepEqual(calls.deletes, []);
+});
+
+test("keyed append failure cleans its distinct assets when reconciliation finds a concurrent winner", async () => {
+  const winnerVisit = {
+    _id: VISIT_ID,
+    attractionId: ATTRACTION_ID,
+    photos: [{
+      _id: PHOTO_ID,
+      photoUrl: "https://res.cloudinary.com/demo/image/upload/concurrent-winner.jpg",
+      capturedAt: NOW,
+      submissionKey: SUBMISSION_KEY,
+    }],
+  };
+  let winnerVisible = false;
+  let appendAttempt = 0;
+  const { service, calls } = createHarness({
+    uploadVerifiedVisitImage: async (dataUri, { publicId }) => {
+      calls.uploads.push({ dataUri, options: { publicId } });
+      return {
+        photoUrl: `https://res.cloudinary.com/demo/image/upload/${publicId}.jpg`,
+        cloudinaryPublicId: `chatlas/verified-visits/${publicId}`,
+      };
+    },
+    findDatedVisitBySubmissionKey: async (input) => {
+      calls.submissionLookups.push(input);
+      return winnerVisible ? winnerVisit : null;
+    },
+    appendPhotosToDatedVisit: async (input) => {
+      calls.appends.push(input);
+      appendAttempt += 1;
+      if (appendAttempt === 1) {
+        winnerVisible = true;
+        throw new Error("concurrent write outcome was not acknowledged");
+      }
+      return null;
+    },
+  });
+
+  const result = await service.verifyVisitPhotos(validBatchInput(1, {
+    submissionKey: SUBMISSION_KEY,
+  }));
+
+  assert.equal(result.photoUrl, winnerVisit.photos[0].photoUrl);
+  assert.deepEqual(calls.deletes, [
+    "chatlas/verified-visits/11111111-1111-4111-8111-111111111111",
+  ]);
+  assert.equal(calls.appends.length, 2);
+  assert.deepEqual(calls.appends[1], calls.appends[0]);
+  assert.equal(calls.uploads.length, 1);
+  assert.equal(calls.photoCounts.length, 1);
+  assert.equal(calls.submissionLookups.length, 2);
+  assert.equal(JSON.stringify(result).includes("submissionKey"), false);
+});
+
+test("completed keyed retry preserves uploaded assets when reconciliation is unavailable", async () => {
+  let lookupCount = 0;
+  let appendAttempt = 0;
+  const { service, calls } = createHarness({
+    uploadVerifiedVisitImage: async (dataUri, { publicId }) => {
+      calls.uploads.push({ dataUri, options: { publicId } });
+      return {
+        photoUrl: `https://res.cloudinary.com/demo/image/upload/${publicId}.jpg`,
+        cloudinaryPublicId: `chatlas/verified-visits/${publicId}`,
+      };
+    },
+    findDatedVisitBySubmissionKey: async (input) => {
+      calls.submissionLookups.push(input);
+      lookupCount += 1;
+      if (lookupCount === 1) return null;
+      throw new Error("reconciliation lookup unavailable");
+    },
+    appendPhotosToDatedVisit: async (input) => {
+      calls.appends.push(input);
+      appendAttempt += 1;
+      if (appendAttempt === 1) {
+        throw new Error("write outcome unknown");
+      }
+      return null;
+    },
+  });
+
+  await expectServiceError(
+    () => service.verifyVisitPhotos(validBatchInput(1, {
+      submissionKey: SUBMISSION_KEY,
+    })),
+    { statusCode: 500, message: "Unable to save the verified visit photo." }
+  );
+  assert.equal(calls.appends.length, 2);
+  assert.deepEqual(calls.appends[1], calls.appends[0]);
+  assert.equal(calls.uploads.length, 1);
+  assert.equal(calls.photoCounts.length, 1);
+  assert.equal(calls.submissionLookups.length, 2);
+  assert.deepEqual(calls.deletes, []);
+});
+
+test("second keyed append uncertainty preserves uploaded assets when reconciliation is still empty", async () => {
+  const { service, calls } = createHarness({
+    uploadVerifiedVisitImage: async (dataUri, { publicId }) => {
+      calls.uploads.push({ dataUri, options: { publicId } });
+      return {
+        photoUrl: `https://res.cloudinary.com/demo/image/upload/${publicId}.jpg`,
+        cloudinaryPublicId: `chatlas/verified-visits/${publicId}`,
+      };
+    },
+    findDatedVisitBySubmissionKey: async (input) => {
+      calls.submissionLookups.push(input);
+      return null;
+    },
+    appendPhotosToDatedVisit: async (input) => {
+      calls.appends.push(input);
+      throw new Error("append outcome remains unknown");
+    },
+  });
+
+  await expectServiceError(
+    () => service.verifyVisitPhotos(validBatchInput(1, {
+      submissionKey: SUBMISSION_KEY,
+    })),
+    { statusCode: 500, message: "Unable to save the verified visit photo." }
+  );
+  assert.equal(calls.appends.length, 2);
+  assert.deepEqual(calls.appends[1], calls.appends[0]);
+  assert.equal(calls.uploads.length, 1);
+  assert.equal(calls.photoCounts.length, 1);
+  assert.equal(calls.submissionLookups.length, 2);
+  assert.deepEqual(calls.deletes, []);
+});
+
+test("keyed append failure cleans uploaded assets after reconciliation confirms no commit", async () => {
+  let appendAttempt = 0;
+  const { service, calls } = createHarness({
+    uploadVerifiedVisitImage: async (dataUri, { publicId }) => {
+      calls.uploads.push({ dataUri, options: { publicId } });
+      return {
+        photoUrl: `https://res.cloudinary.com/demo/image/upload/${publicId}.jpg`,
+        cloudinaryPublicId: `chatlas/verified-visits/${publicId}`,
+      };
+    },
+    findDatedVisitBySubmissionKey: async (input) => {
+      calls.submissionLookups.push(input);
+      return null;
+    },
+    appendPhotosToDatedVisit: async (input) => {
+      calls.appends.push(input);
+      appendAttempt += 1;
+      if (appendAttempt === 1) {
+        throw new Error("write did not commit");
+      }
+      return null;
+    },
+  });
+
+  await expectServiceError(
+    () => service.verifyVisitPhotos(validBatchInput(1, {
+      submissionKey: SUBMISSION_KEY,
+    })),
+    { statusCode: 500, message: "Unable to save the verified visit photo." }
+  );
+  assert.equal(calls.appends.length, 2);
+  assert.deepEqual(calls.appends[1], calls.appends[0]);
+  assert.equal(calls.uploads.length, 1);
+  assert.equal(calls.photoCounts.length, 1);
+  assert.equal(calls.submissionLookups.length, 2);
+  assert.deepEqual(calls.deletes, [
+    "chatlas/verified-visits/11111111-1111-4111-8111-111111111111",
+  ]);
+});
+
+test("verify rejects an existing dated photo before uploading another", async () => {
+  const { service, calls } = createHarness({
+    findDatedVisitPhotoCount: async (input) => {
+      calls.photoCounts.push(input);
+      return 1;
+    },
+  });
+
+  await expectServiceError(
+    () => service.verifyVisitPhotos(validBatchInput(1)),
+    { statusCode: 409, message: CAPACITY_MESSAGE }
+  );
+  assert.equal(calls.uploads.length, 0);
+  assert.equal(calls.appends.length, 0);
+});
+
+test("verify cleans a malformed singleton upload response", async () => {
+  const { service, calls } = createHarness({
+    uploadVerifiedVisitImage: async (dataUri, options) => {
+      const index = calls.uploads.length + 1;
+      calls.uploads.push({ dataUri, options });
+      return { cloudinaryPublicId: "chatlas/verified-visits/private-1" };
+    },
+    deleteCloudinaryImage: async (publicId) => {
+      calls.deletes.push(publicId);
+      if (publicId.endsWith("private-1")) throw new Error("cleanup unavailable");
+    },
+  });
+
+  await expectServiceError(
+    () => service.verifyVisitPhotos(validBatchInput(1)),
+    { statusCode: 500, message: "Unable to save the verified visit photo." }
+  );
+  assert.deepEqual(calls.deletes, [
+    "chatlas/verified-visits/private-1",
+  ]);
+  assert.equal(calls.uploads.length, 1);
+  assert.equal(calls.appends.length, 0);
+});
+
+test("verify cleans its uploaded asset when the one atomic Mongo write fails", async () => {
+  const { service, calls } = createHarness({
+    uploadVerifiedVisitImage: async (dataUri, options) => {
+      const index = calls.uploads.length + 1;
+      calls.uploads.push({ dataUri, options });
+      return {
+        photoUrl: `https://res.cloudinary.com/demo/image/upload/verified-${index}.jpg`,
+        cloudinaryPublicId: `chatlas/verified-visits/private-${index}`,
+      };
+    },
+    appendPhotosToDatedVisit: async (input) => {
+      calls.appends.push(input);
+      throw new Error("private database details");
+    },
+  });
+
+  await expectServiceError(
+    () => service.verifyVisitPhotos(validBatchInput(1)),
+    { statusCode: 500, message: "Unable to save the verified visit photo." }
+  );
+  assert.deepEqual(calls.deletes, [
+    "chatlas/verified-visits/private-1",
+  ]);
+  assert.equal(calls.appends.length, 1);
+  assert.equal(calls.photoCounts.length, 1);
+});
+
+test("capacity reports the actual legacy count while clamping remaining slots to zero or one", async (t) => {
+  for (const [existingTodayCount, remainingSlots] of [[0, 1], [1, 0], [2, 0], [3, 0]]) {
+    await t.test(`${existingTodayCount} existing`, async () => {
+      const { service } = createHarness({
+        findDatedVisitPhotoCount: async () => existingTodayCount,
+      });
+
+      assert.deepEqual(await service.getVerifiedVisitPhotoCapacity({
+        googleId: GOOGLE_ID,
+        attractionId: ATTRACTION_ID,
+      }), {
+        attractionId: ATTRACTION_ID,
+        dailyLimit: 1,
+        existingTodayCount,
+        remainingSlots,
+      });
+    });
+  }
+});
+
+test("deletion restores capacity only when no dated photo remains", async (t) => {
+  for (const [label, initialCount, expectedCount, expectedRemainingSlots] of [
+    ["final photo", 1, 0, 1],
+    ["one photo from a legacy pair", 2, 1, 0],
+  ]) {
+    await t.test(label, async () => {
+      let remainingCount = initialCount;
+      const { service } = createHarness({
+        findDatedVisitPhotoCount: async () => remainingCount,
+        removeOwnedPhoto: async () => {
+          remainingCount -= 1;
+          return {
+            _id: VISIT_ID,
+            photos: Array.from({ length: remainingCount }, (_, index) => ({
+              _id: `remaining-photo-${index + 1}`,
+            })),
+          };
+        },
+      });
+
+      await service.deleteOwnedVerifiedPhoto({
+        googleId: GOOGLE_ID,
+        visitId: VISIT_ID,
+        photoId: PHOTO_ID,
+      });
+
+      assert.deepEqual(await service.getVerifiedVisitPhotoCapacity({
+        googleId: GOOGLE_ID,
+        attractionId: ATTRACTION_ID,
+      }), {
+        attractionId: ATTRACTION_ID,
+        dailyLimit: 1,
+        existingTodayCount: expectedCount,
+        remainingSlots: expectedRemainingSlots,
+      });
+    });
+  }
 });
 
 test("verify uses opaque collision-resistant upload IDs that cannot leak through delivery URLs", async () => {
@@ -396,11 +1226,11 @@ test("verify uses opaque collision-resistant upload IDs that cannot leak through
         cloudinaryPublicId: `chatlas/verified-visits/${publicId}`,
       };
     },
-    appendPhotoToDatedVisit: async (input) => {
+    appendPhotosToDatedVisit: async (input) => {
       calls.appends.push(input);
       return {
         _id: VISIT_ID,
-        photos: [{ _id: PHOTO_ID, photoUrl: input.photo.photoUrl, capturedAt: NOW }],
+        photos: [{ _id: PHOTO_ID, photoUrl: input.photos[0].photoUrl, capturedAt: NOW }],
       };
     },
   });
@@ -466,7 +1296,7 @@ test("verify rejects a grossly oversized encoded payload before lookup or upload
 
 test("verify removes the uploaded image exactly once when persistence fails", async () => {
   const { service, calls } = createHarness({
-    appendPhotoToDatedVisit: async () => {
+    appendPhotosToDatedVisit: async () => {
       throw new Error("database unavailable: private detail");
     },
   });
@@ -481,7 +1311,7 @@ test("verify removes the uploaded image exactly once when persistence fails", as
 test("verify reports the attraction-date group limit and cleans only the new upload once", async () => {
   const oldAsset = "chatlas/verified-visits/existing-private-id";
   const { service, calls } = createHarness({
-    appendPhotoToDatedVisit: async () => null,
+    appendPhotosToDatedVisit: async () => null,
     deleteCloudinaryImage: async (publicId) => {
       calls.deletes.push(publicId);
       assert.notEqual(publicId, oldAsset);
@@ -492,16 +1322,16 @@ test("verify reports the attraction-date group limit and cleans only the new upl
     () => service.verifyVisitPhoto(validVerifyInput()),
     {
       statusCode: 409,
-      message: "You have already added 3 verified photos for this attraction today. You can add more photos on your next visit.",
+      message: CAPACITY_MESSAGE,
     }
   );
   assert.deepEqual(calls.deletes, [CLOUDINARY_PUBLIC_ID]);
 });
 
-test("verify does not retry cleanup when cleanup itself fails", async () => {
+test("verify keeps the capacity response and does not retry cleanup when cleanup fails", async () => {
   let cleanupAttempts = 0;
   const { service } = createHarness({
-    appendPhotoToDatedVisit: async () => null,
+    appendPhotosToDatedVisit: async () => null,
     deleteCloudinaryImage: async () => {
       cleanupAttempts += 1;
       throw new Error("Cloudinary unavailable");
@@ -510,7 +1340,7 @@ test("verify does not retry cleanup when cleanup itself fails", async () => {
 
   await expectServiceError(
     () => service.verifyVisitPhoto(validVerifyInput()),
-    { statusCode: 500, message: "Unable to save the verified visit photo." }
+    { statusCode: 409, message: CAPACITY_MESSAGE }
   );
   assert.equal(cleanupAttempts, 1);
 });
@@ -843,6 +1673,41 @@ test("owner deletion safely handles ownership lookup and post-Cloudinary pull fa
     assert.deepEqual(calls.deletes, [CLOUDINARY_PUBLIC_ID]);
     assert.deepEqual(calls.emptyDeletes, []);
   });
+});
+
+test("owner retry completes metadata and empty-group cleanup after a transient Mongo pull failure", async () => {
+  let removeAttempts = 0;
+  let evidencePresent = true;
+  const { service, calls } = createHarness({
+    findOwnedPhotoForDeletion: async (input) => {
+      calls.ownershipLookups.push(input);
+      return evidencePresent ? { cloudinaryPublicId: CLOUDINARY_PUBLIC_ID } : null;
+    },
+    deleteCloudinaryImage: async (publicId) => {
+      calls.deletes.push(publicId);
+    },
+    removeOwnedPhoto: async (input) => {
+      calls.removals.push(input);
+      removeAttempts += 1;
+      if (removeAttempts === 1) {
+        throw new Error("transient Mongo failure");
+      }
+      evidencePresent = false;
+      return { _id: VISIT_ID, photos: [] };
+    },
+  });
+  const input = { googleId: GOOGLE_ID, visitId: VISIT_ID, photoId: PHOTO_ID };
+
+  await expectServiceError(
+    () => service.deleteOwnedVerifiedPhoto(input),
+    { statusCode: 500, message: "Unable to delete the verified visit photo." }
+  );
+  await service.deleteOwnedVerifiedPhoto(input);
+
+  assert.equal(evidencePresent, false);
+  assert.deepEqual(calls.deletes, [CLOUDINARY_PUBLIC_ID, CLOUDINARY_PUBLIC_ID]);
+  assert.equal(calls.removals.length, 2);
+  assert.deepEqual(calls.emptyDeletes, [VISIT_ID]);
 });
 
 test("empty-group cleanup failure does not make a completed photo deletion untruthful", async () => {

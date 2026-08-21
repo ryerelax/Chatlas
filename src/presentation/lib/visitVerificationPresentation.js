@@ -1,11 +1,24 @@
 import {
+  findNearestToQualifyingAttraction,
   findNearbyAttractions,
+  normaliseVerifiedVisitSubmissionKey,
   validateGeolocationEvidence,
 } from "@/business/services/visitVerificationRules";
 import { VISITED_DATA_STATUS } from "@/business/services/explorationMapService";
 
 const MAX_PUBLIC_API_MESSAGE_LENGTH = 200;
+const VERIFIED_VISIT_DAILY_LIMIT = 1;
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001F\u007F]/u;
+const CAPACITY_ERROR_MESSAGE =
+  "Verified visit photo capacity could not be loaded.";
+const VERIFIED_VISIT_LIMIT_REACHED_MESSAGE =
+  "You have already verified this attraction today. You can add a new photo on another Malaysia date.";
+const GEOLOCATION_OPTIONS = Object.freeze({
+  enableHighAccuracy: true,
+  maximumAge: 0,
+  timeout: 15000,
+});
+const DISTANCE_DISPLAY_TOLERANCE_METRES = 0.0000001;
 
 function rejectEmptyBrowserNumber(value) {
   if (
@@ -26,6 +39,10 @@ export function normaliseBrowserPosition(position) {
     longitude: rejectEmptyBrowserNumber(position?.coords?.longitude),
     accuracyMeters: rejectEmptyBrowserNumber(position?.coords?.accuracy),
   });
+}
+
+export function requestCurrentBrowserPosition(geolocation, onSuccess, onError) {
+  geolocation.getCurrentPosition(onSuccess, onError, GEOLOCATION_OPTIONS);
 }
 
 export function getCandidateSelectionMode(candidates) {
@@ -123,18 +140,30 @@ export function getVisitVerificationResponseDecision(
       type: "success",
       message: "",
       authenticationRequired: false,
+      retryable: false,
     };
   }
 
   const authenticationRequired = response?.status === 401;
+  const retryable = Number.isInteger(response?.status)
+    && response.status >= 500
+    && response.status <= 599;
   const fallbackMessage = authenticationRequired
     ? fallbackMessages.authentication
     : fallbackMessages.verification;
+  const message = response?.status === 409
+    ? VERIFIED_VISIT_LIMIT_REACHED_MESSAGE
+    : selectSafeApiMessage(result, fallbackMessage);
 
   return {
-    type: authenticationRequired ? "authentication-required" : "error",
-    message: selectSafeApiMessage(result, fallbackMessage),
+    type: authenticationRequired
+      ? "authentication-required"
+      : retryable
+        ? "retryable-error"
+        : "terminal-error",
+    message,
     authenticationRequired,
+    retryable,
   };
 }
 
@@ -146,10 +175,13 @@ export function createVisitVerificationOperationController({
   let isAuthenticationConfirmed = authenticationConfirmed === true;
   let currentToken = 0;
   let locationClaimed = false;
+  let activeCapacityController = null;
+  let capacityRemainingSlots = null;
   let cameraClaimed = false;
   let activeStream = null;
-  let activePreviewUrl = "";
+  let currentCapture = null;
   let activeSubmitController = null;
+  let submissionClaimed = false;
 
   function releaseStream() {
     const stream = activeStream;
@@ -164,9 +196,8 @@ export function createVisitVerificationOperationController({
     }
   }
 
-  function clearPreview() {
-    const objectUrl = activePreviewUrl;
-    activePreviewUrl = "";
+  function releaseCapture(capture) {
+    const objectUrl = capture?.url;
 
     if (objectUrl) {
       try {
@@ -175,6 +206,12 @@ export function createVisitVerificationOperationController({
         // Continue releasing the remaining operation resources.
       }
     }
+  }
+
+  function clearCurrentCapture() {
+    const capture = currentCapture;
+    currentCapture = null;
+    releaseCapture(capture);
   }
 
   function isActiveStream(stream) {
@@ -194,13 +231,29 @@ export function createVisitVerificationOperationController({
     }
   }
 
+  function abortCapacity() {
+    const controller = activeCapacityController;
+    activeCapacityController = null;
+
+    if (controller) {
+      try {
+        controller.abort();
+      } catch {
+        // Continue releasing the remaining operation resources.
+      }
+    }
+  }
+
   function invalidate() {
     currentToken += 1;
     locationClaimed = false;
+    capacityRemainingSlots = null;
     cameraClaimed = false;
+    submissionClaimed = false;
+    abortCapacity();
     abortSubmission();
     releaseStream();
-    clearPreview();
+    clearCurrentCapture();
     return currentToken;
   }
 
@@ -226,8 +279,14 @@ export function createVisitVerificationOperationController({
     const operationInvalidated =
       wasAuthenticationConfirmed ||
       locationClaimed ||
+      Boolean(activeCapacityController) ||
       cameraClaimed ||
-      Boolean(activeStream || activePreviewUrl || activeSubmitController);
+      Boolean(
+        activeStream ||
+        currentCapture ||
+        activeSubmitController ||
+        submissionClaimed
+      );
 
     if (operationInvalidated) {
       invalidate();
@@ -243,6 +302,7 @@ export function createVisitVerificationOperationController({
     if (
       !isAuthenticationConfirmed ||
       locationClaimed ||
+      activeCapacityController ||
       cameraClaimed ||
       activeSubmitController
     ) {
@@ -263,11 +323,49 @@ export function createVisitVerificationOperationController({
     return true;
   }
 
+  function claimCapacity(operationToken, controller) {
+    if (
+      !isCurrent(operationToken) ||
+      locationClaimed ||
+      activeCapacityController ||
+      cameraClaimed ||
+      activeStream ||
+      activeSubmitController ||
+      !controller
+    ) {
+      return false;
+    }
+
+    capacityRemainingSlots = null;
+    activeCapacityController = controller;
+    return true;
+  }
+
+  function completeCapacity(operationToken, controller, remainingSlots) {
+    if (
+      !isCurrent(operationToken) ||
+      activeCapacityController !== controller ||
+      !Number.isInteger(remainingSlots) ||
+      remainingSlots < 0 ||
+      remainingSlots > VERIFIED_VISIT_DAILY_LIMIT
+    ) {
+      return false;
+    }
+
+    activeCapacityController = null;
+    capacityRemainingSlots = remainingSlots;
+    return true;
+  }
+
   function claimCamera(operationToken) {
     if (
       !isCurrent(operationToken) ||
       locationClaimed ||
+      activeCapacityController ||
+      !Number.isInteger(capacityRemainingSlots) ||
+      capacityRemainingSlots < 1 ||
       cameraClaimed ||
+      activeStream ||
       activeSubmitController
     ) {
       return false;
@@ -293,35 +391,69 @@ export function createVisitVerificationOperationController({
     return true;
   }
 
-  function setPreview(operationToken, objectUrl) {
-    if (!isCurrent(operationToken)) {
-      if (objectUrl) {
-        try {
-          revokeUrl(objectUrl);
-        } catch {
-          // A stale preview must not interrupt the current operation.
-        }
-      }
+  function setCurrentCapture(operationToken, capture) {
+    if (!isCurrent(operationToken) || submissionClaimed) {
+      releaseCapture(capture);
       return false;
     }
 
-    clearPreview();
-    activePreviewUrl = objectUrl;
+    if (
+      !capture ||
+      typeof capture.url !== "string" ||
+      capture.url.length === 0
+    ) {
+      return false;
+    }
+
+    clearCurrentCapture();
+    currentCapture = capture;
     return true;
   }
 
-  function claimSubmission(operationToken, controller) {
+  function retakeCurrentCapture(operationToken) {
+    if (!isCurrent(operationToken) || !currentCapture) return false;
+    clearCurrentCapture();
+    return true;
+  }
+
+  function getCaptureState() {
+    return {
+      currentCapture,
+    };
+  }
+
+  function setPreview(operationToken, objectUrl) {
+    return setCurrentCapture(operationToken, { blob: null, url: objectUrl });
+  }
+
+  function clearPreview() {
+    clearCurrentCapture();
+  }
+
+  function claimSubmission(
+    operationToken,
+    controller,
+    { capturePending } = {}
+  ) {
     if (
       !isCurrent(operationToken) ||
       locationClaimed ||
       cameraClaimed ||
-      activeSubmitController
+      activeSubmitController ||
+      !currentCapture?.blob ||
+      capturePending !== false
     ) {
       return false;
     }
 
     activeSubmitController = controller;
+    submissionClaimed = true;
+    releaseStream();
     return true;
+  }
+
+  function canAcceptCaptureResult(operationToken) {
+    return isCurrent(operationToken) && !submissionClaimed;
   }
 
   function completeSubmission(operationToken, controller) {
@@ -340,6 +472,7 @@ export function createVisitVerificationOperationController({
     if (
       !isAuthenticationConfirmed ||
       locationClaimed ||
+      activeCapacityController ||
       cameraClaimed ||
       activeSubmitController
     ) {
@@ -353,12 +486,18 @@ export function createVisitVerificationOperationController({
     updateAuthentication,
     claimLocation,
     completeLocation,
+    claimCapacity,
+    completeCapacity,
     claimCamera,
     resolveCamera,
     releaseStream,
     isActiveStream,
     setPreview,
     clearPreview,
+    setCurrentCapture,
+    retakeCurrentCapture,
+    getCaptureState,
+    canAcceptCaptureResult,
     claimSubmission,
     completeSubmission,
     restartOperation,
@@ -367,14 +506,86 @@ export function createVisitVerificationOperationController({
   });
 }
 
+export function completeVerifiedVisitCanvasCapture({
+  operationController,
+  operationToken,
+  blob,
+  createObjectUrl,
+  onAccepted,
+  onFailure,
+  onSettled,
+}) {
+  if (!operationController.canAcceptCaptureResult(operationToken)) {
+    onSettled?.();
+    return false;
+  }
+
+  if (!blob) {
+    onFailure?.("The camera image could not be captured. Please try again.");
+    return false;
+  }
+
+  let objectUrl;
+  try {
+    objectUrl = createObjectUrl(blob);
+  } catch {
+    if (!operationController.canAcceptCaptureResult(operationToken)) {
+      onSettled?.();
+      return false;
+    }
+    onFailure?.("The photo preview could not be created. Please try again.");
+    return false;
+  }
+
+  const capture = { blob, url: objectUrl };
+  if (!operationController.setCurrentCapture(operationToken, capture)) {
+    onSettled?.();
+    return false;
+  }
+
+  onAccepted?.(capture);
+  return true;
+}
+
 export function getNearbyCandidatePresentations(attractions, position) {
   return findNearbyAttractions(
     Array.isArray(attractions) ? attractions : [],
     position
   ).map((candidate) => ({
     ...candidate,
-    distanceLabel: `${Math.round(candidate.distanceMetres)} m away`,
+    distanceLabel: `${Math.round(candidate.distanceMetres)} m away · ${candidate.radiusMeters} m verification radius`,
   }));
+}
+
+function formatOutsideDistanceMetres(distanceMetres) {
+  const nearestInteger = Math.round(distanceMetres);
+  if (
+    Math.abs(distanceMetres - nearestInteger)
+    <= DISTANCE_DISPLAY_TOLERANCE_METRES
+  ) {
+    return nearestInteger.toString();
+  }
+
+  return (
+    Math.ceil(
+      (distanceMetres - DISTANCE_DISPLAY_TOLERANCE_METRES) * 10
+    ) / 10
+  ).toFixed(1);
+}
+
+export function getNoNearbyAttractionMessage(attractions, position) {
+  const nearest = findNearestToQualifyingAttraction(
+    Array.isArray(attractions) ? attractions : [],
+    position
+  );
+
+  if (!nearest) {
+    return "No supported attraction is close enough to verify this visit.";
+  }
+
+  const name = nearest.attraction.name?.trim() || "The nearest supported attraction";
+  const distanceMetres = formatOutsideDistanceMetres(nearest.distanceMetres);
+  return `No supported attraction is close enough. ${name} is ${distanceMetres} metres away (allowed radius: ${nearest.radiusMeters} metres).`;
 }
 
 export function getGeolocationErrorMessage(error) {
@@ -424,10 +635,141 @@ export function selectSafeApiMessage(result, fallbackMessage) {
   return message.trim();
 }
 
+export function normaliseVerifiedVisitCapacity(payload, attractionId) {
+  const expectedAttractionId =
+    typeof attractionId === "string" ? attractionId.trim() : "";
+  const capacity = payload?.data;
+
+  if (
+    payload?.success !== true ||
+    !expectedAttractionId ||
+    capacity?.attractionId !== expectedAttractionId ||
+    !Number.isInteger(capacity?.existingTodayCount) ||
+    !Number.isInteger(capacity?.dailyLimit) ||
+    !Number.isInteger(capacity?.remainingSlots) ||
+    capacity.dailyLimit !== VERIFIED_VISIT_DAILY_LIMIT ||
+    capacity.existingTodayCount < 0 ||
+    capacity.remainingSlots !== (capacity.existingTodayCount === 0 ? 1 : 0)
+  ) {
+    throw new Error(CAPACITY_ERROR_MESSAGE);
+  }
+
+  return {
+    attractionId: capacity.attractionId,
+    dailyLimit: capacity.dailyLimit,
+    existingTodayCount: capacity.existingTodayCount,
+    remainingSlots: capacity.remainingSlots,
+  };
+}
+
+export function buildVerifiedVisitCapacityUrl(attractionId) {
+  return `/api/exploration-map/verified-visits/capacity?attractionId=${encodeURIComponent(attractionId)}`;
+}
+
+export function getVerifiedVisitUploadLabel() {
+  return "Upload Photo";
+}
+
+export function getVerifiedVisitLimitReachedMessage() {
+  return VERIFIED_VISIT_LIMIT_REACHED_MESSAGE;
+}
+
+export function canSubmitVerifiedVisitPhoto({
+  flowState,
+  currentCapture,
+  capturePending,
+  position,
+  attractionId,
+}) {
+  return Boolean(
+    ["preview", "upload-error"].includes(flowState) &&
+    currentCapture?.blob &&
+    typeof currentCapture?.url === "string" &&
+    currentCapture.url.length > 0 &&
+    capturePending === false &&
+    position &&
+    typeof attractionId === "string" &&
+    attractionId.trim().length > 0
+  );
+}
+
+export async function refreshVerifiedVisitConsumers({
+  attractionId,
+  refreshVisitedAttractions,
+  publishPublicPhotoInvalidation,
+}) {
+  const safeAttractionId =
+    typeof attractionId === "string" ? attractionId.trim() : "";
+  if (!safeAttractionId) return;
+
+  const refreshPromise = (async () => refreshVisitedAttractions?.())();
+  let invalidationError;
+  try {
+    publishPublicPhotoInvalidation?.(safeAttractionId);
+  } catch (error) {
+    invalidationError = error;
+  }
+
+  let refreshError;
+  try {
+    await refreshPromise;
+  } catch (error) {
+    refreshError = error;
+  }
+
+  if (invalidationError) throw invalidationError;
+  if (refreshError) throw refreshError;
+}
+
+function createCryptographicallyStrongSubmissionKey(crypto) {
+  if (typeof crypto?.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  if (typeof crypto?.getRandomValues === "function") {
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hexadecimal = [...bytes]
+      .map((value) => value.toString(16).padStart(2, "0"))
+      .join("");
+    return [
+      hexadecimal.slice(0, 8),
+      hexadecimal.slice(8, 12),
+      hexadecimal.slice(12, 16),
+      hexadecimal.slice(16, 20),
+      hexadecimal.slice(20),
+    ].join("-");
+  }
+
+  throw new Error("Secure browser randomness is unavailable.");
+}
+
+export function createVerifiedVisitSubmissionKeyStore({
+  crypto = globalThis.crypto,
+} = {}) {
+  let submissionKey;
+
+  return Object.freeze({
+    getOrCreate() {
+      if (!submissionKey) {
+        submissionKey = normaliseVerifiedVisitSubmissionKey(
+          createCryptographicallyStrongSubmissionKey(crypto)
+        );
+      }
+      return submissionKey;
+    },
+    reset() {
+      submissionKey = undefined;
+    },
+  });
+}
+
 export function createVerifiedVisitFormData({
   photoBlob,
   attractionId,
   position,
+  submissionKey,
 }) {
   const formData = new FormData();
   formData.set("photo", photoBlob, "verified-visit.jpg");
@@ -435,6 +777,12 @@ export function createVerifiedVisitFormData({
   formData.set("latitude", String(position.latitude));
   formData.set("longitude", String(position.longitude));
   formData.set("accuracyMeters", String(position.accuracyMeters));
+  if (submissionKey) {
+    formData.set(
+      "submissionKey",
+      normaliseVerifiedVisitSubmissionKey(submissionKey)
+    );
+  }
   return formData;
 }
 

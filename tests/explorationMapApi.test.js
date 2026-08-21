@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createExplorationMapAttractionsRepository,
+  createVerifiedVisitAttractionRepository,
 } from "../src/data/repositories/attractionRepository.js";
+import Attraction from "../src/data/models/Attraction.js";
 import {
   createExplorationMapService,
 } from "../src/business/services/explorationMapAttractionService.js";
@@ -41,14 +43,17 @@ test("map repository returns every active Melaka attraction with only map fields
   assert.deepEqual(observed.query, { state: "Melaka", isActive: true });
   assert.equal(
     observed.fields,
-    "_id name address latitude longitude category rating totalReviews businessStatus"
+    "_id name address latitude longitude category rating totalReviews businessStatus +verificationRadiusMeters"
   );
   assert.deepEqual(observed.sort, { name: 1, _id: 1 });
 });
 
-test("map service preserves a complete attraction result without pagination", async () => {
+test("map service projects only public fields plus the resolved effective radius", async () => {
   const allMapAttractions = Array.from({ length: 16 }, (_, index) => ({
     _id: `attraction-${index + 1}`,
+    name: `Attraction ${index + 1}`,
+    category: index === 0 ? "Entertainment" : "Gallery",
+    verificationRadiusMeters: index === 0 ? 150 : undefined,
   }));
   const service = createExplorationMapService({
     findAllActiveMelakaMapAttractions: async () => allMapAttractions,
@@ -56,8 +61,55 @@ test("map service preserves a complete attraction result without pagination", as
 
   const result = await service.getExplorationMapAttractions();
 
-  assert.deepEqual(result, allMapAttractions);
+  assert.deepEqual(result[0], {
+    _id: "attraction-1",
+    name: "Attraction 1",
+    category: "Entertainment",
+    verificationRadiusMeters: 150,
+  });
+  assert.equal(result[1].verificationRadiusMeters, 50);
   assert.equal(result.length, 16);
+});
+
+test("verified-visit lookup uses an explicit canonical verification projection", async () => {
+  const observed = {};
+  const repository = createVerifiedVisitAttractionRepository({
+    findOne(query) {
+      observed.query = query;
+      return {
+        select(fields) {
+          observed.fields = fields;
+          return this;
+        },
+        lean() {
+          return { _id: "attraction-1" };
+        },
+      };
+    },
+  });
+
+  await repository.findAttractionByIdForVerifiedVisit("attraction-1");
+
+  assert.deepEqual(observed.query, {
+    _id: "attraction-1",
+    state: "Melaka",
+    isActive: true,
+  });
+  assert.equal(
+    observed.fields,
+    "_id latitude longitude category state isActive +verificationRadiusMeters"
+  );
+});
+
+test("canonical verification radius is optional, integer-bounded, and hidden by default", () => {
+  const schemaPath = Attraction.schema.path("verificationRadiusMeters");
+
+  assert.equal(schemaPath.options.default, undefined);
+  assert.equal(schemaPath.options.select, false);
+  assert.equal(schemaPath.options.min, 30);
+  assert.equal(schemaPath.options.max, 150);
+  assert.equal(schemaPath.options.validate.validator(50), true);
+  assert.equal(schemaPath.options.validate.validator(50.5), false);
 });
 
 test("attraction explorer pagination stays independent while map service keeps all records", async () => {

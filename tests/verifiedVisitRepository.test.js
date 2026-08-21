@@ -43,11 +43,22 @@ function targetVisitDuplicateError() {
   });
 }
 
-test("verified visit schema protects private photo evidence and has one dated-group unique index", () => {
+function pushedPhotos(update) {
+  const pushed = update.$push.photos;
+  return Array.isArray(pushed?.$each) ? pushed.$each : [pushed];
+}
+
+test("verified visit schema protects private evidence and atomically reserves submission keys across dates", async () => {
   const datedGroupIndex = VerifiedVisit.schema.indexes().find(([keys, options]) =>
     keys.userId === 1 &&
     keys.attractionId === 1 &&
     keys.visitDateKey === 1 &&
+    options.unique === true
+  );
+  const submissionKeyIndex = VerifiedVisit.schema.indexes().find(([keys, options]) =>
+    keys.userId === 1 &&
+    keys.attractionId === 1 &&
+    keys["photos.submissionKey"] === 1 &&
     options.unique === true
   );
   const photoSchema = VerifiedVisit.schema.path("photos").schema;
@@ -56,23 +67,150 @@ test("verified visit schema protects private photo evidence and has one dated-gr
     { userId: 1, attractionId: 1, visitDateKey: 1 },
     { unique: true },
   ]);
+  assert.deepEqual(submissionKeyIndex, [
+    { userId: 1, attractionId: 1, "photos.submissionKey": 1 },
+    {
+      unique: true,
+      partialFilterExpression: {
+        "photos.submissionKey": { $exists: true },
+      },
+    },
+  ]);
   for (const field of [
     "cloudinaryPublicId",
     "latitude",
     "longitude",
     "accuracyMeters",
     "distanceMeters",
+    "submissionKey",
   ]) {
     assert.equal(photoSchema.path(field).options.select, false);
   }
+
+  const legacyVisit = new VerifiedVisit({
+    userId: "64b000000000000000000001",
+    attractionId: "64b000000000000000000002",
+    visitDateKey: "2026-08-15",
+    photos: [photo, photo, photo],
+  });
+  await legacyVisit.validate();
 });
 
-test("append uses user, attraction, date, and an atomic fewer-than-three filter", async () => {
+test("keyed photo append atomically requires an empty group and excludes an existing key", async () => {
   const observed = {};
   const repository = createVerifiedVisitRepository({
     findOneAndUpdate(filter, update, options) {
       Object.assign(observed, { filter, update, options });
-      return chain({ _id: "visit-1", photos: [update.$push.photos] }, observed);
+      return chain({ _id: "visit-1", photos: pushedPhotos(update) }, observed);
+    },
+  });
+  const submissionKey = "11111111-1111-4111-8111-111111111111";
+
+  await repository.appendPhotoToDatedVisit({
+    userId: "user-1",
+    attractionId: "attraction-1",
+    visitDateKey: "2026-08-15",
+    submissionKey,
+    photo,
+  });
+
+  assert.deepEqual(observed.filter, {
+    userId: "user-1",
+    attractionId: "attraction-1",
+    visitDateKey: "2026-08-15",
+    "photos.0": { $exists: false },
+    "photos.submissionKey": { $ne: submissionKey },
+  });
+  assert.equal(observed.update.$push.photos.submissionKey, submissionKey);
+});
+
+test("concurrent keyed appends allow only one atomic winner", async () => {
+  const submissionKey = "11111111-1111-4111-8111-111111111111";
+  let visit = null;
+  let arrivals = 0;
+  let release;
+  const barrier = new Promise((resolve) => {
+    release = resolve;
+  });
+  const model = {
+    findOneAndUpdate(filter, update) {
+      return {
+        async lean() {
+          arrivals += 1;
+          if (arrivals === 2) release();
+          await barrier;
+
+          const excludesExistingKey = filter["photos.submissionKey"]?.$ne;
+          if (
+            visit
+            && excludesExistingKey
+            && visit.photos.some((savedPhoto) =>
+              savedPhoto.submissionKey === excludesExistingKey)
+          ) {
+            return null;
+          }
+
+          if (!visit) {
+            visit = { _id: "visit-1", photos: [] };
+          }
+          visit.photos.push(...pushedPhotos(update));
+          return { ...visit, photos: [...visit.photos] };
+        },
+      };
+    },
+  };
+  const repository = createVerifiedVisitRepository(model);
+  const input = {
+    userId: "user-1",
+    attractionId: "attraction-1",
+    visitDateKey: "2026-08-15",
+    submissionKey,
+    photo,
+  };
+
+  const results = await Promise.all([
+    repository.appendPhotoToDatedVisit(input),
+    repository.appendPhotoToDatedVisit(input),
+  ]);
+
+  assert.equal(results.filter(Boolean).length, 1);
+  assert.equal(visit.photos.length, 1);
+  assert.equal(visit.photos[0].submissionKey, submissionKey);
+});
+
+test("key replay lookup spans Malaysia dates for one user and attraction with an explicit private projection", async () => {
+  const observed = {};
+  const repository = createVerifiedVisitRepository({
+    findOne(filter) {
+      observed.filter = filter;
+      return chain({ _id: "visit-1", photos: [] }, observed);
+    },
+  });
+
+  await repository.findDatedVisitBySubmissionKey({
+    userId: "user-1",
+    attractionId: "attraction-1",
+    visitDateKey: "2026-08-15",
+    submissionKey: "11111111-1111-4111-8111-111111111111",
+  });
+
+  assert.deepEqual(observed.filter, {
+    userId: "user-1",
+    attractionId: "attraction-1",
+    "photos.submissionKey": "11111111-1111-4111-8111-111111111111",
+  });
+  assert.equal(
+    observed.select,
+    "_id attractionId photos._id photos.photoUrl photos.capturedAt +photos.submissionKey"
+  );
+});
+
+test("empty dated group accepts one photo through one atomic append", async () => {
+  const observed = {};
+  const repository = createVerifiedVisitRepository({
+    findOneAndUpdate(filter, update, options) {
+      Object.assign(observed, { filter, update, options });
+      return chain({ _id: "visit-1", photos: pushedPhotos(update) }, observed);
     },
   });
 
@@ -87,21 +225,33 @@ test("append uses user, attraction, date, and an atomic fewer-than-three filter"
     userId: "user-1",
     attractionId: "attraction-1",
     visitDateKey: "2026-08-15",
-    "photos.2": { $exists: false },
+    "photos.0": { $exists: false },
   });
-  assert.deepEqual(observed.update, {
-    $setOnInsert: {
-      userId: "user-1",
-      attractionId: "attraction-1",
-      visitDateKey: "2026-08-15",
-    },
-    $push: { photos: photo },
-  });
+  assert.deepEqual(observed.update.$push, { photos: photo });
   assert.deepEqual(observed.options, { upsert: true, new: true, runValidators: true });
   assert.equal(result._id, "visit-1");
 });
 
-test("dated photo groups allow three independently by attraction and Malaysia date", async () => {
+test("internal singleton-array compatibility rejects multi-photo new writes", async () => {
+  const observed = {};
+  const repository = createVerifiedVisitRepository({
+    findOneAndUpdate(filter, update, options) {
+      Object.assign(observed, { filter, update, options });
+      return chain({ _id: "visit-1", photos: pushedPhotos(update) }, observed);
+    },
+  });
+
+  await assert.rejects(repository.appendPhotosToDatedVisit({
+    userId: "user-1",
+    attractionId: "attraction-1",
+    visitDateKey: "2026-08-15",
+    photos: [photo, photo],
+  }), RangeError);
+
+  assert.equal(Object.hasOwn(observed, "update"), false);
+});
+
+test("one-photo groups remain independent by attraction and Malaysia date", async () => {
   const groups = new Map();
   let visitSequence = 0;
 
@@ -121,8 +271,8 @@ test("dated photo groups allow three independently by attraction and Malaysia da
       const key = groupKey(input);
       const existingVisit = groups.get(key);
 
-      if (existingVisit && existingVisit.photos.length < 3) {
-        existingVisit.photos.push(update.$push.photos);
+      if (existingVisit && existingVisit.photos.length < 1) {
+        existingVisit.photos.push(...pushedPhotos(update));
         return chain(snapshot(existingVisit), {});
       }
       if (existingVisit && options.upsert === false) {
@@ -140,7 +290,7 @@ test("dated photo groups allow three independently by attraction and Malaysia da
       const createdVisit = {
         _id: `visit-${++visitSequence}`,
         ...input,
-        photos: [update.$push.photos],
+        photos: pushedPhotos(update),
       };
       groups.set(key, createdVisit);
       return chain(snapshot(createdVisit), {});
@@ -148,7 +298,7 @@ test("dated photo groups allow three independently by attraction and Malaysia da
     findOne(filter) {
       const visit = groups.get(groupKey(filter));
       return chain(
-        visit?.photos.length >= 3 ? snapshot(visit) : null,
+        visit?.photos.length >= 1 ? snapshot(visit) : null,
         {}
       );
     },
@@ -177,19 +327,14 @@ test("dated photo groups allow three independently by attraction and Malaysia da
     });
   }
 
-  for (let photoIndex = 1; photoIndex <= 3; photoIndex += 1) {
-    assert.ok(await append("attraction-1", "2026-08-15", photoIndex));
-  }
-  assert.equal(await append("attraction-1", "2026-08-15", 4), null);
+  assert.ok(await append("attraction-1", "2026-08-15", 1));
+  assert.equal(await append("attraction-1", "2026-08-15", 2), null);
+  assert.ok(await append("attraction-2", "2026-08-15", 1));
+  assert.ok(await append("attraction-1", "2026-08-16", 1));
 
-  for (let photoIndex = 1; photoIndex <= 3; photoIndex += 1) {
-    assert.ok(await append("attraction-2", "2026-08-15", photoIndex));
-    assert.ok(await append("attraction-1", "2026-08-16", photoIndex));
-  }
-
-  assert.equal(groups.get("user-1|attraction-1|2026-08-15").photos.length, 3);
-  assert.equal(groups.get("user-1|attraction-2|2026-08-15").photos.length, 3);
-  assert.equal(groups.get("user-1|attraction-1|2026-08-16").photos.length, 3);
+  assert.equal(groups.get("user-1|attraction-1|2026-08-15").photos.length, 1);
+  assert.equal(groups.get("user-1|attraction-2|2026-08-15").photos.length, 1);
+  assert.equal(groups.get("user-1|attraction-1|2026-08-16").photos.length, 1);
   assert.match(
     groups.get("user-1|attraction-1|2026-08-15").photos[0].photoUrl,
     /2026-08-15-1\.jpg$/
@@ -230,6 +375,182 @@ test("append retries a target duplicate-key upsert without upsert when the group
   });
 });
 
+test("photo append accepts an empty group and rejects one-photo and legacy groups", async (t) => {
+  for (const [existingCount, succeeds] of [
+    [0, true],
+    [1, false],
+    [2, false],
+    [3, false],
+  ]) {
+    await t.test(`${existingCount} existing plus one incoming`, async () => {
+      const existingPhotos = Array.from({ length: existingCount }, (_, index) => ({
+        ...photo,
+        photoUrl: `https://example.test/existing-${index + 1}.jpg`,
+      }));
+      const incomingPhoto = {
+        ...photo,
+        photoUrl: "https://example.test/incoming-1.jpg",
+      };
+      let visit = existingCount > 0
+        ? { _id: "visit-1", userId: "user-1", attractionId: "attraction-1", visitDateKey: "2026-08-15", photos: existingPhotos }
+        : null;
+      const model = {
+        findOneAndUpdate(filter, update, options) {
+          const requiredMissingIndex = Number(
+            Object.keys(filter).find((key) => key.startsWith("photos.")).split(".")[1]
+          );
+          if (visit && visit.photos[requiredMissingIndex] === undefined) {
+            visit.photos.push(...pushedPhotos(update));
+            return chain({ ...visit, photos: [...visit.photos] }, {});
+          }
+          if (visit && options.upsert) throw targetVisitDuplicateError();
+          if (visit || options.upsert === false) return chain(null, {});
+          visit = {
+            _id: "visit-1",
+            userId: filter.userId,
+            attractionId: filter.attractionId,
+            visitDateKey: filter.visitDateKey,
+            photos: pushedPhotos(update),
+          };
+          return chain({ ...visit, photos: [...visit.photos] }, {});
+        },
+        findOne(filter) {
+          const requiredExistingIndex = Number(
+            Object.keys(filter).find((key) => key.startsWith("photos.")).split(".")[1]
+          );
+          return chain(visit?.photos[requiredExistingIndex] ? visit : null, {});
+        },
+      };
+      const repository = createVerifiedVisitRepository(model);
+
+      const result = await repository.appendPhotoToDatedVisit({
+        userId: "user-1",
+        attractionId: "attraction-1",
+        visitDateKey: "2026-08-15",
+        photo: incomingPhoto,
+      });
+
+      assert.equal(Boolean(result), succeeds);
+      assert.equal(visit.photos.length, succeeds ? existingCount + 1 : existingCount);
+    });
+  }
+});
+
+test("barrier-overlapped one-photo submissions persist at most one photo", async () => {
+  const initialPhotos = [];
+  let visit = {
+    _id: "visit-1",
+    userId: "user-1",
+    attractionId: "attraction-1",
+    visitDateKey: "2026-08-15",
+    photos: initialPhotos,
+  };
+  let initialAttemptCount = 0;
+  let signalBothInitialAttempts;
+  let releaseInitialAttempts;
+  const bothInitialAttemptsReachedBarrier = new Promise((resolve) => {
+    signalBothInitialAttempts = resolve;
+  });
+  const initialAttemptBarrier = new Promise((resolve) => {
+    releaseInitialAttempts = resolve;
+  });
+  const initialCapacityKeys = [];
+
+  function snapshotVisit() {
+    return { ...visit, photos: [...visit.photos] };
+  }
+
+  function matchesCapacityPredicate(filter) {
+    const capacityKey = Object.keys(filter).find((key) => key.startsWith("photos."));
+    if (!capacityKey) return true;
+    const photoIndex = Number(capacityKey.split(".")[1]);
+    const photoExists = visit.photos[photoIndex] !== undefined;
+    return photoExists === filter[capacityKey].$exists;
+  }
+
+  const model = {
+    findOneAndUpdate(filter, update, options) {
+      return {
+        async lean() {
+          if (options.upsert) {
+            const capacityKey = Object.keys(filter).find((key) =>
+              key.startsWith("photos.")
+            );
+            initialCapacityKeys.push(capacityKey);
+            initialAttemptCount += 1;
+            if (initialAttemptCount === 2) signalBothInitialAttempts();
+            await initialAttemptBarrier;
+          }
+
+          if (matchesCapacityPredicate(filter)) {
+            visit.photos.push(...pushedPhotos(update));
+            return snapshotVisit();
+          }
+          if (options.upsert) throw targetVisitDuplicateError();
+          return null;
+        },
+      };
+    },
+    findOne(filter) {
+      return chain(matchesCapacityPredicate(filter) ? snapshotVisit() : null, {});
+    },
+  };
+  const repository = createVerifiedVisitRepository(model);
+  const makePhoto = (prefix) => ({
+    ...photo,
+    photoUrl: `https://example.test/${prefix}.jpg`,
+  });
+
+  const attempts = [
+    repository.appendPhotoToDatedVisit({
+      userId: "user-1",
+      attractionId: "attraction-1",
+      visitDateKey: "2026-08-15",
+      photo: makePhoto("first"),
+    }),
+    repository.appendPhotoToDatedVisit({
+      userId: "user-1",
+      attractionId: "attraction-1",
+      visitDateKey: "2026-08-15",
+      photo: makePhoto("second"),
+    }),
+  ];
+
+  await bothInitialAttemptsReachedBarrier;
+  assert.equal(initialAttemptCount, 2);
+  assert.equal(visit.photos.length, 0);
+  releaseInitialAttempts();
+  const results = await Promise.all(attempts);
+
+  assert.equal(results.filter(Boolean).length, 1);
+  assert.deepEqual(initialCapacityKeys, ["photos.0", "photos.0"]);
+  assert.equal(visit.photos.length, 1);
+});
+
+test("dated photo count is isolated by canonical user, attraction, and Malaysia date", async () => {
+  const observed = {};
+  const repository = createVerifiedVisitRepository({
+    findOne(filter) {
+      observed.filter = filter;
+      return chain({ photos: [{ _id: "photo-1" }, { _id: "photo-2" }] }, observed);
+    },
+  });
+
+  const count = await repository.findDatedVisitPhotoCount({
+    userId: "user-1",
+    attractionId: "attraction-2",
+    visitDateKey: "2026-08-16",
+  });
+
+  assert.equal(count, 2);
+  assert.deepEqual(observed.filter, {
+    userId: "user-1",
+    attractionId: "attraction-2",
+    visitDateKey: "2026-08-16",
+  });
+  assert.equal(observed.select, "photos._id");
+});
+
 test("append returns null only after a target duplicate retry confirms the exact group is full", async () => {
   const observed = { updates: [] };
   const repository = createVerifiedVisitRepository({
@@ -243,7 +564,7 @@ test("append returns null only after a target duplicate retry confirms the exact
     },
     findOne(filter) {
       observed.fullFilter = filter;
-      return chain({ _id: "visit-1", photos: [photo, photo, photo] }, {});
+      return chain({ _id: "visit-1", photos: [photo] }, {});
     },
   });
 
@@ -260,7 +581,7 @@ test("append returns null only after a target duplicate retry confirms the exact
     userId: "user-1",
     attractionId: "attraction-1",
     visitDateKey: "2026-08-15",
-    "photos.2": { $exists: true },
+    "photos.0": { $exists: true },
   });
 });
 

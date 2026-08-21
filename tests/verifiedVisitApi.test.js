@@ -8,6 +8,9 @@ import {
   createVerifiedVisitsHandlers,
 } from "../src/app/api/exploration-map/verified-visits/handler.js";
 import {
+  createVerifiedVisitPhotoCapacityHandler,
+} from "../src/app/api/exploration-map/verified-visits/capacity/handler.js";
+import {
   createDeleteVerifiedPhotoHandler,
 } from "../src/app/api/exploration-map/verified-visits/[visitId]/photos/[photoId]/handler.js";
 import {
@@ -17,15 +20,39 @@ import {
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const AUTH_REQUIRED_MESSAGE = "A signed-in user account is required.";
 const INVALID_IMAGE_MESSAGE = "A JPEG, PNG, or WebP image up to 5 MiB is required.";
+const INVALID_BATCH_MESSAGE = "Add exactly one verified visit photo.";
+const SUBMISSION_KEY = "11111111-1111-4111-8111-111111111111";
 
 function createPrivateHandlers(overrides = {}) {
   return createVerifiedVisitsHandlers({
     auth: async () => ({ user: { id: "google-subject-1" } }),
     connectToDatabase: async () => {},
     getVerifiedAttractionIdsForUser: async () => [],
-    verifyVisitPhoto: async () => ({ photoId: "photo-1" }),
+    verifyVisitPhoto: async () => ({
+      visitId: "visit-1",
+      photoId: "photo-1",
+      attractionId: "507f1f77bcf86cd799439011",
+      photoUrl: "https://images.example/verified.jpg",
+      capturedDate: "2026-08-16T08:00:00.000Z",
+      verified: true,
+    }),
     ServiceError: VerifiedVisitServiceError,
     maxImageBytes: MAX_IMAGE_BYTES,
+    ...overrides,
+  });
+}
+
+function createCapacityHandler(overrides = {}) {
+  return createVerifiedVisitPhotoCapacityHandler({
+    auth: async () => ({ user: { id: "google-subject-1" } }),
+    connectToDatabase: async () => {},
+    getVerifiedVisitPhotoCapacity: async () => ({
+      attractionId: "507f1f77bcf86cd799439011",
+      existingTodayCount: 1,
+      dailyLimit: 1,
+      remainingSlots: 0,
+    }),
+    ServiceError: VerifiedVisitServiceError,
     ...overrides,
   });
 }
@@ -57,7 +84,12 @@ function createFormRequest(entries = {}, formDataError) {
 
       return {
         get(name) {
-          return Object.hasOwn(entries, name) ? entries[name] : null;
+          if (!Object.hasOwn(entries, name)) return null;
+          return Array.isArray(entries[name]) ? entries[name][0] ?? null : entries[name];
+        },
+        getAll(name) {
+          if (!Object.hasOwn(entries, name)) return [];
+          return Array.isArray(entries[name]) ? entries[name] : [entries[name]];
         },
       };
     },
@@ -243,6 +275,9 @@ test("POST returns safe JSON when reading a multipart field fails", async () => 
       get() {
         throw new Error("malformed multipart field internals");
       },
+      getAll() {
+        throw new Error("malformed multipart field internals");
+      },
     }),
   };
 
@@ -253,7 +288,6 @@ test("POST returns safe JSON when reading a multipart field fails", async () => 
 });
 
 for (const [label, photo] of [
-  ["missing photo", null],
   ["text in the photo field", "not-a-file"],
   ["a file-like value without a MIME type", { size: 1, arrayBuffer: async () => new ArrayBuffer(1) }],
 ]) {
@@ -299,7 +333,7 @@ test("POST rejects an obviously oversized file before reading its bytes", async 
   assert.equal(arrayBufferCalled, false);
 });
 
-test("POST ignores client identity and passes only the provider subject to the service", async () => {
+test("POST legacy photo compatibility ignores client identity and calls the singular service once", async () => {
   const created = {
     visitId: "visit-1",
     photoId: "photo-1",
@@ -309,8 +343,10 @@ test("POST ignores client identity and passes only the provider subject to the s
     verified: true,
   };
   let serviceInput;
+  let serviceCalls = 0;
   const { POST } = createPrivateHandlers({
     verifyVisitPhoto: async (input) => {
+      serviceCalls += 1;
       serviceInput = input;
       return created;
     },
@@ -322,6 +358,7 @@ test("POST ignores client identity and passes only the provider subject to the s
     latitude: "2.1944",
     longitude: "102.2491",
     accuracyMeters: "15",
+    verificationRadiusMeters: "150",
     photo: createPhotoFile(),
   });
 
@@ -336,7 +373,151 @@ test("POST ignores client identity and passes only the provider subject to the s
     accuracyMeters: "15",
     photoDataUri: "data:image/png;base64,AQID",
   });
+  assert.equal(serviceCalls, 1);
   assert.equal(Object.hasOwn(serviceInput, "userId"), false);
+  assert.equal(Object.hasOwn(serviceInput, "verificationRadiusMeters"), false);
+});
+
+test("POST accepts one repeated photos value and invokes the service once", async () => {
+  const serviceInputs = [];
+  const { POST } = createPrivateHandlers({
+    verifyVisitPhoto: async (input) => {
+      serviceInputs.push(input);
+      return {
+        visitId: "visit-1",
+        photoId: "photo-1",
+        attractionId: "507f1f77bcf86cd799439011",
+        photoUrl: "https://images.example/verified.jpg",
+        capturedDate: "2026-08-16T08:00:00.000Z",
+        verified: true,
+      };
+    },
+  });
+  const photo = createPhotoFile({ bytes: Uint8Array.from([7]), size: 1 });
+
+  const response = await POST(createFormRequest({
+    attractionId: "507f1f77bcf86cd799439011",
+    latitude: "2.1944",
+    longitude: "102.2491",
+    accuracyMeters: "15",
+    photos: [photo],
+  }));
+
+  assert.equal(response.status, 201);
+  assert.equal(serviceInputs.length, 1);
+  assert.equal(serviceInputs[0].photoDataUri, "data:image/png;base64,Bw==");
+  assert.equal(Object.hasOwn(serviceInputs[0], "userId"), false);
+});
+
+test("POST accepts a safe key and projects only the singular public DTO", async () => {
+  let serviceInput;
+  const singularResult = {
+    visitId: "visit-1",
+    photoId: "photo-1",
+    attractionId: "507f1f77bcf86cd799439011",
+    photoUrl: "https://images.example/verified.jpg",
+    capturedDate: "2026-08-16T08:00:00.000Z",
+    verified: true,
+  };
+  const { POST } = createPrivateHandlers({
+    verifyVisitPhoto: async (input) => {
+      serviceInput = input;
+      return {
+        ...singularResult,
+        photos: [{ photoId: "must-not-cross-the-route-boundary" }],
+        submissionKey: SUBMISSION_KEY,
+        cloudinaryPublicId: "private-asset-id",
+      };
+    },
+  });
+
+  const response = await POST(createFormRequest({
+    photos: [createPhotoFile()],
+    attractionId: "507f1f77bcf86cd799439011",
+    latitude: "2.1944",
+    longitude: "102.2491",
+    accuracyMeters: "15",
+    submissionKey: SUBMISSION_KEY,
+    userId: "client-controlled-user",
+    googleId: "client-controlled-provider",
+    verificationRadiusMeters: "150",
+  }));
+
+  await assertJsonResponse(response, 201, { success: true, data: singularResult });
+  assert.equal(serviceInput.submissionKey, SUBMISSION_KEY);
+  assert.equal(Object.hasOwn(serviceInput, "userId"), false);
+  assert.equal(Object.hasOwn(serviceInput, "verificationRadiusMeters"), false);
+});
+
+test("POST rejects an unsafe submission key before reading photo bytes or calling the service", async (t) => {
+  for (const submissionKey of ["short", "unsafe key with spaces", "<script>not-safe</script>"]) {
+    await t.test(submissionKey, async () => {
+      let readCalls = 0;
+      let serviceCalls = 0;
+      const { POST } = createPrivateHandlers({
+        verifyVisitPhoto: async () => {
+          serviceCalls += 1;
+        },
+      });
+
+      await assertJsonResponse(
+        await POST(createFormRequest({
+          photos: [createPhotoFile({ onArrayBuffer: () => { readCalls += 1; } })],
+          submissionKey,
+        })),
+        400,
+        { success: false, message: "Invalid verified visit request." }
+      );
+      assert.equal(readCalls, 0);
+      assert.equal(serviceCalls, 0);
+    });
+  }
+});
+
+for (const [label, entries, expectedMessage] of [
+  ["zero photos", {}, INVALID_BATCH_MESSAGE],
+  ["two repeated photos", { photos: [createPhotoFile(), createPhotoFile()] }, INVALID_BATCH_MESSAGE],
+  ["mixed new and legacy fields", { photos: [createPhotoFile()], photo: createPhotoFile() }, INVALID_BATCH_MESSAGE],
+  ["two legacy photo fields", { photo: [createPhotoFile(), createPhotoFile()] }, INVALID_BATCH_MESSAGE],
+  ["text in a repeated photo field", { photos: ["not-a-file"] }, INVALID_IMAGE_MESSAGE],
+]) {
+  test(`POST rejects ${label} without calling the service`, async () => {
+    let serviceCalls = 0;
+    const { POST } = createPrivateHandlers({
+      verifyVisitPhoto: async () => {
+        serviceCalls += 1;
+      },
+    });
+
+    await assertJsonResponse(
+      await POST(createFormRequest(entries)),
+      400,
+      { success: false, message: expectedMessage }
+    );
+    assert.equal(serviceCalls, 0);
+  });
+}
+
+test("POST rejects two incoming files before reading either file or calling the service", async () => {
+  let readCalls = 0;
+  let serviceCalls = 0;
+  const { POST } = createPrivateHandlers({
+    verifyVisitPhoto: async () => {
+      serviceCalls += 1;
+    },
+  });
+  const photos = [
+    createPhotoFile({ onArrayBuffer: () => { readCalls += 1; } }),
+    createPhotoFile({ onArrayBuffer: () => { readCalls += 1; } }),
+  ];
+
+  await assertJsonResponse(
+    await POST(createFormRequest({ photos })),
+    400,
+    { success: false, message: INVALID_BATCH_MESSAGE }
+  );
+  assert.equal(readCalls, 0);
+  assert.equal(serviceCalls, 0);
 });
 
 test("POST rejects an invalid session shape before parsing multipart data", async () => {
@@ -370,7 +551,7 @@ test("POST returns a safe error when auth fails", async () => {
 });
 
 test("POST preserves an exact service error status and message", async () => {
-  const message = "You must be within 150 metres of the attraction to verify this visit.";
+  const message = "You must be within 50 metres of the attraction to verify this visit.";
   const { POST } = createPrivateHandlers({
     verifyVisitPhoto: async () => {
       throw new VerifiedVisitServiceError(message, 400);
@@ -398,6 +579,84 @@ for (const [label, overrides] of [
     );
   });
 }
+
+test("capacity GET rejects an invalid session before connecting to the database", async () => {
+  let connected = false;
+  const GET = createCapacityHandler({
+    auth: async () => ({ user: {} }),
+    connectToDatabase: async () => {
+      connected = true;
+    },
+  });
+
+  await assertJsonResponse(
+    await GET(new Request("https://chatlas.test/api/exploration-map/verified-visits/capacity?attractionId=507f1f77bcf86cd799439011")),
+    401,
+    { success: false, message: AUTH_REQUIRED_MESSAGE }
+  );
+  assert.equal(connected, false);
+});
+
+test("capacity GET uses only the session identity and returns the exact safe capacity result", async () => {
+  const capacity = {
+    attractionId: "507f1f77bcf86cd799439011",
+    existingTodayCount: 2,
+    dailyLimit: 1,
+    remainingSlots: 0,
+  };
+  let serviceInput;
+  const GET = createCapacityHandler({
+    getVerifiedVisitPhotoCapacity: async (input) => {
+      serviceInput = input;
+      return {
+        ...capacity,
+        maxPhotos: 3,
+        privateDiagnostic: "must-not-cross-the-route-boundary",
+      };
+    },
+  });
+  const request = new Request(
+    "https://chatlas.test/api/exploration-map/verified-visits/capacity"
+      + "?attractionId=507f1f77bcf86cd799439011&userId=client-controlled&googleId=client-controlled"
+  );
+
+  await assertJsonResponse(await GET(request), 200, { success: true, data: capacity });
+  assert.deepEqual(serviceInput, {
+    googleId: "google-subject-1",
+    attractionId: "507f1f77bcf86cd799439011",
+  });
+  assert.equal(Object.hasOwn(serviceInput, "userId"), false);
+});
+
+test("capacity GET preserves service errors and hides unexpected details", async (t) => {
+  await t.test("service error", async () => {
+    const GET = createCapacityHandler({
+      getVerifiedVisitPhotoCapacity: async () => {
+        throw new VerifiedVisitServiceError("A valid attraction ID is required.", 400);
+      },
+    });
+
+    await assertJsonResponse(
+      await GET(new Request("https://chatlas.test/api/exploration-map/verified-visits/capacity")),
+      400,
+      { success: false, message: "A valid attraction ID is required." }
+    );
+  });
+
+  await t.test("unexpected error", async () => {
+    const GET = createCapacityHandler({
+      getVerifiedVisitPhotoCapacity: async () => {
+        throw new Error("private database and identity details");
+      },
+    });
+
+    await assertJsonResponse(
+      await GET(new Request("https://chatlas.test/api/exploration-map/verified-visits/capacity?attractionId=507f1f77bcf86cd799439011")),
+      500,
+      { success: false, message: "Unable to load verified visit photo capacity." }
+    );
+  });
+});
 
 test("public GET leaves a missing session anonymous", async () => {
   let serviceArguments;
@@ -517,6 +776,7 @@ test("public GET returns only the safe service result", async () => {
     "longitude",
     "accuracyMeters",
     "distanceMeters",
+    "submissionKey",
   ]) {
     assert.equal(serialized.includes(privateField), false);
   }
@@ -786,6 +1046,47 @@ test("confirmed deletion removes one card while refresh failure preserves canoni
     preservePhotos: true,
     showRefreshError: true,
   });
+});
+
+test("public photo invalidation is published once and matches only its attraction", async () => {
+  const {
+    isMatchingVerifiedVisitorPhotosInvalidation,
+    publishVerifiedVisitorPhotosInvalidation,
+    VERIFIED_VISITOR_PHOTOS_INVALIDATED_EVENT,
+  } = await import("../src/presentation/lib/verifiedVisitorPhotosPresentation.js");
+  const publishedEvents = [];
+  const eventTarget = {
+    dispatchEvent(event) {
+      publishedEvents.push(event);
+      return true;
+    },
+  };
+
+  assert.equal(
+    publishVerifiedVisitorPhotosInvalidation("attraction-1", {
+      eventTarget,
+      eventFactory: (type, init) => ({ type, ...init }),
+    }),
+    true
+  );
+  assert.deepEqual(publishedEvents, [{
+    type: VERIFIED_VISITOR_PHOTOS_INVALIDATED_EVENT,
+    detail: { attractionId: "attraction-1" },
+  }]);
+  assert.equal(
+    isMatchingVerifiedVisitorPhotosInvalidation(
+      publishedEvents[0],
+      "attraction-1"
+    ),
+    true
+  );
+  assert.equal(
+    isMatchingVerifiedVisitorPhotosInvalidation(
+      publishedEvents[0],
+      "attraction-2"
+    ),
+    false
+  );
 });
 
 for (const [label, overrides] of [

@@ -193,7 +193,6 @@ export async function loadVisitedAttractionIds({
     throw new Error(LOAD_ERROR_MESSAGE);
   }
 
-  // TODO: Refresh this adapter after Verified Visit create or delete actions are added to the map.
   return {
     status: VISITED_DATA_STATUS.SUCCESS,
     data: normaliseVisitedAttractionIds(result.data),

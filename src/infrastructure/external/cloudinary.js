@@ -45,22 +45,43 @@ export function createCloudinaryAdapter(getClient = getConfiguredClient) {
 
     async uploadVerifiedVisitImage(dataUri, { publicId } = {}) {
       const client = getClient();
+      const folder = "chatlas/verified-visits";
+      const targetPublicId = `${folder}/${publicId}`;
 
-      const result = await client.uploader.upload(dataUri, {
-        folder: "chatlas/verified-visits",
-        public_id: publicId,
-        overwrite: false,
-        resource_type: "image",
-        transformation: [
-          { width: 1600, height: 1600, crop: "limit" },
-          { quality: "auto", fetch_format: "auto" },
-        ],
-      });
+      try {
+        const result = await client.uploader.upload(dataUri, {
+          folder,
+          public_id: publicId,
+          overwrite: false,
+          resource_type: "image",
+          transformation: [
+            { width: 1600, height: 1600, crop: "limit" },
+            { quality: "auto", fetch_format: "auto" },
+          ],
+        });
 
-      return {
-        photoUrl: result.secure_url,
-        cloudinaryPublicId: result.public_id,
-      };
+        if (
+          typeof result?.secure_url !== "string"
+          || result.secure_url.length === 0
+          || result.public_id !== targetPublicId
+        ) {
+          throw new Error("Cloudinary did not return a valid upload result.");
+        }
+
+        return {
+          photoUrl: result.secure_url,
+          cloudinaryPublicId: targetPublicId,
+        };
+      } catch (error) {
+        try {
+          await client.uploader.destroy(targetPublicId, {
+            resource_type: "image",
+          });
+        } catch {
+          // Cleanup is best effort; preserve the original upload failure.
+        }
+        throw error;
+      }
     },
 
     async deleteCloudinaryImage(cloudinaryPublicId) {

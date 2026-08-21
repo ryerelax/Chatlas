@@ -67,6 +67,17 @@ const attractionSchema = new mongoose.Schema(
       trim: true,
     },
 
+    verificationRadiusMeters: {
+      type: Number,
+      min: 30,
+      max: 150,
+      select: false,
+      validate: {
+        validator: Number.isInteger,
+        message: "Verification radius must be a whole number of metres.",
+      },
+    },
+
     // Backfilled from Google Places API (New) editorialSummary.text by
     // scripts/syncAttractionDescriptions.mjs. Not all attractions have an
     // editorial summary, so this stays empty for some records.

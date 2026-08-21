@@ -164,6 +164,10 @@ export function normaliseMapAttractions(attractions) {
     }
 
     const rating = Number(attraction.rating);
+    const verificationRadiusMeters = Number(attraction.verificationRadiusMeters);
+    const hasVerificationRadius = Number.isInteger(verificationRadiusMeters)
+      && verificationRadiusMeters >= 30
+      && verificationRadiusMeters <= 150;
 
     return [{
       id,
@@ -173,6 +177,7 @@ export function normaliseMapAttractions(attractions) {
       latitude,
       longitude,
       rating: Number.isFinite(rating) ? rating : 0,
+      ...(hasVerificationRadius ? { verificationRadiusMeters } : {}),
     }];
   });
 }

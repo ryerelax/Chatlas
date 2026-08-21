@@ -82,6 +82,63 @@ test("verified visit deletion ignores an empty public ID and deletes a supplied 
   }]);
 });
 
+test("thrown verified upload destroys the exact deterministic target before rethrowing", async () => {
+  const uploads = [];
+  const deletes = [];
+  const uploadError = new Error("upload transport failed");
+  const adapter = createCloudinaryAdapter(() => ({
+    uploader: {
+      async upload(source, options) {
+        uploads.push({ source, options });
+        throw uploadError;
+      },
+      async destroy(publicId, options) {
+        deletes.push({ publicId, options });
+      },
+    },
+  }));
+
+  await assert.rejects(
+    adapter.uploadVerifiedVisitImage("data:image/jpeg;base64,abc", {
+      publicId: "request-unique-id",
+    }),
+    (error) => error === uploadError
+  );
+  assert.equal(uploads.length, 1);
+  assert.deepEqual(deletes, [{
+    publicId: "chatlas/verified-visits/request-unique-id",
+    options: { resource_type: "image" },
+  }]);
+});
+
+test("malformed verified upload destroys only the chosen target, never a returned foreign ID", async () => {
+  const deletes = [];
+  const adapter = createCloudinaryAdapter(() => ({
+    uploader: {
+      async upload() {
+        return {
+          secure_url: "",
+          public_id: "chatlas/verified-visits/concurrent-foreign-request",
+        };
+      },
+      async destroy(publicId, options) {
+        deletes.push({ publicId, options });
+      },
+    },
+  }));
+
+  await assert.rejects(
+    adapter.uploadVerifiedVisitImage("data:image/jpeg;base64,abc", {
+      publicId: "this-request-only",
+    }),
+    /valid upload result/i
+  );
+  assert.deepEqual(deletes, [{
+    publicId: "chatlas/verified-visits/this-request-only",
+    options: { resource_type: "image" },
+  }]);
+});
+
 test("legacy URL upload keeps its overwrite behavior and secure URL result", async () => {
   const fake = createFakeClient();
   const adapter = createCloudinaryAdapter(() => fake.client);

@@ -32,7 +32,7 @@ function createDatedVisitCapacityFilter({ userId, attractionId, visitDateKey }) 
     userId,
     attractionId,
     visitDateKey,
-    "photos.2": { $exists: false },
+    "photos.0": { $exists: false },
   };
 }
 
@@ -60,13 +60,25 @@ function toPublicVerifiedVisit(visit, viewerId) {
 }
 
 export function createVerifiedVisitRepository(VerifiedVisitModel) {
-  return {
-    async appendPhotoToDatedVisit({ userId, attractionId, visitDateKey, photo }) {
+  const repository = {
+    async appendPhotoToDatedVisit({
+      userId,
+      attractionId,
+      visitDateKey,
+      photo,
+      submissionKey,
+    }) {
       const input = { userId, attractionId, visitDateKey };
-      const capacityFilter = createDatedVisitCapacityFilter(input);
+      const capacityFilter = {
+        ...createDatedVisitCapacityFilter(input),
+        ...(submissionKey
+          ? { "photos.submissionKey": { $ne: submissionKey } }
+          : {}),
+      };
+      const persistedPhoto = submissionKey ? { ...photo, submissionKey } : photo;
       const update = {
         $setOnInsert: input,
-        $push: { photos: photo },
+        $push: { photos: persistedPhoto },
       };
 
       try {
@@ -91,18 +103,64 @@ export function createVerifiedVisitRepository(VerifiedVisitModel) {
         }
 
         const fullVisit = await VerifiedVisitModel.findOne({
-          userId,
-          attractionId,
-          visitDateKey,
-          "photos.2": { $exists: true },
+          ...input,
+          "photos.0": { $exists: true },
         }).lean();
 
         if (fullVisit) {
           return null;
         }
 
+        if (submissionKey) {
+          const replayedVisit = await repository.findDatedVisitBySubmissionKey({
+            ...input,
+            submissionKey,
+          });
+          if (replayedVisit) return null;
+        }
+
         throw error;
       }
+    },
+
+    async appendPhotosToDatedVisit({ photos, ...input }) {
+      if (!Array.isArray(photos) || photos.length !== 1) {
+        throw new RangeError("A dated visit write must contain exactly one photo.");
+      }
+
+      return repository.appendPhotoToDatedVisit({ ...input, photo: photos[0] });
+    },
+
+    async findDatedVisitPhotoCount({ userId, attractionId, visitDateKey }) {
+      const visit = await VerifiedVisitModel.findOne({ userId, attractionId, visitDateKey })
+        .select("photos._id")
+        .lean();
+      return Array.isArray(visit?.photos) ? visit.photos.length : 0;
+    },
+
+    async findDatedVisitBySubmissionKey({
+      userId,
+      attractionId,
+      submissionKey,
+    }) {
+      const visit = await VerifiedVisitModel.findOne({
+        userId,
+        attractionId,
+        "photos.submissionKey": submissionKey,
+      })
+        .select(
+          "_id attractionId photos._id photos.photoUrl photos.capturedAt +photos.submissionKey"
+        )
+        .lean();
+
+      if (!visit) return null;
+
+      return {
+        ...visit,
+        photos: (visit.photos || []).filter(
+          (photo) => photo.submissionKey === submissionKey
+        ),
+      };
     },
 
     async findDistinctVerifiedAttractionIds(userId) {
@@ -158,12 +216,26 @@ export function createVerifiedVisitRepository(VerifiedVisitModel) {
       await VerifiedVisitModel.deleteOne({ _id: visitId, photos: { $size: 0 } });
     },
   };
+
+  return repository;
 }
 
 const verifiedVisitRepository = createVerifiedVisitRepository(VerifiedVisit);
 
 export async function appendPhotoToDatedVisit(input) {
   return verifiedVisitRepository.appendPhotoToDatedVisit(input);
+}
+
+export async function appendPhotosToDatedVisit(input) {
+  return verifiedVisitRepository.appendPhotosToDatedVisit(input);
+}
+
+export async function findDatedVisitPhotoCount(input) {
+  return verifiedVisitRepository.findDatedVisitPhotoCount(input);
+}
+
+export async function findDatedVisitBySubmissionKey(input) {
+  return verifiedVisitRepository.findDatedVisitBySubmissionKey(input);
 }
 
 export async function findDistinctVerifiedAttractionIds(userId) {

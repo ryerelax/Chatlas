@@ -1,16 +1,19 @@
 import { randomUUID } from "node:crypto";
 import mongoose from "mongoose";
 import {
-  calculateDistanceMetres,
   createMalaysiaVisitDateKey,
-  MAX_VISIT_DISTANCE_METRES,
+  evaluateVisitProximity,
+  MAX_PHOTOS_PER_ATTRACTION_DAY,
+  normaliseVerifiedVisitSubmissionKey,
   validateGeolocationEvidence,
 } from "@/business/services/visitVerificationRules";
-import { findAttractionById } from "@/data/repositories/attractionRepository";
+import { findAttractionByIdForVerifiedVisit } from "@/data/repositories/attractionRepository";
 import { findUserByGoogleId } from "@/data/repositories/userRepository";
 import {
-  appendPhotoToDatedVisit,
+  appendPhotosToDatedVisit,
   deleteVisitWhenEmpty,
+  findDatedVisitBySubmissionKey,
+  findDatedVisitPhotoCount,
   findDistinctVerifiedAttractionIds,
   findOwnedPhotoForDeletion,
   findPublicVerifiedPhotos as findPublicVerifiedPhotosRepository,
@@ -36,6 +39,9 @@ const AUTH_REQUIRED_MESSAGE = "A signed-in user account is required.";
 const INVALID_IMAGE_MESSAGE = "A JPEG, PNG, or WebP image up to 5 MiB is required.";
 const SAVE_ERROR_MESSAGE = "Unable to save the verified visit photo.";
 const DELETE_ERROR_MESSAGE = "Unable to delete the verified visit photo.";
+const INVALID_BATCH_MESSAGE = "Add exactly one verified visit photo.";
+const CAPACITY_MESSAGE =
+  "You have already verified this attraction today. You can add a new photo on another Malaysia date.";
 
 function requireProviderSubject(googleId) {
   if (typeof googleId !== "string" || googleId.trim().length === 0) {
@@ -82,6 +88,17 @@ function validateImageDataUri(photoDataUri) {
   return photoDataUri;
 }
 
+function validateImageBatch(photoDataUris) {
+  if (
+    !Array.isArray(photoDataUris)
+    || photoDataUris.length !== MAX_PHOTOS_PER_ATTRACTION_DAY
+  ) {
+    throw new VerifiedVisitServiceError(INVALID_BATCH_MESSAGE, 400);
+  }
+
+  return photoDataUris.map(validateImageDataUri);
+}
+
 function validateEvidence(input) {
   const normaliseNumber = (value, message) => {
     const isNumber = typeof value === "number" && Number.isFinite(value);
@@ -101,7 +118,7 @@ function validateEvidence(input) {
     longitude: normaliseNumber(input.longitude, "A valid current location is required."),
     accuracyMeters: normaliseNumber(
       input.accuracyMeters,
-      "Location accuracy must be 100 metres or better."
+      "A valid location accuracy is required."
     ),
   };
 
@@ -120,20 +137,78 @@ function toIsoString(value) {
   return new Date(value).toISOString();
 }
 
-function toSafeCreatedPhoto(visit, attractionId, capturedAt) {
-  const photo = visit?.photos?.at(-1);
-  if (!visit?._id || !photo?._id || !photo?.photoUrl) {
-    throw new Error("The persisted visit did not include the created photo.");
+function toSafeCreatedBatch(visit, attractionId, capturedAt, incomingPhotoCount) {
+  const createdPhotos = visit?.photos?.slice(-incomingPhotoCount).map((photo) => {
+    if (!photo?._id || !photo?.photoUrl) {
+      throw new Error("The persisted visit did not include every created photo.");
+    }
+
+    return {
+      photoId: safeString(photo._id),
+      photoUrl: photo.photoUrl,
+      capturedDate: capturedAt.toISOString(),
+      verified: true,
+    };
+  });
+  const firstPhoto = createdPhotos?.[0];
+
+  if (!visit?._id || createdPhotos?.length !== incomingPhotoCount || !firstPhoto) {
+    throw new Error("The persisted visit did not include every created photo.");
   }
 
   return {
     visitId: safeString(visit._id),
-    photoId: safeString(photo._id),
+    photoId: firstPhoto.photoId,
     attractionId: safeString(attractionId),
-    photoUrl: photo.photoUrl,
-    capturedDate: capturedAt.toISOString(),
+    photoUrl: firstPhoto.photoUrl,
+    capturedDate: firstPhoto.capturedDate,
     verified: true,
+    photos: createdPhotos,
   };
+}
+
+function toSafeReplayedBatch(visit, attractionId) {
+  const createdPhotos = visit?.photos?.map((photo) => {
+    if (!photo?._id || !photo?.photoUrl || !photo?.capturedAt) {
+      throw new Error("The replayed visit did not include every created photo.");
+    }
+
+    return {
+      photoId: safeString(photo._id),
+      photoUrl: photo.photoUrl,
+      capturedDate: toIsoString(photo.capturedAt),
+      verified: true,
+    };
+  });
+  const firstPhoto = createdPhotos?.[0];
+
+  if (!visit?._id || !firstPhoto) {
+    throw new Error("The replayed visit did not include every created photo.");
+  }
+
+  return {
+    visitId: safeString(visit._id),
+    photoId: firstPhoto.photoId,
+    attractionId: safeString(attractionId),
+    photoUrl: firstPhoto.photoUrl,
+    capturedDate: firstPhoto.capturedDate,
+    verified: true,
+    photos: createdPhotos,
+  };
+}
+
+function replayMatchesUploadedBatch(visit, uploadedAssets) {
+  if (
+    !Array.isArray(visit?.photos)
+    || visit.photos.length !== uploadedAssets.length
+  ) {
+    return false;
+  }
+
+  return visit.photos.every((photo, index) => (
+    typeof photo?.photoUrl === "string"
+    && photo.photoUrl === uploadedAssets[index]?.photoUrl
+  ));
 }
 
 function toSafePublicCards(visits, attractionId) {
@@ -166,10 +241,12 @@ export function createVerifiedVisitService(dependencies) {
     now,
     randomUUID: createUuid,
     findUserByGoogleId: findUser,
-    findAttractionById: findAttraction,
+    findAttractionByIdForVerifiedVisit: findAttraction,
     uploadVerifiedVisitImage: uploadImage,
     deleteCloudinaryImage: deleteImage,
-    appendPhotoToDatedVisit: appendPhoto,
+    appendPhotosToDatedVisit: appendPhotos,
+    findDatedVisitBySubmissionKey: findBySubmissionKey,
+    findDatedVisitPhotoCount: findPhotoCount,
     findDistinctVerifiedAttractionIds: findDistinctIds,
     findPublicVerifiedPhotos: findPublicPhotos,
     findOwnedPhotoForDeletion: findOwnedPhoto,
@@ -185,22 +262,12 @@ export function createVerifiedVisitService(dependencies) {
     }
   }
 
-  async function verifyVisitPhoto(input = {}) {
-    const googleId = requireProviderSubject(input.googleId);
-    const attractionId = requireObjectId(input.attractionId, "attraction", isValidObjectId);
-    const photoDataUri = validateImageDataUri(input.photoDataUri);
-    const evidence = validateEvidence(input);
-    const user = await findPersistedUser(googleId, SAVE_ERROR_MESSAGE);
-
-    if (!user?._id) {
-      throw new VerifiedVisitServiceError(AUTH_REQUIRED_MESSAGE, 401);
-    }
-
+  async function findSupportedAttraction(attractionId, errorMessage) {
     let attraction;
     try {
       attraction = await findAttraction(attractionId);
     } catch {
-      throw asSafeInternalError(SAVE_ERROR_MESSAGE);
+      throw asSafeInternalError(errorMessage);
     }
 
     if (
@@ -211,50 +278,127 @@ export function createVerifiedVisitService(dependencies) {
       throw new VerifiedVisitServiceError("Attraction not found.", 404);
     }
 
-    const distanceMeters = calculateDistanceMetres(evidence, attraction);
+    return attraction;
+  }
+
+  async function readDatedPhotoCount(input, errorMessage) {
+    let count;
+    try {
+      count = await findPhotoCount(input);
+    } catch {
+      throw asSafeInternalError(errorMessage);
+    }
+
+    if (!Number.isInteger(count) || count < 0) {
+      throw asSafeInternalError(errorMessage);
+    }
+
+    return count;
+  }
+
+  async function readSubmissionReplay(input, errorMessage) {
+    try {
+      return await findBySubmissionKey(input);
+    } catch {
+      throw asSafeInternalError(errorMessage);
+    }
+  }
+
+  async function verifyVisitPhotos(input = {}) {
+    const googleId = requireProviderSubject(input.googleId);
+    const attractionId = requireObjectId(input.attractionId, "attraction", isValidObjectId);
+    const photoDataUris = validateImageBatch(input.photoDataUris);
+    const evidence = validateEvidence(input);
+    let submissionKey;
+    try {
+      submissionKey = normaliseVerifiedVisitSubmissionKey(input.submissionKey);
+    } catch (error) {
+      throw new VerifiedVisitServiceError(error.message, 400);
+    }
+    const user = await findPersistedUser(googleId, SAVE_ERROR_MESSAGE);
+
+    if (!user?._id) {
+      throw new VerifiedVisitServiceError(AUTH_REQUIRED_MESSAGE, 401);
+    }
+
+    const attraction = await findSupportedAttraction(attractionId, SAVE_ERROR_MESSAGE);
+    const capturedAt = now();
+    const visitDateKey = createMalaysiaVisitDateKey(capturedAt);
+    const datedVisitInput = {
+      userId: user._id,
+      attractionId: attraction._id,
+      visitDateKey,
+    };
+    const submissionReplayInput = submissionKey
+      ? {
+          userId: user._id,
+          attractionId: attraction._id,
+          submissionKey,
+        }
+      : null;
+
+    if (submissionKey) {
+      const replayedVisit = await readSubmissionReplay(
+        submissionReplayInput,
+        SAVE_ERROR_MESSAGE
+      );
+      if (replayedVisit) {
+        return toSafeReplayedBatch(replayedVisit, attraction._id);
+      }
+    }
+
+    const {
+      distanceMetres: distanceMeters,
+      radiusMeters,
+      qualifies,
+    } = evaluateVisitProximity(attraction, evidence);
     if (!Number.isFinite(distanceMeters)) {
       throw asSafeInternalError(SAVE_ERROR_MESSAGE);
     }
-    if (distanceMeters > MAX_VISIT_DISTANCE_METRES) {
+    if (!qualifies) {
       throw new VerifiedVisitServiceError(
-        "You must be within 150 metres of the attraction to verify this visit.",
+        `You must be within ${radiusMeters} metres of the attraction to verify this visit.`,
         400
       );
     }
 
-    const capturedAt = now();
-    const visitDateKey = createMalaysiaVisitDateKey(capturedAt);
-    const publicId = createUuid();
-
-    let uploaded;
-    try {
-      uploaded = await uploadImage(photoDataUri, { publicId });
-    } catch {
-      throw asSafeInternalError(SAVE_ERROR_MESSAGE);
+    const existingPhotoCount = await readDatedPhotoCount(
+      datedVisitInput,
+      SAVE_ERROR_MESSAGE
+    );
+    if (existingPhotoCount + photoDataUris.length > MAX_PHOTOS_PER_ATTRACTION_DAY) {
+      throw new VerifiedVisitServiceError(CAPACITY_MESSAGE, 409);
     }
 
+    const uploadedAssets = [];
     let cleanupAttempted = false;
-    const cleanupUpload = async () => {
-      if (cleanupAttempted || !uploaded?.cloudinaryPublicId) return;
+    let preserveUploadedAssets = false;
+    const cleanupUploads = async () => {
+      if (cleanupAttempted) return;
       cleanupAttempted = true;
-      await deleteImage(uploaded.cloudinaryPublicId);
+
+      for (const asset of uploadedAssets) {
+        if (!asset.cloudinaryPublicId) continue;
+        try {
+          await deleteImage(asset.cloudinaryPublicId);
+        } catch {
+          // Cleanup is best effort, and every remaining asset is still attempted.
+        }
+      }
     };
 
-    if (!uploaded?.photoUrl || !uploaded?.cloudinaryPublicId) {
-      try {
-        await cleanupUpload();
-      } catch {
-        // The malformed upload response still produces only a safe service error.
-      }
-      throw asSafeInternalError(SAVE_ERROR_MESSAGE);
-    }
-
     try {
-      const visit = await appendPhoto({
-        userId: user._id,
-        attractionId: attraction._id,
-        visitDateKey,
-        photo: {
+      for (const photoDataUri of photoDataUris) {
+        const uploaded = await uploadImage(photoDataUri, { publicId: createUuid() });
+        if (uploaded?.cloudinaryPublicId) {
+          uploadedAssets.push(uploaded);
+        }
+        if (!uploaded?.photoUrl || !uploaded?.cloudinaryPublicId) {
+          throw asSafeInternalError(SAVE_ERROR_MESSAGE);
+        }
+      }
+
+      const photos = uploadedAssets.map((uploaded) => ({
           photoUrl: uploaded.photoUrl,
           cloudinaryPublicId: uploaded.cloudinaryPublicId,
           capturedAt,
@@ -262,30 +406,134 @@ export function createVerifiedVisitService(dependencies) {
           longitude: evidence.longitude,
           accuracyMeters: evidence.accuracyMeters,
           distanceMeters,
-        },
-      });
+      }));
+      const appendInput = {
+        ...datedVisitInput,
+        photos,
+        ...(submissionKey ? { submissionKey } : {}),
+      };
+      let visit;
+      try {
+        visit = await appendPhotos(appendInput);
+      } catch (appendError) {
+        if (!submissionKey) throw appendError;
 
-      if (!visit) {
-        await cleanupUpload();
-        throw new VerifiedVisitServiceError(
-          "You have already added 3 verified photos for this attraction today. You can add more photos on your next visit.",
-          409
-        );
+        let retryReturnedNull = false;
+        try {
+          visit = await appendPhotos(appendInput);
+          retryReturnedNull = visit === null;
+        } catch {
+          // A second unknown outcome must be reconciled before destructive cleanup.
+        }
+
+        if (visit) {
+          preserveUploadedAssets = true;
+          return toSafeCreatedBatch(
+            visit,
+            attraction._id,
+            capturedAt,
+            photos.length
+          );
+        }
+
+        let replayedVisit;
+        try {
+          replayedVisit = await readSubmissionReplay(
+            submissionReplayInput,
+            SAVE_ERROR_MESSAGE
+          );
+        } catch (reconciliationError) {
+          preserveUploadedAssets = true;
+          throw reconciliationError;
+        }
+
+        if (replayedVisit) {
+          if (replayMatchesUploadedBatch(replayedVisit, uploadedAssets)) {
+            preserveUploadedAssets = true;
+          } else {
+            await cleanupUploads();
+          }
+          return toSafeReplayedBatch(replayedVisit, attraction._id);
+        }
+
+        if (!retryReturnedNull) {
+          preserveUploadedAssets = true;
+          throw asSafeInternalError(SAVE_ERROR_MESSAGE);
+        }
+        throw appendError;
       }
 
-      return toSafeCreatedPhoto(visit, attraction._id, capturedAt);
+      if (!visit) {
+        if (submissionKey) {
+          const replayedVisit = await readSubmissionReplay(
+            submissionReplayInput,
+            SAVE_ERROR_MESSAGE
+          );
+          if (replayedVisit) {
+            await cleanupUploads();
+            return toSafeReplayedBatch(replayedVisit, attraction._id);
+          }
+        }
+        throw new VerifiedVisitServiceError(CAPACITY_MESSAGE, 409);
+      }
+
+      return toSafeCreatedBatch(visit, attraction._id, capturedAt, photos.length);
     } catch (error) {
+      if (!preserveUploadedAssets) {
+        await cleanupUploads();
+      }
       if (error instanceof VerifiedVisitServiceError) {
         throw error;
       }
 
-      try {
-        await cleanupUpload();
-      } catch {
-        // The response remains safe and cleanup is never attempted more than once.
-      }
       throw asSafeInternalError(SAVE_ERROR_MESSAGE);
     }
+  }
+
+  async function verifyVisitPhoto(input = {}) {
+    const { photoDataUri, ...batchInput } = input;
+    const result = await verifyVisitPhotos({
+      ...batchInput,
+      photoDataUris: [photoDataUri],
+    });
+    return {
+      visitId: result.visitId,
+      photoId: result.photoId,
+      attractionId: result.attractionId,
+      photoUrl: result.photoUrl,
+      capturedDate: result.capturedDate,
+      verified: result.verified,
+    };
+  }
+
+  async function getVerifiedVisitPhotoCapacity(input = {}) {
+    const googleId = requireProviderSubject(input.googleId);
+    const attractionId = requireObjectId(input.attractionId, "attraction", isValidObjectId);
+    const user = await findPersistedUser(
+      googleId,
+      "Unable to load verified visit photo capacity."
+    );
+
+    if (!user?._id) {
+      throw new VerifiedVisitServiceError(AUTH_REQUIRED_MESSAGE, 401);
+    }
+
+    const attraction = await findSupportedAttraction(
+      attractionId,
+      "Unable to load verified visit photo capacity."
+    );
+    const visitDateKey = createMalaysiaVisitDateKey(now());
+    const existingTodayCount = await readDatedPhotoCount(
+      { userId: user._id, attractionId: attraction._id, visitDateKey },
+      "Unable to load verified visit photo capacity."
+    );
+
+    return {
+      attractionId: safeString(attraction._id),
+      existingTodayCount,
+      dailyLimit: MAX_PHOTOS_PER_ATTRACTION_DAY,
+      remainingSlots: existingTodayCount === 0 ? 1 : 0,
+    };
   }
 
   async function getVerifiedAttractionIdsForUser(providerSubject) {
@@ -382,7 +630,9 @@ export function createVerifiedVisitService(dependencies) {
   }
 
   return {
+    verifyVisitPhotos,
     verifyVisitPhoto,
+    getVerifiedVisitPhotoCapacity,
     getVerifiedAttractionIdsForUser,
     getPublicVerifiedPhotos,
     deleteOwnedVerifiedPhoto,
@@ -394,10 +644,12 @@ const verifiedVisitService = createVerifiedVisitService({
   now: () => new Date(),
   randomUUID,
   findUserByGoogleId,
-  findAttractionById,
+  findAttractionByIdForVerifiedVisit,
   uploadVerifiedVisitImage,
   deleteCloudinaryImage,
-  appendPhotoToDatedVisit,
+  appendPhotosToDatedVisit,
+  findDatedVisitBySubmissionKey,
+  findDatedVisitPhotoCount,
   findDistinctVerifiedAttractionIds,
   findPublicVerifiedPhotos: findPublicVerifiedPhotosRepository,
   findOwnedPhotoForDeletion,
@@ -407,6 +659,14 @@ const verifiedVisitService = createVerifiedVisitService({
 
 export async function verifyVisitPhoto(input) {
   return verifiedVisitService.verifyVisitPhoto(input);
+}
+
+export async function verifyVisitPhotos(input) {
+  return verifiedVisitService.verifyVisitPhotos(input);
+}
+
+export async function getVerifiedVisitPhotoCapacity(input) {
+  return verifiedVisitService.getVerifiedVisitPhotoCapacity(input);
 }
 
 export async function getVerifiedAttractionIdsForUser(googleId) {
