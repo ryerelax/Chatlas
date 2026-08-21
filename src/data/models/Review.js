@@ -42,6 +42,16 @@ const reviewSchema = new mongoose.Schema(
       maxlength: 1000,
     },
 
+    likes: {
+      type: [
+        {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+      ],
+      default: [],
+    },
+
     photos: {
       type: [
         {

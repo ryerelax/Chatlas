@@ -2,11 +2,22 @@
 
 import Image from "next/image";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useSession } from "next-auth/react";
 
 export default function ReviewCard({ review = {} }) {
+  const { status: sessionStatus } = useSession();
   const userName = review.userName || "Chatlas traveller";
   const rating = Number(review.rating) || 0;
   const photos = getValidPhotos(review.photos);
+  const reviewId = review._id?.toString() || "";
+  const [likeCount, setLikeCount] = useState(() =>
+    normalizeLikeCount(review.likeCount)
+  );
+  const [likedByCurrentUser, setLikedByCurrentUser] = useState(
+    Boolean(review.likedByCurrentUser)
+  );
+  const [isUpdatingLike, setIsUpdatingLike] = useState(false);
+  const [likeError, setLikeError] = useState("");
   const [activePhotoIndex, setActivePhotoIndex] = useState(null);
   const dialogRef = useRef(null);
   const closeButtonRef = useRef(null);
@@ -150,6 +161,46 @@ export default function ReviewCard({ review = {} }) {
     }
   }
 
+  async function handleLikeClick() {
+    if (
+      sessionStatus !== "authenticated" ||
+      !reviewId ||
+      isUpdatingLike
+    ) {
+      return;
+    }
+
+    try {
+      setIsUpdatingLike(true);
+      setLikeError("");
+
+      const response = await fetch(`/api/reviews/${reviewId}/like`, {
+        method: likedByCurrentUser ? "DELETE" : "PUT",
+      });
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(result.message || "Unable to update this Review's likes.");
+      }
+
+      setLikeCount(normalizeLikeCount(result.data?.likeCount));
+      setLikedByCurrentUser(Boolean(result.data?.likedByCurrentUser));
+    } catch (error) {
+      setLikeError(error.message || "Unable to update this Review's likes.");
+    } finally {
+      setIsUpdatingLike(false);
+    }
+  }
+
+  const isGuest = sessionStatus === "unauthenticated";
+  const isLikeDisabled =
+    sessionStatus !== "authenticated" || !reviewId || isUpdatingLike;
+  const likeButtonLabel = isGuest
+    ? "Sign in to like this review"
+    : likedByCurrentUser
+      ? "Unlike this review"
+      : "Like this review";
+
   return (
     <article className="rounded-[18px] border border-attraction-border bg-white p-[18px] shadow-sm sm:p-6">
       <div className="flex items-start gap-4">
@@ -244,6 +295,53 @@ export default function ReviewCard({ review = {} }) {
           ))}
         </div>
       )}
+
+      <div className="mt-5 sm:ml-[72px]">
+        <button
+          type="button"
+          onClick={handleLikeClick}
+          disabled={isLikeDisabled}
+          aria-pressed={likedByCurrentUser}
+          aria-label={`${likeButtonLabel}. ${likeCount} ${likeCount === 1 ? "like" : "likes"}.`}
+          className={`inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-[10px] border px-4 text-sm font-semibold transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-attraction-primary disabled:cursor-not-allowed disabled:opacity-60 ${
+            likedByCurrentUser
+              ? "border-attraction-primary bg-attraction-primary-soft-strong text-attraction-primary-dark"
+              : "border-attraction-border-strong bg-white text-attraction-body hover:bg-attraction-primary-soft"
+          }`}
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill={likedByCurrentUser ? "currentColor" : "none"}
+            aria-hidden="true"
+          >
+            <path
+              d="M7.5 10.5v9H4.75a1.75 1.75 0 0 1-1.75-1.75v-5.5a1.75 1.75 0 0 1 1.75-1.75H7.5Zm0 0 3.6-6.3a1.65 1.65 0 0 1 3.05 1.02V9h4.31a2.54 2.54 0 0 1 2.48 3.08l-1.23 5.75a2.75 2.75 0 0 1-2.69 2.17H7.5"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span>
+            {isUpdatingLike
+              ? "Updating..."
+              : isGuest
+                ? "Sign in to like"
+                : likedByCurrentUser
+                  ? "Liked"
+                  : "Like"}
+          </span>
+          <span aria-live="polite">{likeCount}</span>
+        </button>
+
+        {likeError && (
+          <p role="alert" className="mt-2 text-sm text-attraction-error">
+            {likeError}
+          </p>
+        )}
+      </div>
 
       {activePhoto && (
         <div
@@ -364,6 +462,11 @@ function getValidPhotos(photos) {
   return photos
     .filter(isValidReviewPhoto)
     .slice(0, 3);
+}
+
+function normalizeLikeCount(value) {
+  const count = Number(value);
+  return Number.isInteger(count) && count > 0 ? count : 0;
 }
 
 function isValidReviewPhoto(photo) {

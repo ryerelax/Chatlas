@@ -1,47 +1,40 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import {
-  deleteReviewPhoto,
+  likeReview,
   ReviewServiceError,
+  unlikeReview,
 } from "@/business/services/reviewService";
 import { connectToDatabase } from "@/infrastructure/database/mongodb";
 
 export const runtime = "nodejs";
 
-export async function DELETE(request, { params }) {
+export async function PUT(_request, { params }) {
+  return updateLikeState(params, true);
+}
+
+export async function DELETE(_request, { params }) {
+  return updateLikeState(params, false);
+}
+
+async function updateLikeState(params, liked) {
   try {
     const session = await auth();
 
     if (!session?.user?.email) {
       return NextResponse.json(
-        { success: false, message: "Unauthorized" },
+        { success: false, message: "Please sign in to like reviews." },
         { status: 401 }
-      );
-    }
-
-    let body;
-
-    try {
-      body = await request.json();
-    } catch {
-      return NextResponse.json(
-        { success: false, message: "Invalid photo deletion request." },
-        { status: 400 }
       );
     }
 
     const { id } = await params;
     await connectToDatabase();
-    await deleteReviewPhoto({
-      reviewId: id,
-      email: session.user.email,
-      publicId: body.publicId,
-    });
+    const likeState = liked
+      ? await likeReview({ reviewId: id, email: session.user.email })
+      : await unlikeReview({ reviewId: id, email: session.user.email });
 
-    return NextResponse.json({
-      success: true,
-      message: "Photo deleted successfully",
-    });
+    return NextResponse.json({ success: true, data: likeState });
   } catch (error) {
     if (error instanceof ReviewServiceError) {
       return NextResponse.json(
@@ -50,9 +43,9 @@ export async function DELETE(request, { params }) {
       );
     }
 
-    console.error("Failed to delete Review photo.");
+    console.error("Failed to update Review like state.");
     return NextResponse.json(
-      { success: false, message: "Failed to delete photo" },
+      { success: false, message: "Unable to update this Review's likes." },
       { status: 500 }
     );
   }

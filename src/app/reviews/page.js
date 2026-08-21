@@ -565,7 +565,7 @@ export default function MyReviewsPage() {
             </div>
             <h3 className="text-xl font-bold text-[#10213B] text-center">Delete this review?</h3>
             <p className="text-[#65748A] text-center mt-2">
-              Are you sure you want to permanently delete your review of "<span className="font-semibold text-[#10213B]">{deleteTarget.attractionId?.name || "this attraction"}</span>"? This action cannot be undone.
+              Are you sure you want to permanently delete your review of &quot;<span className="font-semibold text-[#10213B]">{deleteTarget.attractionId?.name || "this attraction"}</span>&quot;? This action cannot be undone.
             </p>
             <div className="flex gap-3 justify-end mt-6">
               <button
@@ -626,7 +626,7 @@ export default function MyReviewsPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
             </svg>
             <h3 className="text-xl font-semibold text-[#10213B]">No reviews yet</h3>
-            <p className="text-[#65748A] mt-2">You haven't written any reviews yet.</p>
+            <p className="text-[#65748A] mt-2">You haven&apos;t written any reviews yet.</p>
             <button
               onClick={() => router.push("/")}
               className="mt-6 px-6 py-2 bg-[#FFAB00] text-[#142033] font-semibold rounded-lg hover:bg-[#E89B00] transition-colors"

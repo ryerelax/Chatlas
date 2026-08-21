@@ -53,3 +53,58 @@ export async function findReviewsByAttraction(attractionId) {
     .sort({ createdAt: -1 })      /** Sort by creation date, newest first */
     .lean();
 }
+
+export async function findReviewById(reviewId) {
+  return Review.findById(reviewId).lean();
+}
+
+export async function findReviewByIdWithAttraction(reviewId) {
+  return Review.findById(reviewId)
+    .populate("attractionId", "name category address rating photos")
+    .lean();
+}
+
+export async function findReviewsByUserId(userId) {
+  return Review.find({ userId })
+    .populate("attractionId", "name category address rating photos")
+    .sort({ createdAt: -1 })
+    .lean();
+}
+
+export async function updateReviewById(reviewId, reviewData) {
+  return Review.findByIdAndUpdate(
+    reviewId,
+    { $set: reviewData },
+    { new: true, runValidators: true }
+  )
+    .populate("attractionId", "name category address rating photos")
+    .lean();
+}
+
+export async function removeReviewPhotoByPublicId(reviewId, publicId) {
+  return Review.findOneAndUpdate(
+    { _id: reviewId, "photos.publicId": publicId },
+    { $pull: { photos: { publicId } } },
+    { new: true, runValidators: true }
+  ).lean();
+}
+
+export async function deleteReviewById(reviewId) {
+  return Review.findByIdAndDelete(reviewId).lean();
+}
+
+export async function addReviewLike(reviewId, userId) {
+  return Review.findByIdAndUpdate(
+    reviewId,
+    { $addToSet: { likes: userId } },
+    { new: true }
+  ).lean();
+}
+
+export async function removeReviewLike(reviewId, userId) {
+  return Review.findByIdAndUpdate(
+    reviewId,
+    { $pull: { likes: userId } },
+    { new: true }
+  ).lean();
+}

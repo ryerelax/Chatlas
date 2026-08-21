@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useSession } from "next-auth/react";
@@ -10,14 +10,20 @@ export default function MyPhotosPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const { reviews, isLoading: reviewsLoading, loadReviews, refreshReviews } = useReviews();
-  const [photos, setPhotos] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [lightboxPhoto, setLightboxPhoto] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [toast, setToast] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSettingProfile, setIsSettingProfile] = useState(false);
-  const [hasLoaded, setHasLoaded] = useState(false);
+  const [isInitialLoadPending, setIsInitialLoadPending] = useState(true);
+  const [profilePictureOverride, setProfilePictureOverride] = useState(null);
+  const hasRequestedReviewsRef = useRef(false);
+  const currentProfilePicture =
+    profilePictureOverride ?? session?.user?.profilePicture ?? "";
+  const photos = useMemo(
+    () => buildReviewPhotos(reviews, currentProfilePicture),
+    [reviews, currentProfilePicture]
+  );
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -25,17 +31,11 @@ export default function MyPhotosPage() {
       return;
     }
     
-    if (status === "authenticated" && !hasLoaded) {
-      loadReviews(true);
-      setHasLoaded(true);
+    if (status === "authenticated" && !hasRequestedReviewsRef.current) {
+      hasRequestedReviewsRef.current = true;
+      loadReviews(true).finally(() => setIsInitialLoadPending(false));
     }
-  }, [status, router, loadReviews, hasLoaded]);
-
-  useEffect(() => {
-    if (reviews.length > 0 || !reviewsLoading) {
-      extractPhotosFromReviews();
-    }
-  }, [reviews, reviewsLoading]);
+  }, [status, router, loadReviews]);
 
   useEffect(() => {
     const refreshIfNeeded = () => {
@@ -62,60 +62,20 @@ export default function MyPhotosPage() {
       }
     };
 
-    window.addEventListener("focus", refreshIfNeeded);
-    document.addEventListener('visibilitychange', () => {
+    const handleVisibilityChange = () => {
       if (!document.hidden) {
         refreshIfNeeded();
       }
-    });
+    };
+
+    window.addEventListener("focus", refreshIfNeeded);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       window.removeEventListener("focus", refreshIfNeeded);
-      document.removeEventListener('visibilitychange', refreshIfNeeded);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [refreshReviews]);
-
-  const extractPhotosFromReviews = () => {
-    setIsLoading(true);
-    try {
-      const photoList = [];
-      const seenUrls = new Set();
-      const currentProfilePic = session?.user?.profilePicture;
-
-      reviews.forEach((review) => {
-        if (review.photos && review.photos.length > 0) {
-          review.photos.forEach((photo, index) => {
-            if (seenUrls.has(photo.url)) {
-              return;
-            }
-            
-            photoList.push({
-              id: `${review._id}-${index}`,
-              reviewId: review._id,
-              url: photo.url,
-              publicId: photo.publicId,
-              attractionName: review.attractionId?.name || "Unknown attraction",
-              attractionId: review.attractionId?._id || review.attractionId,
-              uploadedAt: new Date(review.createdAt).toLocaleDateString("en-US", {
-                day: "numeric",
-                month: "long",
-                year: "numeric",
-              }),
-              isProfilePicture: photo.url === currentProfilePic,
-            });
-            seenUrls.add(photo.url);
-          });
-        }
-      });
-
-      setPhotos(photoList);
-    } catch (error) {
-      console.error("Error extracting photos:", error);
-      setPhotos([]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const showToast = (message, type = "success") => {
     setToast({ message, type });
@@ -146,16 +106,7 @@ export default function MyPhotosPage() {
       const data = await response.json();
 
       if (data.success) {
-        setPhotos(prev => prev.map((p) => ({ 
-          ...p, 
-          isProfilePicture: p.id === photoId 
-        })));
-        
-        if (session) {
-          session.user.image = photo.url;
-          session.user.profilePicture = photo.url;
-        }
-        
+        setProfilePictureOverride(photo.url);
         localStorage.setItem('profileUpdated', 'true');
         showToast("Profile picture updated successfully!", "success");
         
@@ -184,10 +135,7 @@ export default function MyPhotosPage() {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ 
-            publicId: deleteTarget.publicId,
-            url: deleteTarget.url 
-          }),
+          body: JSON.stringify({ publicId: deleteTarget.publicId }),
         });
 
         const data = await response.json();
@@ -210,18 +158,12 @@ export default function MyPhotosPage() {
             publicId: "",
           }),
         });
-        
-        console.log("Profile picture reset response:", await resetResponse.json());
-        
-        if (session) {
-          session.user.image = "";
-          session.user.profilePicture = "";
-        }
-        
+
+        await resetResponse.json();
+        setProfilePictureOverride("");
         localStorage.setItem('profileUpdated', 'true');
       }
 
-      setPhotos(photos.filter((p) => p.id !== deleteTarget.id));
       setDeleteTarget(null);
       localStorage.setItem('photoDeleted', 'true');
       showToast("Photo deleted successfully!", "success");
@@ -239,7 +181,7 @@ export default function MyPhotosPage() {
     }
   };
 
-  if (status === "loading" || isLoading || reviewsLoading) {
+  if (status === "loading" || isInitialLoadPending || reviewsLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <p className="text-[#65748A]">Loading your photos...</p>
@@ -341,7 +283,7 @@ export default function MyPhotosPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
             <h3 className="text-xl font-semibold text-[#10213B]">No photos yet</h3>
-            <p className="text-[#65748A] mt-2">You haven't uploaded any photos with your reviews yet.</p>
+            <p className="text-[#65748A] mt-2">You haven&apos;t uploaded any photos with your reviews yet.</p>
             <button
               onClick={() => router.push("/")}
               className="mt-6 px-6 py-2 bg-[#FFAB00] text-[#142033] font-semibold rounded-lg hover:bg-[#E89B00] transition-colors"
@@ -473,4 +415,46 @@ export default function MyPhotosPage() {
       )}
     </div>
   );
+}
+
+function buildReviewPhotos(reviews, currentProfilePicture) {
+  const photoList = [];
+  const seenUrls = new Set();
+
+  reviews.forEach((review) => {
+    if (!Array.isArray(review.photos)) {
+      return;
+    }
+
+    review.photos.forEach((photo, index) => {
+      if (
+        !photo ||
+        typeof photo.url !== "string" ||
+        !photo.url ||
+        typeof photo.publicId !== "string" ||
+        !photo.publicId ||
+        seenUrls.has(photo.url)
+      ) {
+        return;
+      }
+
+      photoList.push({
+        id: `${review._id}-${index}`,
+        reviewId: review._id,
+        url: photo.url,
+        publicId: photo.publicId,
+        attractionName: review.attractionId?.name || "Unknown attraction",
+        attractionId: review.attractionId?._id || review.attractionId,
+        uploadedAt: new Date(review.createdAt).toLocaleDateString("en-US", {
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        }),
+        isProfilePicture: photo.url === currentProfilePicture,
+      });
+      seenUrls.add(photo.url);
+    });
+  });
+
+  return photoList;
 }
