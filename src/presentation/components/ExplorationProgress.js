@@ -1,9 +1,15 @@
+import Link from "next/link";
 import { VISITED_DATA_STATUS } from "@/business/services/explorationMapService";
+import { getVisitedAuthenticationPresentation } from "@/presentation/lib/explorationMapPresentation";
 
 function ProgressState({ status }) {
   const isError = status === VISITED_DATA_STATUS.ERROR;
+  const authenticationPresentation =
+    getVisitedAuthenticationPresentation(status);
   const message =
-    status === VISITED_DATA_STATUS.LOADING
+    authenticationPresentation
+      ? "Sign in to view exploration progress"
+      : status === VISITED_DATA_STATUS.LOADING
       ? "Loading exploration progress..."
       : isError
         ? "Unable to load exploration progress"
@@ -29,6 +35,19 @@ function ProgressState({ status }) {
         {isError ? "!" : status === VISITED_DATA_STATUS.LOADING ? "…" : "i"}
       </span>
       <p className="mt-3 font-semibold text-[#10213B]">{message}</p>
+      {authenticationPresentation && (
+        <>
+          <p className="mt-1 text-sm text-[#65748A]">
+            {authenticationPresentation.message}
+          </p>
+          <Link
+            href={authenticationPresentation.signInHref}
+            className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-[#006C56] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#005E4B] focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#006C56]"
+          >
+            {authenticationPresentation.signInLabel}
+          </Link>
+        </>
+      )}
     </div>
   );
 }
@@ -65,7 +84,7 @@ export default function ExplorationProgress({ progress }) {
           Exploration progress
         </h3>
         <p className="mt-1 text-sm leading-6 text-[#65748A]">
-          Your reviewed places across supported Melaka attractions.
+          Your verified visits across supported Melaka attractions.
         </p>
       </div>
 

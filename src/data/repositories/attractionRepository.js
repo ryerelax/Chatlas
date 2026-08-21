@@ -1,7 +1,7 @@
 import Attraction from "@/data/models/Attraction";
 
 const EXPLORATION_MAP_FIELDS =
-  "_id name address latitude longitude category rating totalReviews businessStatus";
+  "_id name address latitude longitude category rating totalReviews businessStatus +verificationRadiusMeters";
 
 export function createExplorationMapAttractionsRepository(AttractionModel) {
   return {
@@ -95,6 +95,31 @@ export async function findAttractionById(attractionId) {
     state: "Melaka",
     isActive: true,
   }).lean();
+}
+
+export function createVerifiedVisitAttractionRepository(AttractionModel) {
+  return {
+    findAttractionByIdForVerifiedVisit(attractionId) {
+      return AttractionModel.findOne({
+        _id: attractionId,
+        state: "Melaka",
+        isActive: true,
+      })
+        .select(
+          "_id latitude longitude category state isActive +verificationRadiusMeters"
+        )
+        .lean();
+    },
+  };
+}
+
+const verifiedVisitAttractionRepository =
+  createVerifiedVisitAttractionRepository(Attraction);
+
+export async function findAttractionByIdForVerifiedVisit(attractionId) {
+  return verifiedVisitAttractionRepository.findAttractionByIdForVerifiedVisit(
+    attractionId
+  );
 }
 
 export async function findAttractionsMissingPhotos({ force = false } = {}) {

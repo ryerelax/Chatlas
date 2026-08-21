@@ -1,6 +1,7 @@
 export const VISITED_DATA_STATUS = Object.freeze({
   LOADING: "loading",
   SUCCESS: "success",
+  AUTH_REQUIRED: "auth-required",
   UNAVAILABLE: "unavailable",
   ERROR: "error",
 });
@@ -44,21 +45,21 @@ export function normaliseAttractionId(value) {
   }
 }
 
-export function normaliseReviewedAttractionIds(reviewedAttractionIds) {
-  if (!Array.isArray(reviewedAttractionIds)) {
+export function normaliseVisitedAttractionIds(visitedAttractionIds) {
+  if (!Array.isArray(visitedAttractionIds)) {
     return [];
   }
 
   return [
     ...new Set(
-      reviewedAttractionIds
+      visitedAttractionIds
         .map(normaliseAttractionId)
         .filter((attractionId) => attractionId !== null)
     ),
   ];
 }
 
-export function selectDevelopmentPreviewReviewedAttractionIds(
+export function selectDevelopmentPreviewVisitedAttractionIds(
   supportedAttractions,
   limit = 3
 ) {
@@ -69,7 +70,7 @@ export function selectDevelopmentPreviewReviewedAttractionIds(
   const resolvedLimit = Number.isFinite(limit)
     ? Math.max(0, Math.trunc(limit))
     : 3;
-  const supportedAttractionIds = normaliseReviewedAttractionIds(
+  const supportedAttractionIds = normaliseVisitedAttractionIds(
     supportedAttractions.map((attraction) => attraction?.id)
   );
   const selectedCount = Math.min(resolvedLimit, supportedAttractionIds.length);
@@ -96,13 +97,13 @@ export function createDevelopmentVisitedAttractionCollection(
   supportedAttractions = [],
   initialAttractionIds = []
 ) {
-  const supportedAttractionIds = normaliseReviewedAttractionIds(
+  const supportedAttractionIds = normaliseVisitedAttractionIds(
     Array.isArray(supportedAttractions)
       ? supportedAttractions.map((attraction) => attraction?.id)
       : []
   );
   const supportedAttractionIdSet = new Set(supportedAttractionIds);
-  const initialIds = normaliseReviewedAttractionIds(initialAttractionIds).filter(
+  const initialIds = normaliseVisitedAttractionIds(initialAttractionIds).filter(
     (attractionId) => supportedAttractionIdSet.has(attractionId)
   );
   let currentAttractionIds = [...initialIds];
@@ -112,9 +113,9 @@ export function createDevelopmentVisitedAttractionCollection(
       return [...currentAttractionIds];
     },
     add() {
-      const reviewedIdSet = new Set(currentAttractionIds);
+      const visitedIdSet = new Set(currentAttractionIds);
       const nextAttractionId = supportedAttractionIds.find(
-        (attractionId) => !reviewedIdSet.has(attractionId)
+        (attractionId) => !visitedIdSet.has(attractionId)
       );
 
       if (nextAttractionId) {
@@ -163,6 +164,10 @@ export function normaliseMapAttractions(attractions) {
     }
 
     const rating = Number(attraction.rating);
+    const verificationRadiusMeters = Number(attraction.verificationRadiusMeters);
+    const hasVerificationRadius = Number.isInteger(verificationRadiusMeters)
+      && verificationRadiusMeters >= 30
+      && verificationRadiusMeters <= 150;
 
     return [{
       id,
@@ -172,13 +177,14 @@ export function normaliseMapAttractions(attractions) {
       latitude,
       longitude,
       rating: Number.isFinite(rating) ? rating : 0,
+      ...(hasVerificationRadius ? { verificationRadiusMeters } : {}),
     }];
   });
 }
 
 export function createExplorationMapViewModel(
   supportedAttractions,
-  reviewedAttractionIds,
+  visitedAttractionIds,
   visitedDataStatus = VISITED_DATA_STATUS.UNAVAILABLE
 ) {
   const requestedStatus = VISITED_DATA_STATUS_VALUES.has(visitedDataStatus)
@@ -186,19 +192,19 @@ export function createExplorationMapViewModel(
     : VISITED_DATA_STATUS.UNAVAILABLE;
   const resolvedStatus =
     requestedStatus === VISITED_DATA_STATUS.SUCCESS &&
-    !Array.isArray(reviewedAttractionIds)
+    !Array.isArray(visitedAttractionIds)
       ? VISITED_DATA_STATUS.UNAVAILABLE
       : requestedStatus;
   const hasVisitedData = resolvedStatus === VISITED_DATA_STATUS.SUCCESS;
-  const reviewedIdSet = new Set(
-    hasVisitedData ? normaliseReviewedAttractionIds(reviewedAttractionIds) : []
+  const visitedIdSet = new Set(
+    hasVisitedData ? normaliseVisitedAttractionIds(visitedAttractionIds) : []
   );
   const attractions = Array.isArray(supportedAttractions)
     ? supportedAttractions.flatMap((attraction) => {
         const id = normaliseAttractionId(attraction?.id);
 
         return id
-          ? [{ ...attraction, id, isVisited: hasVisitedData ? reviewedIdSet.has(id) : null }]
+          ? [{ ...attraction, id, isVisited: hasVisitedData ? visitedIdSet.has(id) : null }]
           : [];
       })
     : [];
@@ -222,7 +228,7 @@ export function createExplorationMapViewModel(
 
 export function createExplorationPageState({
   supportedAttractions,
-  reviewedAttractionIds,
+  visitedAttractionIds,
   attractionDataStatus = ATTRACTION_DATA_STATUS.LOADING,
   visitedDataStatus = VISITED_DATA_STATUS.UNAVAILABLE,
   mapStatus = MAP_STATUS.IDLE,
@@ -243,7 +249,7 @@ export function createExplorationPageState({
       : VISITED_DATA_STATUS.ERROR;
   const viewModel = createExplorationMapViewModel(
     hasAttractionData ? supportedAttractions : [],
-    reviewedAttractionIds,
+    visitedAttractionIds,
     effectiveVisitedDataStatus
   );
 
@@ -265,6 +271,28 @@ export function createExplorationPageState({
       viewModel.visitedDataStatus === VISITED_DATA_STATUS.SUCCESS &&
       viewModel.visitedAttractions.length === 0,
   };
+}
+
+const PUBLIC_PAGE_PATHS = new Set([
+  "/",
+  "/offline",
+  "/sw.js",
+  "/manifest.webmanifest",
+  "/exploration-map",
+  "/exploration-map/",
+  "/profiles",
+]);
+
+export function isPublicPagePathname(pathname) {
+  if (typeof pathname !== "string") {
+    return false;
+  }
+
+  return (
+    PUBLIC_PAGE_PATHS.has(pathname) ||
+    pathname.startsWith("/attractions/") ||
+    pathname.startsWith("/profiles/")
+  );
 }
 
 export function createExplorationProgressSummary(

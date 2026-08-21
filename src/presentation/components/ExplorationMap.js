@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import {
   useCallback,
   useEffect,
@@ -10,6 +11,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import ExplorationProgress from "@/presentation/components/ExplorationProgress";
+import VisitVerificationFlow from "@/presentation/components/VisitVerificationFlow";
 import VisitedAttractionsList from "@/presentation/components/VisitedAttractionsList";
 import { loadGoogleMaps } from "@/presentation/lib/googleMapsLoader";
 import {
@@ -25,11 +27,14 @@ import {
   MELAKA_MAP_CENTRE,
 } from "@/presentation/lib/explorationMapPresentation";
 import {
+  canLoadVisitedAttractions,
+  createVisitedDataReloadRevision,
   createDevelopmentVisitedPreviewAdapter,
   getDevelopmentMapPreviewMode,
   getDevelopmentVisitedPreviewMode,
   loadVisitedAttractionIds,
 } from "@/presentation/lib/visitedAttractionsAdapter";
+import { getVerificationAuthenticationState } from "@/presentation/lib/visitVerificationPresentation";
 const MAP_UNAVAILABLE_MESSAGE =
   "We couldn't load the map. You can still explore the attraction lists below.";
 
@@ -114,6 +119,8 @@ function MarkerLegend({ visitedDataStatus }) {
   const statusLabel =
     visitedDataStatus === VISITED_DATA_STATUS.LOADING
       ? "Checking visited history"
+      : visitedDataStatus === VISITED_DATA_STATUS.AUTH_REQUIRED
+        ? "Sign in for visited status"
       : "Visited status unavailable";
 
   return (
@@ -121,15 +128,17 @@ function MarkerLegend({ visitedDataStatus }) {
       className="mt-4 flex flex-wrap items-center gap-3 text-xs font-semibold text-[#405066]"
       aria-label="Map marker legend"
     >
-      <span className="inline-flex items-center gap-2 rounded-full border border-[#B7E5D2] bg-white px-3 py-1.5">
-        <span
-          className="flex h-6 w-6 items-center justify-center rounded-full bg-[#006C56] text-sm font-bold text-white"
-          aria-hidden="true"
-        >
-          {"\u2713"}
+      {visitStatusResolved && (
+        <span className="inline-flex items-center gap-2 rounded-full border border-[#B7E5D2] bg-white px-3 py-1.5">
+          <span
+            className="flex h-6 w-6 items-center justify-center rounded-full bg-[#006C56] text-sm font-bold text-white"
+            aria-hidden="true"
+          >
+            {"\u2713"}
+          </span>
+          Visited
         </span>
-        Visited
-      </span>
+      )}
       <span className="inline-flex items-center gap-2 rounded-full border border-[#D8E1E7] bg-white px-3 py-1.5">
         <span
           className="flex h-6 w-6 items-center justify-center rounded-full border border-[#768780] bg-[#E3EAE7] text-[10px] font-bold text-[#31463F]"
@@ -206,6 +215,7 @@ function LoadingSkeleton() {
 }
 
 export default function ExplorationMap() {
+  const { data: session, status: sessionStatus } = useSession();
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markerByAttractionIdRef = useRef(new Map());
@@ -268,10 +278,18 @@ export default function ExplorationMap() {
         : null,
     [attractions, dataStatus, developmentVisitedPreviewMode]
   );
-  const isVisitedDataReadyToLoad =
-    isDevelopmentPreviewQueryReady &&
-    (developmentVisitedPreviewMode === null ||
-      developmentPreviewAdapter !== null);
+  const visitedDataReloadRevision = createVisitedDataReloadRevision({
+    sessionStatus,
+    sessionUserId: session?.user?.id,
+    requestRevision: visitedRequest,
+    developmentPreviewActive: developmentVisitedPreviewMode !== null,
+  });
+  const isVisitedDataReadyToLoad = canLoadVisitedAttractions({
+    isPreviewQueryReady: isDevelopmentPreviewQueryReady,
+    developmentPreviewActive: developmentVisitedPreviewMode !== null,
+    developmentPreviewReady: developmentPreviewAdapter !== null,
+    sessionStatus,
+  });
 
   const loadAttractions = useCallback(() => {
     setMapStatus(MAP_STATUS.IDLE);
@@ -366,14 +384,14 @@ export default function ExplorationMap() {
     developmentPreviewAdapter,
     developmentVisitedPreviewMode,
     isVisitedDataReadyToLoad,
-    visitedRequest,
+    visitedDataReloadRevision,
   ]);
 
   const explorationPageState = useMemo(
     () =>
       createExplorationPageState({
         supportedAttractions: attractions,
-        reviewedAttractionIds: visitedData.attractionIds,
+        visitedAttractionIds: visitedData.attractionIds,
         attractionDataStatus: dataStatus,
         visitedDataStatus: visitedData.status,
         mapStatus,
@@ -389,6 +407,11 @@ export default function ExplorationMap() {
   const explorationViewModel = explorationPageState.viewModel;
   const mapAttractions = explorationViewModel.attractions;
   const visitedAttractions = explorationViewModel.visitedAttractions;
+  const verificationAuthenticationState =
+    getVerificationAuthenticationState(
+      explorationViewModel.visitedDataStatus,
+      { developmentPreviewActive: developmentVisitedPreviewMode !== null }
+    );
 
   useEffect(() => {
     mapAttractionByIdRef.current = new Map(
@@ -714,7 +737,7 @@ export default function ExplorationMap() {
                   }
                   className="min-h-11 rounded-xl bg-[#704A00] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#5D3E00] focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#704A00] disabled:cursor-not-allowed disabled:bg-[#C5AD7B]"
                 >
-                  Add mock review
+                  Add mock visited place
                 </button>
                 <button
                   type="button"
@@ -727,7 +750,7 @@ export default function ExplorationMap() {
                   }
                   className="min-h-11 rounded-xl border border-[#B88924] bg-white px-4 py-2 text-sm font-semibold text-[#704A00] transition hover:bg-[#FFF1C2] focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#704A00] disabled:cursor-not-allowed disabled:border-[#D8CAB0] disabled:text-[#9B8968]"
                 >
-                  Remove mock review
+                  Remove mock visited place
                 </button>
                 <button
                   type="button"
@@ -770,6 +793,27 @@ export default function ExplorationMap() {
           {mapAttractions.length === 1 ? "" : "s"}
         </div>
       </div>
+
+      <VisitVerificationFlow
+        attractions={mapAttractions}
+        authenticationState={
+          verificationAuthenticationState.authenticationState
+        }
+        authenticationConfirmed={
+          verificationAuthenticationState.authenticationConfirmed
+        }
+        authenticationRequired={
+          verificationAuthenticationState.authenticationRequired
+        }
+        authenticationPending={
+          verificationAuthenticationState.authenticationPending
+        }
+        authenticationUnavailable={
+          verificationAuthenticationState.authenticationUnavailable
+        }
+        onAuthenticationRetry={loadVisitedAttractions}
+        onVerified={loadVisitedAttractions}
+      />
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
         <div className="relative min-h-80 overflow-hidden rounded-3xl border border-[#D8E1E7] bg-[#F1F6F4] shadow-sm lg:min-h-136">
@@ -904,7 +948,7 @@ export default function ExplorationMap() {
       </div>
 
       <p className="mt-4 text-sm text-[#65748A]">
-        This map shows attraction locations only. Chatlas does not request your current location or provide route navigation.
+        This map shows attraction locations only. Chatlas requests your current location only when you start visit verification and does not provide route navigation.
       </p>
 
       <div className="mt-8 grid items-start gap-6 xl:grid-cols-[minmax(300px,0.8fr)_minmax(0,1.2fr)]">

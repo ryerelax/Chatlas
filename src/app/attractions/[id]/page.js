@@ -17,6 +17,7 @@ import {
   removeFromFavourites,
   checkFavouritesStatus,
 } from "@/business/services/favouritesService";
+import VerifiedVisitorPhotos from "@/presentation/components/VerifiedVisitorPhotos";
 
 export default function AttractionDetailsPage() {
   const params = useParams();
@@ -223,6 +224,8 @@ export default function AttractionDetailsPage() {
                 refreshVersion={reviewRefreshVersion}
               />
             </section>
+
+            <VerifiedVisitorPhotos key={attractionId} attractionId={attractionId} />
           </div>
 
           {/* Right column */}

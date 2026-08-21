@@ -11,7 +11,7 @@ The system is planned around six core modules:
 - Social Profile
 - Personal Collection
 
-The current application includes working attraction discovery, Google authentication, reviews, exploration maps, public Social Profiles, collection-related pages, and offline/PWA support. Some cross-module integration and final design work remains in progress.
+The current application includes working attraction discovery, Google authentication, reviews, exploration maps, Verified Visit photos, public Social Profiles, collection-related pages, and offline/PWA support. Some cross-module integration and final design work remains in progress.
 
 ## Technology Stack
 
@@ -122,7 +122,9 @@ src/
 - Google sign-in with persisted user records
 - Signed-in user profile view and editing
 - Create, edit, and delete ratings and reviews, including review photos
-- Display a personal exploration map and progress derived from reviewed attractions
+- Display a personal exploration map and progress derived from distinct Verified Visits
+- Verify nearby visits with one live-camera photo and server-side distance checks
+- Display public Verified Visit photos on attraction detail pages
 - Browse and search a public Traveller Directory as a guest or registered user
 - Display public profiles without exposing email addresses or Google IDs
 - Display public reviews with attraction links and available photos
@@ -237,27 +239,51 @@ Returns one attraction by MongoDB ObjectId.
 
 ### `/attractions/[id]`
 
-Displays the attraction details page.
+Displays attraction details, reviews, and the attraction's public Verified Visit photo gallery.
 
 ### `/attractions/[id]/location`
 
-Displays the selected attraction on Google Maps.
+Displays the attraction on Google Maps.
 
 ### `/login`
 
-Provides Google sign-in through Auth.js.
+Provides Google sign-in.
 
 ### `/profile` and `/profile/edit`
 
-Display and update the signed-in user's profile.
+Display and edit the signed-in user's profile.
+
+### `/exploration-map`
+
+Displays the interactive attraction map, canonical visited state, progress, and the live-camera Verified Visit flow. The public photo gallery is rendered on attraction details pages, not on the exploration map itself.
+
+### `GET /api/exploration-map/attractions`
+
+Returns supported map attractions with their resolved effective verification radius.
+
+### `GET /api/exploration-map/verified-visits`
+
+Returns the signed-in user's distinct verified attraction IDs. An attraction appears once even when it has evidence from several retained photos or dates.
+
+### `POST /api/exploration-map/verified-visits`
+
+Accepts exactly one live-camera photo plus location evidence and returns one singular safe photo result. Identity, attraction, GPS accuracy, distance, per-attraction daily capacity, and canonical radius are validated server-side. Network and server failures retain the selected evidence for an idempotent retry; definitive client failures clear it, and a `409` displays the authoritative daily-limit message.
+
+### `GET /api/exploration-map/verified-visits/capacity?attractionId=[id]`
+
+Returns `dailyLimit: 1`, the actual dated photo count, and non-authoritative `remainingSlots` of `0` or `1` for that attraction on the current Malaysia calendar date. The camera preflight uses this response before requesting camera access.
+
+### `GET /api/attractions/[id]/verified-photos`
+
+Returns safe public verified-photo cards for an attraction.
+
+### `DELETE /api/exploration-map/verified-visits/[visitId]/photos/[photoId]`
+
+Deletes one photo owned by the signed-in user and removes its dated visit group when no photos remain.
 
 ### `/reviews`
 
 Displays the signed-in user's review activity and review-management interface.
-
-### `/exploration-map`
-
-Displays the signed-in user's exploration progress and visited attractions.
 
 ### `/profiles`
 

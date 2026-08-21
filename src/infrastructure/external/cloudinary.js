@@ -28,17 +28,85 @@ function getConfiguredClient() {
 
 // Uploads an image directly from a source URL (Cloudinary fetches it server-side)
 // and returns the resulting stable, permanent secure URL.
+export function createCloudinaryAdapter(getClient = getConfiguredClient) {
+  return {
+    async uploadImageFromUrl(imageUrl, { folder, publicId } = {}) {
+      const client = getClient();
+
+      const result = await client.uploader.upload(imageUrl, {
+        folder,
+        public_id: publicId,
+        overwrite: true,
+        resource_type: "image",
+      });
+
+      return result.secure_url;
+    },
+
+    async uploadVerifiedVisitImage(dataUri, { publicId } = {}) {
+      const client = getClient();
+      const folder = "chatlas/verified-visits";
+      const targetPublicId = `${folder}/${publicId}`;
+
+      try {
+        const result = await client.uploader.upload(dataUri, {
+          folder,
+          public_id: publicId,
+          overwrite: false,
+          resource_type: "image",
+          transformation: [
+            { width: 1600, height: 1600, crop: "limit" },
+            { quality: "auto", fetch_format: "auto" },
+          ],
+        });
+
+        if (
+          typeof result?.secure_url !== "string"
+          || result.secure_url.length === 0
+          || result.public_id !== targetPublicId
+        ) {
+          throw new Error("Cloudinary did not return a valid upload result.");
+        }
+
+        return {
+          photoUrl: result.secure_url,
+          cloudinaryPublicId: targetPublicId,
+        };
+      } catch (error) {
+        try {
+          await client.uploader.destroy(targetPublicId, {
+            resource_type: "image",
+          });
+        } catch {
+          // Cleanup is best effort; preserve the original upload failure.
+        }
+        throw error;
+      }
+    },
+
+    async deleteCloudinaryImage(cloudinaryPublicId) {
+      if (!cloudinaryPublicId) return;
+
+      const client = getClient();
+      await client.uploader.destroy(cloudinaryPublicId, {
+        resource_type: "image",
+      });
+    },
+  };
+}
+
+const cloudinaryAdapter = createCloudinaryAdapter();
+
 export async function uploadImageFromUrl(imageUrl, { folder, publicId } = {}) {
-  const client = getConfiguredClient();
+  return cloudinaryAdapter.uploadImageFromUrl(imageUrl, { folder, publicId });
+}
 
-  const result = await client.uploader.upload(imageUrl, {
-    folder,
-    public_id: publicId,
-    overwrite: true,
-    resource_type: "image",
-  });
+export async function uploadVerifiedVisitImage(dataUri, { publicId } = {}) {
+  return cloudinaryAdapter.uploadVerifiedVisitImage(dataUri, { publicId });
+}
 
-  return result.secure_url;
+export async function deleteCloudinaryImage(cloudinaryPublicId) {
+  return cloudinaryAdapter.deleteCloudinaryImage(cloudinaryPublicId);
 }
 
 // Uploads a browser-submitted file (already read into a Buffer server-side) and

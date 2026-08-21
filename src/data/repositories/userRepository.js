@@ -68,7 +68,7 @@ export async function findUserByIdentity({ googleId = "", email = "" } = {}) {
 
 export async function findUserByGoogleId(googleId) {
   return User.findOne({ googleId })
-    .select("_id name displayName profilePicture")
+    .select("_id name displayName profilePicture bio location")
     .lean();
 }
 

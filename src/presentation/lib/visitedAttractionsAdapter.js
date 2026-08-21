@@ -1,12 +1,12 @@
 import {
   createDevelopmentVisitedAttractionCollection,
-  normaliseReviewedAttractionIds,
-  selectDevelopmentPreviewReviewedAttractionIds,
+  normaliseVisitedAttractionIds,
+  selectDevelopmentPreviewVisitedAttractionIds,
   VISITED_DATA_STATUS,
 } from "@/business/services/explorationMapService";
 
-const INTEGRATION_PENDING_MESSAGE =
-  "Visited attractions are unavailable until Review integration is complete.";
+const AUTH_REQUIRED_MESSAGE = "Sign in to view your verified visits.";
+const LOAD_ERROR_MESSAGE = "Verified visits could not be loaded.";
 const DEVELOPMENT_PREVIEW_MESSAGE =
   "Development preview \u2014 mock visited data";
 const DEVELOPMENT_LOADING_PREVIEW_MESSAGE =
@@ -20,6 +20,43 @@ const DEVELOPMENT_MAP_PREVIEW_MODES = new Set([
   "loading",
   "unavailable",
 ]);
+
+function isAbortError(error) {
+  return error?.name === "AbortError";
+}
+
+export function createVisitedDataReloadRevision({
+  sessionStatus,
+  sessionUserId,
+  requestRevision = 0,
+  developmentPreviewActive = false,
+} = {}) {
+  if (developmentPreviewActive) {
+    return JSON.stringify(["development-preview", requestRevision]);
+  }
+
+  const identity =
+    sessionStatus === "authenticated" && typeof sessionUserId === "string"
+      ? sessionUserId.trim()
+      : "";
+
+  return JSON.stringify([sessionStatus, identity, requestRevision]);
+}
+
+export function canLoadVisitedAttractions({
+  isPreviewQueryReady,
+  developmentPreviewActive,
+  developmentPreviewReady,
+  sessionStatus,
+} = {}) {
+  if (!isPreviewQueryReady) return false;
+
+  if (developmentPreviewActive) {
+    return developmentPreviewReady === true;
+  }
+
+  return sessionStatus !== "loading";
+}
 
 export function getDevelopmentVisitedPreviewMode(
   queryString,
@@ -69,59 +106,105 @@ export function isDevelopmentVisitedPreviewEnabled(
 }
 
 /**
- * Loads the attraction IDs reviewed by the signed-in user.
+ * Loads the attraction IDs verified as visited by the signed-in user.
  *
- * The adapter keeps visited-data access separate from the map UI so its
- * implementation can later be replaced without changing map or list logic.
- * Callers may pass an AbortSignal even though the pending implementation does
- * not perform a request yet. User identity is intentionally not accepted here.
+ * The adapter keeps private visited-data access separate from the public map UI.
+ * User identity is intentionally not accepted here because the route resolves
+ * it from the server-side session.
  *
  * @param {{
  *   signal?: AbortSignal,
+ *   fetchImpl?: typeof fetch,
  *   developmentPreview?: boolean,
+ *   developmentPreviewStatus?: "success" | "loading",
  *   previewAttractionIds?: unknown[],
  * }} options
  * @returns {Promise<{
- *   status: "success" | "unavailable",
+ *   status: "success" | "auth-required" | "error",
  *   data: string[],
  *   message: string,
  * }>}
  */
 export async function loadVisitedAttractionIds({
   signal,
+  fetchImpl = globalThis.fetch,
   developmentPreview = false,
+  developmentPreviewStatus = VISITED_DATA_STATUS.SUCCESS,
   previewAttractionIds = [],
 } = {}) {
-  void signal;
-
   if (
     process.env.NODE_ENV === "development" &&
     developmentPreview === true
   ) {
+    const isLoadingPreview =
+      developmentPreviewStatus === VISITED_DATA_STATUS.LOADING;
+
     return {
-      status: VISITED_DATA_STATUS.SUCCESS,
-      data: normaliseReviewedAttractionIds(previewAttractionIds),
-      message: DEVELOPMENT_PREVIEW_MESSAGE,
+      status: isLoadingPreview
+        ? VISITED_DATA_STATUS.LOADING
+        : VISITED_DATA_STATUS.SUCCESS,
+      data: isLoadingPreview
+        ? []
+        : normaliseVisitedAttractionIds(previewAttractionIds),
+      message: isLoadingPreview
+        ? DEVELOPMENT_LOADING_PREVIEW_MESSAGE
+        : DEVELOPMENT_PREVIEW_MESSAGE,
     };
   }
 
-  // TODO: Connect this adapter only after the Review integration contract provides:
-  // - the canonical internal user ID used by review records;
-  // - the Review service for querying the signed-in user's reviews;
-  // - the valid review statuses that count an attraction as visited;
-  // - the review deletion rules that remove an attraction from visited data; and
-  // - an authenticated private /api/exploration-map/visited-attractions endpoint;
-  // - the refresh/cache-invalidation contract after review create, edit, or delete.
+  let response;
+  try {
+    response = await fetchImpl("/api/exploration-map/verified-visits", {
+      signal,
+      cache: "no-store",
+    });
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
+
+    throw new Error(LOAD_ERROR_MESSAGE);
+  }
+
+  if (response?.status === 401) {
+    return {
+      status: VISITED_DATA_STATUS.AUTH_REQUIRED,
+      data: [],
+      message: AUTH_REQUIRED_MESSAGE,
+    };
+  }
+
+  let result;
+  try {
+    result = await response?.json();
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
+
+    throw new Error(LOAD_ERROR_MESSAGE);
+  }
+
+  if (
+    !response?.ok ||
+    result?.success === false ||
+    !Array.isArray(result?.data)
+  ) {
+    throw new Error(LOAD_ERROR_MESSAGE);
+  }
+
   return {
-    status: VISITED_DATA_STATUS.UNAVAILABLE,
-    data: [],
-    message: INTEGRATION_PENDING_MESSAGE,
+    status: VISITED_DATA_STATUS.SUCCESS,
+    data: normaliseVisitedAttractionIds(result.data),
+    message: "",
   };
 }
 
 export function createDevelopmentVisitedPreviewAdapter({
   supportedAttractions = [],
   mode = "visited",
+  fetchImpl = globalThis.fetch,
+  loadVisitedAttractionIdsImpl = loadVisitedAttractionIds,
 } = {}) {
   if (process.env.NODE_ENV !== "development") {
     return null;
@@ -132,7 +215,7 @@ export function createDevelopmentVisitedPreviewAdapter({
     : "visited";
   const initialAttractionIds =
     resolvedMode === "visited"
-      ? selectDevelopmentPreviewReviewedAttractionIds(
+      ? selectDevelopmentPreviewVisitedAttractionIds(
           supportedAttractions
         )
       : [];
@@ -143,17 +226,14 @@ export function createDevelopmentVisitedPreviewAdapter({
     );
 
   function createResult(signal) {
-    if (resolvedMode === "loading") {
-      return Promise.resolve({
-        status: VISITED_DATA_STATUS.LOADING,
-        data: [],
-        message: DEVELOPMENT_LOADING_PREVIEW_MESSAGE,
-      });
-    }
-
-    return loadVisitedAttractionIds({
+    return loadVisitedAttractionIdsImpl({
       signal,
+      fetchImpl,
       developmentPreview: true,
+      developmentPreviewStatus:
+        resolvedMode === "loading"
+          ? VISITED_DATA_STATUS.LOADING
+          : VISITED_DATA_STATUS.SUCCESS,
       previewAttractionIds: visitedAttractionCollection.getAttractionIds(),
     });
   }

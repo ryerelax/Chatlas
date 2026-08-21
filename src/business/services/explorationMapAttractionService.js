@@ -1,11 +1,25 @@
 import { findAllActiveMelakaMapAttractions } from "@/data/repositories/attractionRepository";
+import { resolveVerificationRadiusMeters } from "@/business/services/visitVerificationRules";
+
+function toPublicMapAttraction(attraction) {
+  const { verificationRadiusMeters: canonicalOverride, ...publicAttraction } = attraction;
+
+  return {
+    ...publicAttraction,
+    verificationRadiusMeters: resolveVerificationRadiusMeters({
+      ...attraction,
+      verificationRadiusMeters: canonicalOverride,
+    }),
+  };
+}
 
 export function createExplorationMapService({
   findAllActiveMelakaMapAttractions: findMapAttractions,
 }) {
   return {
     async getExplorationMapAttractions() {
-      return findMapAttractions();
+      const attractions = await findMapAttractions();
+      return attractions.map(toPublicMapAttraction);
     },
   };
 }
