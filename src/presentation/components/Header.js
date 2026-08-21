@@ -1,12 +1,11 @@
 "use client";
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
-import { useState } from "react";
 import { useLanguage } from "@/presentation/contexts/LanguageContext";
+import NavDropdown from "@/presentation/components/NavDropdown";
 
 export default function Header() {
   const { data: session, status } = useSession();
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const { lang, changeLang, t } = useLanguage();
 
   const isLoggedIn = status === "authenticated";
@@ -33,18 +32,22 @@ export default function Header() {
           >
             {t("home")}
           </Link>
-          <Link
-            href="/#attractions"
-            className="rounded-lg px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-emerald-50 hover:text-emerald-700"
-          >
-            {t("attractions")}
-          </Link>
-          {isLoggedIn && (
+          {isLoggedIn ? (
+            <NavDropdown
+              trigger={t("attractions")}
+              triggerClassName="rounded-lg px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-emerald-50 hover:text-emerald-700"
+              menuClassName="absolute left-0 z-10 mt-2 w-56 rounded-lg border border-gray-200 bg-white shadow-lg"
+              items={[
+                { key: "browse", label: t("browseAttractions"), href: "/#attractions" },
+                { key: "add", label: t("addAttraction"), href: "/attractions/submit" },
+              ]}
+            />
+          ) : (
             <Link
-              href="/attractions/submit"
+              href="/#attractions"
               className="rounded-lg px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-emerald-50 hover:text-emerald-700"
             >
-              {t("addAttraction")}
+              {t("attractions")}
             </Link>
           )}
           <Link
@@ -107,55 +110,42 @@ export default function Header() {
           </div>
 
           {isLoggedIn ? (
-            <div className="relative">
-              <button
-                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="flex items-center gap-2 focus:outline-none"
-              >
-                <img
-                  src={
-                    session?.user?.image ||
-                    session?.user?.picture ||
-                    "/default-avatar.png"
-                  }
-                  alt={
-                    session?.user?.displayName ||
-                    session?.user?.name ||
-                    "Profile"
-                  }
-                  className="h-8 w-8 rounded-full border border-gray-300 object-cover"
-                  onError={(e) => {
-                    e.currentTarget.src = "/default-avatar.png";
-                  }}
-                />
-                <span className="hidden text-sm text-gray-700 sm:inline">
-                  {session?.user?.displayName ||
-                    session?.user?.name?.split(" ")[0] ||
-                    "User"}
-                </span>
-              </button>
-
-              {isDropdownOpen && (
-                <div className="absolute right-0 z-10 mt-2 w-48 rounded-lg border border-gray-200 bg-white shadow-lg">
-                  <Link
-                    href="/profile"
-                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                    onClick={() => setIsDropdownOpen(false)}
-                  >
-                    👤 {t("myProfile")}
-                  </Link>
-                  <button
-                    onClick={() => {
-                      setIsDropdownOpen(false);
-                      signOut({ redirectTo: "/login" });
+            <NavDropdown
+              trigger={
+                <>
+                  <img
+                    src={
+                      session?.user?.image ||
+                      session?.user?.picture ||
+                      "/default-avatar.png"
+                    }
+                    alt={
+                      session?.user?.displayName ||
+                      session?.user?.name ||
+                      "Profile"
+                    }
+                    className="h-8 w-8 rounded-full border border-gray-300 object-cover"
+                    onError={(e) => {
+                      e.currentTarget.src = "/default-avatar.png";
                     }}
-                    className="block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-gray-50"
-                  >
-                    🚪 {t("logout")}
-                  </button>
-                </div>
-              )}
-            </div>
+                  />
+                  <span className="hidden text-sm text-gray-700 sm:inline">
+                    {session?.user?.displayName ||
+                      session?.user?.name?.split(" ")[0] ||
+                      "User"}
+                  </span>
+                </>
+              }
+              items={[
+                { key: "profile", label: <>👤 {t("myProfile")}</>, href: "/profile" },
+                {
+                  key: "logout",
+                  label: <>🚪 {t("logout")}</>,
+                  className: "block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-gray-50",
+                  onClick: () => signOut({ redirectTo: "/login" }),
+                },
+              ]}
+            />
           ) : (
             <Link
               href="/login"
@@ -211,18 +201,27 @@ export default function Header() {
             >
               {t("home")}
             </Link>
-            <Link
-              href="/#attractions"
-              className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700"
-            >
-              {t("attractions")}
-            </Link>
-            {isLoggedIn && (
+            {isLoggedIn ? (
+              <>
+                <Link
+                  href="/#attractions"
+                  className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700"
+                >
+                  {t("browseAttractions")}
+                </Link>
+                <Link
+                  href="/attractions/submit"
+                  className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700"
+                >
+                  {t("addAttraction")}
+                </Link>
+              </>
+            ) : (
               <Link
-                href="/attractions/submit"
+                href="/#attractions"
                 className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700"
               >
-                {t("addAttraction")}
+                {t("attractions")}
               </Link>
             )}
             <Link
