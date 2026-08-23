@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useSession } from "next-auth/react";
 import { useReviews } from "@/presentation/contexts/ReviewsContext";
+import ExplorationMap from "@/presentation/components/ExplorationMap";
+import { loadVisitedAttractionIds } from "@/presentation/lib/visitedAttractionsAdapter";
 
 export default function TravelHistoryPage() {
   const router = useRouter();
@@ -16,6 +18,9 @@ export default function TravelHistoryPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortNewest, setSortNewest] = useState(true);
   const [expandedId, setExpandedId] = useState(null);
+  const [visitedCount, setVisitedCount] = useState(0);
+  const [latestVerifiedAtByAttractionId, setLatestVerifiedAtByAttractionId] =
+    useState({});
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -27,6 +32,31 @@ export default function TravelHistoryPage() {
       loadReviews(true);
     }
   }, [status, router, loadReviews]);
+
+  useEffect(() => {
+    if (status !== "authenticated") return;
+
+    const controller = new AbortController();
+
+    async function loadVisitedCount() {
+      try {
+        const result = await loadVisitedAttractionIds({ signal: controller.signal });
+        if (!controller.signal.aborted && result.status === "success") {
+          setVisitedCount(result.data.length);
+          setLatestVerifiedAtByAttractionId(
+            result.latestVerifiedAtByAttractionId || {}
+          );
+        }
+      } catch (error) {
+        if (error?.name !== "AbortError") {
+          console.error("Failed to load visited attraction count:", error);
+        }
+      }
+    }
+
+    loadVisitedCount();
+    return () => controller.abort();
+  }, [status]);
 
   useEffect(() => {
     if (reviews && reviews.length > 0) {
@@ -220,7 +250,7 @@ export default function TravelHistoryPage() {
     return null;
   }
 
-  const totalAttractions = activities ? activities.length : 0;
+  const totalAttractions = visitedCount;
   const totalReviews = activities ? activities.reduce((sum, a) => sum + (a.reviews ? a.reviews.length : 0), 0) : 0;
   const totalPhotos = activities ? activities.reduce((sum, a) => sum + getTotalPhotos(a.reviews), 0) : 0;
 
@@ -255,6 +285,10 @@ export default function TravelHistoryPage() {
             <p className="text-[#10213B] font-bold text-3xl tracking-tight">{totalPhotos}</p>
             <p className="text-[#65748A] text-sm mt-1">Photos uploaded</p>
           </div>
+        </div>
+
+        <div className="mb-8">
+          <ExplorationMap mapOnly />
         </div>
 
         <div className="flex items-center gap-4 mb-6">
@@ -361,7 +395,9 @@ export default function TravelHistoryPage() {
                         </div>
                         <div className="text-right">
                           <p className="text-sm text-[#65748A]">
-                            Last visited: {activity.lastReviewDate ? formatDate(activity.lastReviewDate) : "N/A"}
+                            {latestVerifiedAtByAttractionId[activity.id]
+                              ? `Last visited: ${formatDate(latestVerifiedAtByAttractionId[activity.id])}`
+                              : `Last reviewed: ${formatDate(activity.lastReviewDate)}`}
                           </p>
                         </div>
                       </div>

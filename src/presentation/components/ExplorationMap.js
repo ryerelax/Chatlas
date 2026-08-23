@@ -184,7 +184,25 @@ function MarkerLegend({ visitedDataStatus, filter, onFilterChange }) {
   );
 }
 
-function LoadingSkeleton() {
+function LoadingSkeleton({ mapOnly = false }) {
+  if (mapOnly) {
+    return (
+      <div
+        className="flex min-h-80 items-center justify-center overflow-hidden rounded-3xl border border-[#D8E1E7] bg-[#F1F6F4] shadow-sm lg:min-h-136"
+        role="status"
+        aria-live="polite"
+      >
+        <div className="text-center">
+          <div
+            className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-[#CDF5E5] border-t-[#006C56]"
+            aria-hidden="true"
+          />
+          <p className="mt-4 font-semibold text-[#405066]">Loading map...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
@@ -241,7 +259,7 @@ function LoadingSkeleton() {
   );
 }
 
-export default function ExplorationMap() {
+export default function ExplorationMap({ mapOnly = false }) {
   const { data: session, status: sessionStatus } = useSession();
   const { lang } = useLanguage();
   const mapContainerRef = useRef(null);
@@ -753,7 +771,7 @@ export default function ExplorationMap() {
   }
 
   if (dataStatus === ATTRACTION_DATA_STATUS.LOADING) {
-    return <LoadingSkeleton />;
+    return <LoadingSkeleton mapOnly={mapOnly} />;
   }
 
   if (dataStatus === ATTRACTION_DATA_STATUS.ERROR) {
@@ -781,18 +799,20 @@ export default function ExplorationMap() {
           </button>
         </section>
 
-        <div className="max-w-xl">
-          <ExplorationProgress
-            progress={{ status: VISITED_DATA_STATUS.ERROR }}
-          />
-        </div>
+        {!mapOnly && (
+          <div className="max-w-xl">
+            <ExplorationProgress
+              progress={{ status: VISITED_DATA_STATUS.ERROR }}
+            />
+          </div>
+        )}
       </div>
     );
   }
 
   return (
-    <section aria-labelledby="exploration-map-heading">
-      {process.env.NODE_ENV === "development" &&
+    <section aria-labelledby={mapOnly ? undefined : "exploration-map-heading"}>
+      {!mapOnly && process.env.NODE_ENV === "development" &&
         developmentPreviewRequested && (
           <div className="mb-6 rounded-2xl border border-[#E9B949] bg-[#FFF7DD] px-4 py-3 text-sm text-[#704A00] shadow-sm">
             <div className="flex items-center gap-3 font-semibold" role="status">
@@ -867,6 +887,7 @@ export default function ExplorationMap() {
           </div>
         )}
 
+      {!mapOnly && (
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#006C56]">
@@ -892,8 +913,9 @@ export default function ExplorationMap() {
           {getExplorationMapFilterCountLabel(visibleAttractions.length, mapVisitFilter)}
         </div>
       </div>
+      )}
 
-      <VisitVerificationFlow
+      {!mapOnly && <VisitVerificationFlow
         attractions={mapAttractions}
         authenticationState={
           verificationAuthenticationState.authenticationState
@@ -912,9 +934,9 @@ export default function ExplorationMap() {
         }
         onAuthenticationRetry={loadVisitedAttractions}
         onVerified={loadVisitedAttractions}
-      />
+      />}
 
-      <LiveLocationControls
+      {!mapOnly && <LiveLocationControls
         status={liveLocation.status}
         errorKey={liveLocation.errorKey}
         hasPosition={
@@ -924,9 +946,9 @@ export default function ExplorationMap() {
         onStart={liveLocation.start}
         onRecenter={() => liveLocationOverlayRef.current?.recenter()}
         onStop={liveLocation.stop}
-      />
+      />}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
+      <div className={mapOnly ? "" : "grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]"}>
         <div className="relative min-h-80 overflow-hidden rounded-3xl border border-[#D8E1E7] bg-[#F1F6F4] shadow-sm lg:min-h-136">
           <div
             ref={mapContainerRef}
@@ -988,7 +1010,7 @@ export default function ExplorationMap() {
           )}
         </div>
 
-        <aside className="max-h-136 overflow-hidden rounded-3xl border border-[#D8E1E7] bg-white shadow-sm">
+        {!mapOnly && <aside className="max-h-136 overflow-hidden rounded-3xl border border-[#D8E1E7] bg-white shadow-sm">
           <div className="border-b border-[#E8EDF1] p-5">
             <h3 className="text-lg font-bold text-[#10213B]">Places on this map</h3>
             <p className="mt-1 text-sm text-[#65748A]">
@@ -1055,10 +1077,10 @@ export default function ExplorationMap() {
               ))}
             </ol>
           )}
-        </aside>
+        </aside>}
       </div>
 
-      <div className="mt-8 grid items-start gap-6 xl:grid-cols-[minmax(300px,0.8fr)_minmax(0,1.2fr)]">
+      {!mapOnly && <div className="mt-8 grid items-start gap-6 xl:grid-cols-[minmax(300px,0.8fr)_minmax(0,1.2fr)]">
         <ExplorationProgress progress={explorationViewModel.progress} />
 
         <VisitedAttractionsList
@@ -1073,7 +1095,7 @@ export default function ExplorationMap() {
               : undefined
           }
         />
-      </div>
+      </div>}
     </section>
   );
 }

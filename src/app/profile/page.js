@@ -2,10 +2,11 @@
 
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useReviews } from "@/presentation/contexts/ReviewsContext";
 import { useLanguage } from "@/presentation/contexts/LanguageContext";
+import { loadVisitedAttractionIds } from "@/presentation/lib/visitedAttractionsAdapter";
 
 export default function ProfilePage() {
   const { data: session, status } = useSession();
@@ -15,6 +16,7 @@ export default function ProfilePage() {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [statsLoading, setStatsLoading] = useState(true);
+  const [visitedCount, setVisitedCount] = useState(0);
   const [stats, setStats] = useState({
     placesVisited: 0,
     photosUploaded: 0,
@@ -22,6 +24,17 @@ export default function ProfilePage() {
     wishlistCount: 0,
     favouritesCount: 0,
   });
+
+  const fetchVisitedCount = useCallback(async () => {
+    try {
+      const result = await loadVisitedAttractionIds();
+      if (result.status === "success") {
+        setVisitedCount(result.data.length);
+      }
+    } catch (error) {
+      console.error("Failed to load visited attraction count:", error);
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -52,12 +65,13 @@ export default function ProfilePage() {
       fetchUserData();
       loadReviews(true);
       fetchCollectionStats();
+      fetchVisitedCount();
     }
 
     return () => {
       cancelled = true;
     };
-  }, [status, router, loadReviews]);
+  }, [status, router, loadReviews, fetchVisitedCount]);
 
   useEffect(() => {
     if (status !== "authenticated") return;
@@ -67,21 +81,25 @@ export default function ProfilePage() {
         localStorage.removeItem("reviewDeleted");
         refreshReviews();
         fetchCollectionStats();
+        fetchVisitedCount();
       }
       if (localStorage.getItem("reviewAdded") === "true") {
         localStorage.removeItem("reviewAdded");
         refreshReviews();
         fetchCollectionStats();
+        fetchVisitedCount();
       }
       if (localStorage.getItem("photoDeleted") === "true") {
         localStorage.removeItem("photoDeleted");
         refreshReviews();
         fetchCollectionStats();
+        fetchVisitedCount();
       }
       if (localStorage.getItem("profileUpdated") === "true") {
         localStorage.removeItem("profileUpdated");
         refreshReviews();
         fetchCollectionStats();
+        fetchVisitedCount();
       }
     };
 
@@ -97,7 +115,7 @@ export default function ProfilePage() {
       window.removeEventListener("focus", refreshIfNeeded);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [status, refreshReviews]);
+  }, [status, refreshReviews, fetchVisitedCount]);
 
   const fetchCollectionStats = async () => {
     setStatsLoading(true);
@@ -170,15 +188,6 @@ export default function ProfilePage() {
     return total + (review.photos?.length || 0);
   }, 0);
 
-  const uniqueAttractions = new Set();
-  reviews.forEach((review) => {
-    const attractionId = review.attractionId?._id || review.attractionId;
-    if (attractionId) {
-      uniqueAttractions.add(attractionId.toString());
-    }
-  });
-  const travelHistoryCount = uniqueAttractions.size;
-
   const threeDaysAgo = new Date();
   threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
   const recentReviews = reviews.filter(
@@ -188,7 +197,7 @@ export default function ProfilePage() {
 
   const updatedStats = {
     ...stats,
-    placesVisited: travelHistoryCount,
+    placesVisited: visitedCount,
   };
 
   return (
@@ -431,7 +440,7 @@ export default function ProfilePage() {
                 {t("travelHistory")}
               </p>
               <p className="text-sm text-[#65748A]">
-                {travelHistoryCount} {travelHistoryCount === 1 ? "attraction" : "attractions"}
+                {visitedCount} {visitedCount === 1 ? "attraction" : "attractions"}
               </p>
               <div className="mt-3 text-sm font-medium text-[#16845B] opacity-0 transition-opacity duration-300 group-hover:opacity-100">
                 {t("view")}
