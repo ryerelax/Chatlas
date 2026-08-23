@@ -11,9 +11,16 @@ import {
   useSyncExternalStore,
 } from "react";
 import ExplorationProgress from "@/presentation/components/ExplorationProgress";
+import LiveLocationControls from "@/presentation/components/LiveLocationControls";
 import VisitVerificationFlow from "@/presentation/components/VisitVerificationFlow";
 import VisitedAttractionsList from "@/presentation/components/VisitedAttractionsList";
+import { useLanguage } from "@/presentation/contexts/LanguageContext";
+import useLiveLocation from "@/presentation/hooks/useLiveLocation";
 import { loadGoogleMaps } from "@/presentation/lib/googleMapsLoader";
+import {
+  createLiveLocationMapOverlayController,
+  getLiveLocationCopy,
+} from "@/presentation/lib/liveLocationPresentation";
 import {
   ATTRACTION_DATA_STATUS,
   createVisibleAttractions,
@@ -41,6 +48,14 @@ import {
 import { getVerificationAuthenticationState } from "@/presentation/lib/visitVerificationPresentation";
 const MAP_UNAVAILABLE_MESSAGE =
   "We couldn't load the map. You can still explore the attraction lists below.";
+
+function createLiveLocationMarkerContent() {
+  const marker = document.createElement("div");
+  marker.className =
+    "h-4 w-4 rounded-full border-[3px] border-white bg-[#1769E0] shadow-[0_0_0_2px_#1769E0,0_3px_10px_rgba(23,105,224,0.45)]";
+  marker.setAttribute("aria-hidden", "true");
+  return marker;
+}
 
 function subscribeToDevelopmentPreviewQuery(onStoreChange) {
   if (process.env.NODE_ENV !== "development") {
@@ -228,6 +243,7 @@ function LoadingSkeleton() {
 
 export default function ExplorationMap() {
   const { data: session, status: sessionStatus } = useSession();
+  const { lang } = useLanguage();
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markerByAttractionIdRef = useRef(new Map());
@@ -235,6 +251,11 @@ export default function ExplorationMap() {
   const infoWindowRef = useRef(null);
   const pinElementConstructorRef = useRef(null);
   const selectedAttractionIdRef = useRef(null);
+  const liveLocationOverlayRef = useRef(null);
+  const latestLiveLocationRef = useRef(null);
+  const liveLocationMarkerLabelRef = useRef(
+    getLiveLocationCopy(lang).markerLabel
+  );
   const [attractions, setAttractions] = useState([]);
   const [dataStatus, setDataStatus] = useState(
     ATTRACTION_DATA_STATUS.LOADING
@@ -252,6 +273,19 @@ export default function ExplorationMap() {
     message: "",
     latestVisitedDateByAttractionId: {},
     latestVerifiedAtByAttractionId: {},
+  });
+  const updateLiveLocationOverlay = useCallback((position, options) => {
+    latestLiveLocationRef.current = position;
+    liveLocationOverlayRef.current?.update(position, options);
+  }, []);
+  const clearLiveLocationOverlay = useCallback(() => {
+    latestLiveLocationRef.current = null;
+    liveLocationOverlayRef.current?.clear();
+  }, []);
+  const liveLocation = useLiveLocation({
+    mapStatus,
+    onPosition: updateLiveLocationOverlay,
+    onClear: clearLiveLocationOverlay,
   });
   const developmentPreviewQuery = useSyncExternalStore(
     subscribeToDevelopmentPreviewQuery,
@@ -421,7 +455,10 @@ export default function ExplorationMap() {
   );
   const explorationViewModel = explorationPageState.viewModel;
   const mapAttractions = explorationViewModel.attractions;
-  const visibleAttractions = createVisibleAttractions(mapAttractions, mapVisitFilter);
+  const visibleAttractions = useMemo(
+    () => createVisibleAttractions(mapAttractions, mapVisitFilter),
+    [mapAttractions, mapVisitFilter]
+  );
   const visitedAttractions = explorationViewModel.visitedAttractions.map((attraction) => ({
     ...attraction,
     latestVisitedDate: visitedData.latestVisitedDateByAttractionId?.[attraction.id] || null,
@@ -438,6 +475,12 @@ export default function ExplorationMap() {
       mapAttractions.map((attraction) => [attraction.id, attraction])
     );
   }, [mapAttractions]);
+
+  useEffect(() => {
+    const markerLabel = getLiveLocationCopy(lang).markerLabel;
+    liveLocationMarkerLabelRef.current = markerLabel;
+    liveLocationOverlayRef.current?.setMarkerTitle(markerLabel);
+  }, [lang]);
 
   const updateDevelopmentPreview = useCallback(
     async (actionName) => {
@@ -511,7 +554,7 @@ export default function ExplorationMap() {
           return;
         }
 
-        const { InfoWindow, Map: GoogleMap } = mapsLibrary;
+        const { Circle, InfoWindow, Map: GoogleMap } = mapsLibrary;
         const { AdvancedMarkerElement, PinElement } = markerLibrary;
         const { LatLngBounds } = coreLibrary;
 
@@ -587,6 +630,39 @@ export default function ExplorationMap() {
         }
 
         mapInstanceRef.current = map;
+        liveLocationOverlayRef.current = createLiveLocationMapOverlayController({
+          map,
+          createMarker({ map: markerMap, position }) {
+            const marker = new AdvancedMarkerElement({
+              map: markerMap,
+              position,
+              title: liveLocationMarkerLabelRef.current,
+              zIndex: 0,
+            });
+            marker.append(createLiveLocationMarkerContent());
+            return marker;
+          },
+          createAccuracyCircle({ map: circleMap, center, radius }) {
+            return new Circle({
+              map: circleMap,
+              center,
+              radius,
+              clickable: false,
+              fillColor: "#1769E0",
+              fillOpacity: 0.16,
+              strokeColor: "#1769E0",
+              strokeOpacity: 0.55,
+              strokeWeight: 1.5,
+              zIndex: 1,
+            });
+          },
+        });
+        if (latestLiveLocationRef.current) {
+          liveLocationOverlayRef.current.update(
+            latestLiveLocationRef.current,
+            { shouldCenter: false }
+          );
+        }
         setMapStatus(MAP_STATUS.READY);
       } catch {
         if (!isCancelled) {
@@ -607,6 +683,8 @@ export default function ExplorationMap() {
       infoWindowRef.current = null;
       pinElementConstructorRef.current = null;
       selectedAttractionIdRef.current = null;
+      liveLocationOverlayRef.current?.clear();
+      liveLocationOverlayRef.current = null;
       mapInstanceRef.current = null;
     };
   }, [
@@ -836,6 +914,18 @@ export default function ExplorationMap() {
         onVerified={loadVisitedAttractions}
       />
 
+      <LiveLocationControls
+        status={liveLocation.status}
+        errorKey={liveLocation.errorKey}
+        hasPosition={
+          Boolean(liveLocation.position) && mapStatus === MAP_STATUS.READY
+        }
+        canStart={liveLocation.canStart}
+        onStart={liveLocation.start}
+        onRecenter={() => liveLocationOverlayRef.current?.recenter()}
+        onStop={liveLocation.stop}
+      />
+
       <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
         <div className="relative min-h-80 overflow-hidden rounded-3xl border border-[#D8E1E7] bg-[#F1F6F4] shadow-sm lg:min-h-136">
           <div
@@ -967,10 +1057,6 @@ export default function ExplorationMap() {
           )}
         </aside>
       </div>
-
-      <p className="mt-4 text-sm text-[#65748A]">
-        This map shows attraction locations only. Chatlas requests your current location only when you start visit verification and does not provide route navigation.
-      </p>
 
       <div className="mt-8 grid items-start gap-6 xl:grid-cols-[minmax(300px,0.8fr)_minmax(0,1.2fr)]">
         <ExplorationProgress progress={explorationViewModel.progress} />
