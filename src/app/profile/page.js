@@ -170,6 +170,27 @@ export default function ProfilePage() {
     return total + (review.photos?.length || 0);
   }, 0);
 
+  const uniqueAttractions = new Set();
+  reviews.forEach((review) => {
+    const attractionId = review.attractionId?._id || review.attractionId;
+    if (attractionId) {
+      uniqueAttractions.add(attractionId.toString());
+    }
+  });
+  const travelHistoryCount = uniqueAttractions.size;
+
+  const threeDaysAgo = new Date();
+  threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+  const recentReviews = reviews.filter(
+    (review) => review.createdAt && new Date(review.createdAt) >= threeDaysAgo
+  );
+  const recentReviewsCount = recentReviews.length;
+
+  const updatedStats = {
+    ...stats,
+    placesVisited: travelHistoryCount,
+  };
+
   return (
     <div className="min-h-screen bg-[#F7F9FB] px-4 py-10">
       <div className="mx-auto max-w-4xl">
@@ -214,7 +235,7 @@ export default function ProfilePage() {
         <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
           <div className="rounded-lg bg-white p-4 text-center shadow-md">
             <p className="text-2xl font-bold text-[#006C56]">
-              {statsLoading ? "..." : stats.placesVisited}
+              {statsLoading ? "..." : updatedStats.placesVisited}
             </p>
             <p className="text-sm text-[#65748A]">{t("placesVisited")}</p>
           </div>
@@ -409,7 +430,9 @@ export default function ProfilePage() {
               <p className="mt-3 text-base font-bold text-[#10213B]">
                 {t("travelHistory")}
               </p>
-              <p className="text-sm text-[#65748A]">0 attractions</p>
+              <p className="text-sm text-[#65748A]">
+                {travelHistoryCount} {travelHistoryCount === 1 ? "attraction" : "attractions"}
+              </p>
               <div className="mt-3 text-sm font-medium text-[#16845B] opacity-0 transition-opacity duration-300 group-hover:opacity-100">
                 {t("view")}
               </div>
@@ -417,19 +440,17 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        <div className="rounded-lg bg-white p-8 shadow-md">
-          <h2 className="mb-4 text-xl font-bold text-[#10213B]">
-            {t("recentReviews")}
+        <div className="rounded-lg bg-white p-6 shadow-md">
+          <h2 className="text-lg font-bold text-[#10213B] mb-3">
+            Recent Reviews
           </h2>
-          {statsLoading ? (
-            <p className="text-[#65748A]">{t("loading")}</p>
-          ) : reviewsWritten === 0 ? (
-            <p className="text-[#65748A]">{t("noReviewsYet")}</p>
-          ) : (
-            <p className="text-[#65748A]">
-              {t("youHaveReviews", { count: reviewsWritten })}
-            </p>
-          )}
+          <p className="text-[#65748A]">
+            {statsLoading 
+              ? "Loading..." 
+              : recentReviewsCount === 0 
+                ? "No reviews in the last 3 days." 
+                : `You have ${recentReviewsCount} review${recentReviewsCount > 1 ? 's' : ''} in the last 3 days.`}
+          </p>
         </div>
       </div>
     </div>

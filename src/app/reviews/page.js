@@ -10,6 +10,7 @@ const STAR_OPTIONS = [1, 2, 3, 4, 5];
 const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024;
 const MAX_REVIEW_PHOTOS = 3;
+const EDIT_WINDOW_DAYS = 3;
 
 export default function MyReviewsPage() {
   const { data: session, status } = useSession();
@@ -36,6 +37,45 @@ export default function MyReviewsPage() {
     setTimeout(() => setToast(null), 4000);
   };
 
+  // Check if review is eligible for editing (must be at least 3 days old, and if edited before, 3 days since last edit)
+  const canEditReview = (review) => {
+    if (!review) return false;
+    
+    const referenceDate = review.lastEditedAt ? new Date(review.lastEditedAt) : new Date(review.createdAt);
+    const now = new Date();
+    const diffTime = now - referenceDate;
+    const diffDays = diffTime / (1000 * 60 * 60 * 24);
+    
+    return diffDays >= EDIT_WINDOW_DAYS;
+  };
+
+  const getNextEditDate = (review) => {
+    if (!review) return null;
+    const referenceDate = review.lastEditedAt ? new Date(review.lastEditedAt) : new Date(review.createdAt);
+    const nextDate = new Date(referenceDate);
+    nextDate.setDate(nextDate.getDate() + EDIT_WINDOW_DAYS);
+    return nextDate;
+  };
+
+  const getDaysUntilNextEdit = (review) => {
+    if (!review) return 0;
+    const nextDate = getNextEditDate(review);
+    const now = new Date();
+    const diffTime = nextDate - now;
+    const diffDays = diffTime / (1000 * 60 * 60 * 24);
+    return Math.max(0, Math.ceil(diffDays));
+  };
+
+  const formatNextEditDate = (review) => {
+    const nextDate = getNextEditDate(review);
+    if (!nextDate) return "N/A";
+    return nextDate.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  };
+
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/login?redirect=/reviews");
@@ -56,7 +96,6 @@ export default function MyReviewsPage() {
     };
   }, [newPhotoPreviews]);
 
-  // Refresh when page comes into focus
   useEffect(() => {
     const refreshIfNeeded = () => {
       if (localStorage.getItem('reviewDeleted') === 'true') {
@@ -131,6 +170,13 @@ export default function MyReviewsPage() {
   };
 
   const openEditModal = (review) => {
+    if (!canEditReview(review)) {
+      const days = getDaysUntilNextEdit(review);
+      const nextDate = formatNextEditDate(review);
+      showToast(`Edit not available yet. You can edit this review again after ${nextDate}. (${days} day${days > 1 ? 's' : ''} remaining)`, "error");
+      return;
+    }
+
     setEditingReview(review);
     setEditRating(review.rating || 0);
     setEditText(review.reviewText || "");
@@ -225,6 +271,13 @@ export default function MyReviewsPage() {
   const handleSaveEdit = async () => {
     if (!editingReview) return;
 
+    if (!canEditReview(editingReview)) {
+      const days = getDaysUntilNextEdit(editingReview);
+      showToast(`Edit not available yet. Please wait ${days} more day${days > 1 ? 's' : ''}.`, "error");
+      closeEditModal();
+      return;
+    }
+
     const nextErrors = {};
     if (editRating < 1 || editRating > 5) {
       nextErrors.rating = "Please select a rating from 1 to 5 stars.";
@@ -265,7 +318,7 @@ export default function MyReviewsPage() {
 
       if (data.success) {
         await refreshReviews();
-        showToast("Review updated successfully!", "success");
+        showToast("Review updated successfully! Next edit available in 3 days.", "success");
         closeEditModal();
       } else {
         showToast(data.message || "Failed to update review", "error");
@@ -342,6 +395,18 @@ export default function MyReviewsPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
+            </div>
+
+            {/* Edit Window Info */}
+            <div className="mb-5 p-3 rounded-lg bg-[#F7F9FB] border border-[#D8E1E7]">
+              <p className="text-sm text-[#65748A]">
+                <span className="font-medium text-[#10213B]">Edit policy:</span> You can edit this review once every {EDIT_WINDOW_DAYS} days.
+                {editingReview && (
+                  <span className="block mt-1 text-xs">
+                    Next edit available: <span className="font-medium text-[#006C56]">{formatNextEditDate(editingReview)}</span>
+                  </span>
+                )}
+              </p>
             </div>
 
             {/* Attraction Info */}
@@ -644,87 +709,115 @@ export default function MyReviewsPage() {
           </div>
         ) : (
           <div className="space-y-6">
-            {filtered.map((review) => (
-              <div key={review._id} className="bg-white border border-[#D8E1E7] rounded-[18px] p-6 md:p-8 hover:shadow-lg transition-shadow">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 flex-wrap mb-3">
-                      <h3 className="text-2xl font-bold text-[#10213B]">
-                        {review.attractionId?.name || "Unknown attraction"}
-                      </h3>
-                      <span className="px-3 py-1 bg-[#E6F7F0] text-[#004638] text-sm font-medium rounded-full border border-[#A7D7C5]">
-                        {review.attractionId?.category || "Uncategorized"}
-                      </span>
-                    </div>
-                    
-                    <div className="flex items-center gap-4 mb-3">
-                      <div className="flex items-center gap-1">
-                        {[...Array(5)].map((_, i) => (
-                          <span key={i} className={i < review.rating ? "text-[#FFAB00] text-2xl" : "text-[#D8E1E7] text-2xl"}>
-                            ★
-                          </span>
-                        ))}
+            {filtered.map((review) => {
+              const isEditable = canEditReview(review);
+              const daysUntilEdit = getDaysUntilNextEdit(review);
+              const nextDate = formatNextEditDate(review);
+              
+              return (
+                <div key={review._id} className="bg-white border border-[#D8E1E7] rounded-[18px] p-6 md:p-8 hover:shadow-lg transition-shadow">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 flex-wrap mb-3">
+                        <h3 className="text-2xl font-bold text-[#10213B]">
+                          {review.attractionId?.name || "Unknown attraction"}
+                        </h3>
+                        <span className="px-3 py-1 bg-[#E6F7F0] text-[#004638] text-sm font-medium rounded-full border border-[#A7D7C5]">
+                          {review.attractionId?.category || "Uncategorized"}
+                        </span>
                       </div>
-                      <span className="text-[#65748A] text-base font-medium">
-                        {new Date(review.createdAt).toLocaleDateString("en-US", {
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric",
-                        })}
-                      </span>
-                    </div>
-                    
-                    <p className="text-[#405066] text-lg leading-relaxed mb-4">
-                      {review.reviewText}
-                    </p>
-                    
-                    {review.photos && review.photos.length > 0 && (
-                      <div className="flex gap-4 mt-3 flex-wrap">
-                        {review.photos.slice(0, 4).map((photo, index) => (
-                          <div key={index} className="relative w-28 h-28 rounded-xl overflow-hidden bg-[#CDF5E5] border-2 border-[#D8E1E7] flex-shrink-0 hover:scale-105 transition-transform cursor-pointer shadow-sm">
-                            <Image
-                              src={photo.url || photo}
-                              alt={`Review photo ${index + 1}`}
-                              fill
-                              sizes="(max-width: 768px) 100px, 112px"
-                              className="object-cover"
-                              loading="lazy"
-                            />
-                          </div>
-                        ))}
-                        {review.photos.length > 4 && (
-                          <div className="w-28 h-28 rounded-xl bg-[#F1F6F4] flex items-center justify-center text-[#65748A] text-xl font-medium border-2 border-[#D8E1E7] flex-shrink-0">
-                            +{review.photos.length - 4}
-                          </div>
+                      
+                      <div className="flex items-center gap-4 mb-3">
+                        <div className="flex items-center gap-1">
+                          {[...Array(5)].map((_, i) => (
+                            <span key={i} className={i < review.rating ? "text-[#FFAB00] text-2xl" : "text-[#D8E1E7] text-2xl"}>
+                              ★
+                            </span>
+                          ))}
+                        </div>
+                        <span className="text-[#65748A] text-base font-medium">
+                          {new Date(review.createdAt).toLocaleDateString("en-US", {
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                          })}
+                        </span>
+                        {review.lastEditedAt && (
+                          <span className="text-sm text-[#65748A]">
+                            | Edited: {new Date(review.lastEditedAt).toLocaleDateString()}
+                          </span>
                         )}
                       </div>
-                    )}
-                  </div>
-                  
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <button
-                      onClick={() => openEditModal(review)}
-                      className="w-11 h-11 flex items-center justify-center border-2 border-[#D8E1E7] text-[#65748A] hover:text-[#006C56] hover:border-[#006C56] rounded-full transition-colors"
-                      title="Edit review"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={() => setDeleteTarget(review)}
-                      disabled={isDeleting}
-                      className="w-11 h-11 flex items-center justify-center border-2 border-[#D8E1E7] text-[#65748A] hover:text-[#C2413B] hover:border-[#C2413B] rounded-full transition-colors disabled:opacity-50"
-                      title="Delete review"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
+                      
+                      <p className="text-[#405066] text-lg leading-relaxed mb-4">
+                        {review.reviewText}
+                      </p>
+                      
+                      {review.photos && review.photos.length > 0 && (
+                        <div className="flex gap-4 mt-3 flex-wrap">
+                          {review.photos.slice(0, 4).map((photo, index) => (
+                            <div key={index} className="relative w-28 h-28 rounded-xl overflow-hidden bg-[#CDF5E5] border-2 border-[#D8E1E7] flex-shrink-0 hover:scale-105 transition-transform cursor-pointer shadow-sm">
+                              <Image
+                                src={photo.url || photo}
+                                alt={`Review photo ${index + 1}`}
+                                fill
+                                sizes="(max-width: 768px) 100px, 112px"
+                                className="object-cover"
+                                loading="lazy"
+                              />
+                            </div>
+                          ))}
+                          {review.photos.length > 4 && (
+                            <div className="w-28 h-28 rounded-xl bg-[#F1F6F4] flex items-center justify-center text-[#65748A] text-xl font-medium border-2 border-[#D8E1E7] flex-shrink-0">
+                              +{review.photos.length - 4}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => openEditModal(review)}
+                          disabled={!isEditable}
+                          className={`w-11 h-11 flex items-center justify-center border-2 rounded-full transition-colors ${
+                            isEditable 
+                              ? "border-[#D8E1E7] text-[#65748A] hover:text-[#006C56] hover:border-[#006C56]" 
+                              : "border-[#E8E8E8] text-[#C0C0C0] cursor-not-allowed opacity-50"
+                          }`}
+                          title={isEditable ? "Edit review" : `Next edit available: ${nextDate}`}
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => setDeleteTarget(review)}
+                          disabled={isDeleting}
+                          className="w-11 h-11 flex items-center justify-center border-2 border-[#D8E1E7] text-[#65748A] hover:text-[#C2413B] hover:border-[#C2413B] rounded-full transition-colors disabled:opacity-50"
+                          title="Delete review"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                      {/* Edit status text below buttons */}
+                      {isEditable ? (
+                        <span className="text-xs text-[#16845B] font-medium">
+                          Ready to edit
+                        </span>
+                      ) : (
+                        <span className="text-xs text-[#C2413B] font-medium">
+                          {daysUntilEdit} days until edit
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

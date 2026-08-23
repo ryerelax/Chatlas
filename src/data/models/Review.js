@@ -74,6 +74,11 @@ const reviewSchema = new mongoose.Schema(
         message: "A review can include up to 3 photos.",
       },
     },
+    
+    lastEditedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

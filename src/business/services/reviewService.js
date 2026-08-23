@@ -298,10 +298,12 @@ export async function updateReview({
       uploadedPhotos.push(uploadedPhoto);
     }
 
+    // ✅ Set lastEditedAt to current time
     const updatedReview = await updateReviewById(normalizedReviewId, {
       rating: normalizedRating,
       reviewText: normalizedReviewText,
       photos: [...retainedPhotos, ...uploadedPhotos],
+      lastEditedAt: new Date(),
     });
 
     if (!updatedReview) {
