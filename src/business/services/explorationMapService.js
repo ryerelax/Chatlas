@@ -281,6 +281,8 @@ const PUBLIC_PAGE_PATHS = new Set([
   "/exploration-map",
   "/exploration-map/",
   "/profiles",
+  "/community",
+  "/community/",
 ]);
 
 export function isPublicPagePathname(pathname) {

@@ -5,6 +5,7 @@ import {
   addReviewLike,
   createReview,
   deleteReviewById,
+  findCommunityReviews,
   findReviewById,
   findReviewByIdWithAttraction,
   findReviewsByAttraction,
@@ -24,6 +25,24 @@ import {
 } from "@/business/services/photoValidation";
 
 const MAX_REVIEW_PHOTOS = 3;
+const DEFAULT_REVIEW_PAGE = 1;
+const DEFAULT_REVIEW_LIMIT = 5;
+const MAX_REVIEW_LIMIT = 20;
+const MAX_REVIEW_PAGE = 100000;
+const COMMUNITY_REVIEW_LIMIT = 5;
+const MAX_COMMUNITY_SEARCH_LENGTH = 80;
+const REVIEW_SORT_OPTIONS = new Set([
+  "newest",
+  "oldest",
+  "highest-rating",
+  "lowest-rating",
+  "most-liked",
+]);
+const COMMUNITY_REVIEW_SORT_OPTIONS = new Set([
+  "newest",
+  "highest-rating",
+  "most-liked",
+]);
 
 export class ReviewServiceError extends Error {
   constructor(message, statusCode) {
@@ -97,21 +116,184 @@ export async function submitReview({
   }
 }
 
-export async function getReviewsByAttraction(attractionId, email = "") {
-  const normalizedAttractionId = attractionId?.trim();
+export async function getReviewsByAttraction({
+  attractionId,
+  email = "",
+  page,
+  limit,
+  sort,
+}) {
+  const normalizedAttractionId =
+    typeof attractionId === "string" ? attractionId.trim() : "";
 
   if (!mongoose.Types.ObjectId.isValid(normalizedAttractionId)) {
     return null;
   }
 
-  const [reviews, viewer] = await Promise.all([
-    findReviewsByAttraction(normalizedAttractionId),
+  const normalizedPage = normalizeReviewListInteger(page, {
+    defaultValue: DEFAULT_REVIEW_PAGE,
+    maximum: MAX_REVIEW_PAGE,
+    label: "Page",
+  });
+  const normalizedLimit = normalizeReviewListInteger(limit, {
+    defaultValue: DEFAULT_REVIEW_LIMIT,
+    maximum: MAX_REVIEW_LIMIT,
+    label: "Limit",
+  });
+  const normalizedSort = normalizeReviewSort(sort);
+
+  const [{ items, totalReviews }, viewer] = await Promise.all([
+    findReviewsByAttraction({
+      attractionId: normalizedAttractionId,
+      page: normalizedPage,
+      limit: normalizedLimit,
+      sort: normalizedSort,
+    }),
     findOptionalUserByEmail(email),
   ]);
 
-  return reviews.map((review) =>
-    serializeReviewForViewer(review, viewer?._id)
-  );
+  const totalPages =
+    totalReviews === 0 ? 0 : Math.ceil(totalReviews / normalizedLimit);
+
+  return {
+    reviews: items.map((review) =>
+      serializeReviewForViewer(review, viewer?._id)
+    ),
+    page: normalizedPage,
+    limit: normalizedLimit,
+    sort: normalizedSort,
+    totalReviews,
+    totalPages,
+  };
+}
+
+export async function getCommunityReviews({
+  email = "",
+  page,
+  sort,
+  search,
+}) {
+  const normalizedPage = normalizeReviewListInteger(page, {
+    defaultValue: DEFAULT_REVIEW_PAGE,
+    maximum: MAX_REVIEW_PAGE,
+    label: "Page",
+  });
+  const normalizedSort = normalizeCommunityReviewSort(sort);
+  const normalizedSearch = normalizeCommunityReviewSearch(search);
+  const searchPattern = normalizedSearch
+    ? escapeRegularExpression(normalizedSearch)
+    : "";
+
+  const [{ items, totalReviews }, viewer] = await Promise.all([
+    findCommunityReviews({
+      page: normalizedPage,
+      limit: COMMUNITY_REVIEW_LIMIT,
+      sort: normalizedSort,
+      searchPattern,
+    }),
+    findOptionalUserByEmail(email),
+  ]);
+  const totalPages =
+    totalReviews === 0
+      ? 0
+      : Math.ceil(totalReviews / COMMUNITY_REVIEW_LIMIT);
+
+  return {
+    reviews: items.map((review) =>
+      serializeCommunityReviewForViewer(review, viewer?._id)
+    ),
+    page: normalizedPage,
+    limit: COMMUNITY_REVIEW_LIMIT,
+    search: normalizedSearch,
+    sort: normalizedSort,
+    totalReviews,
+    totalPages,
+  };
+}
+
+function normalizeReviewListInteger(
+  value,
+  { defaultValue, maximum, label }
+) {
+  if (value === undefined || value === null) {
+    return defaultValue;
+  }
+
+  const normalizedValue =
+    typeof value === "string" || typeof value === "number"
+      ? String(value).trim()
+      : "";
+
+  if (!/^[1-9]\d*$/.test(normalizedValue)) {
+    throw new ReviewServiceError(
+      `${label} must be a positive integer.`,
+      400
+    );
+  }
+
+  const parsedValue = Number(normalizedValue);
+
+  if (!Number.isSafeInteger(parsedValue) || parsedValue > maximum) {
+    throw new ReviewServiceError(
+      `${label} must be between 1 and ${maximum.toLocaleString("en-GB")}.`,
+      400
+    );
+  }
+
+  return parsedValue;
+}
+
+function normalizeReviewSort(sort) {
+  if (sort === undefined || sort === null) {
+    return "newest";
+  }
+
+  const normalizedSort = typeof sort === "string" ? sort.trim() : "";
+
+  if (!REVIEW_SORT_OPTIONS.has(normalizedSort)) {
+    throw new ReviewServiceError("Invalid review sort option.", 400);
+  }
+
+  return normalizedSort;
+}
+
+function normalizeCommunityReviewSort(sort) {
+  if (sort === undefined || sort === null || sort === "") {
+    return "newest";
+  }
+
+  const normalizedSort = typeof sort === "string" ? sort.trim() : "";
+
+  if (!COMMUNITY_REVIEW_SORT_OPTIONS.has(normalizedSort)) {
+    throw new ReviewServiceError("Invalid Community review sort option.", 400);
+  }
+
+  return normalizedSort;
+}
+
+function normalizeCommunityReviewSearch(search) {
+  if (search === undefined || search === null) {
+    return "";
+  }
+
+  if (typeof search !== "string") {
+    throw new ReviewServiceError("Invalid Community review search.", 400);
+  }
+
+  const normalizedSearch = search.trim();
+
+  if (normalizedSearch.length > MAX_COMMUNITY_SEARCH_LENGTH) {
+    throw new ReviewServiceError(
+      `Search must be ${MAX_COMMUNITY_SEARCH_LENGTH} characters or fewer.`,
+      400
+    );
+  }
+
+  return normalizedSearch;
+}
+
+function escapeRegularExpression(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function normalizeAttractionId(attractionId) {
@@ -504,6 +686,49 @@ function serializeReviewForViewer(review, viewerId = null) {
   return {
     ...publicReview,
     ...createReviewLikeState(review, viewerId),
+  };
+}
+
+function serializeCommunityReviewForViewer(review, viewerId = null) {
+  const reviewer = review._communityReviewer;
+  const attraction = review._communityAttraction;
+  const likeState = createReviewLikeState(review, viewerId);
+  const reviewerName =
+    reviewer?.displayName?.trim() ||
+    reviewer?.name?.trim() ||
+    review.userName?.trim() ||
+    "Chatlas traveller";
+  const reviewerAvatar =
+    reviewer?.profilePicture?.trim() || review.userAvatar?.trim() || "";
+
+  return {
+    _id: review._id.toString(),
+    reviewer: reviewer?._id
+      ? {
+          id: reviewer._id.toString(),
+          name: reviewerName,
+          avatar: reviewerAvatar,
+        }
+      : {
+          id: "",
+          name: reviewerName,
+          avatar: reviewerAvatar,
+        },
+    attraction:
+      attraction?._id && attraction?.name
+        ? {
+            id: attraction._id.toString(),
+            name: attraction.name,
+          }
+        : null,
+    rating: Number(review.rating) || 0,
+    reviewText: review.reviewText?.trim() || "",
+    photos: getReviewPhotos(review.photos).map((photo) => ({
+      url: photo.url,
+      publicId: photo.publicId,
+    })),
+    createdAt: review.createdAt || null,
+    ...likeState,
   };
 }
 

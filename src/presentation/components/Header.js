@@ -63,7 +63,7 @@ export default function Header() {
             {t("travellers")}
           </Link>
           <Link
-            href="/reviews"
+            href="/community"
             className="rounded-lg px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-emerald-50 hover:text-emerald-700"
           >
             {t("community")}
@@ -237,7 +237,7 @@ export default function Header() {
               {t("travellers")}
             </Link>
             <Link
-              href="/reviews"
+              href="/community"
               className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700"
             >
               {t("community")}

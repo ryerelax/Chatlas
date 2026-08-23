@@ -1,12 +1,23 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 
-export default function ReviewCard({ review = {} }) {
+export default function ReviewCard({ review = {}, onLikeUpdated }) {
   const { status: sessionStatus } = useSession();
-  const userName = review.userName || "Chatlas traveller";
+  const userName =
+    review.reviewer?.name || review.userName || "Chatlas traveller";
+  const userAvatar = review.reviewer?.avatar || review.userAvatar || "";
+  const reviewerProfileHref = createDocumentHref(
+    "/profiles",
+    review.reviewer?.id
+  );
+  const attractionHref = createDocumentHref(
+    "/attractions",
+    review.attraction?.id
+  );
   const rating = Number(review.rating) || 0;
   const photos = getValidPhotos(review.photos);
   const reviewId = review._id?.toString() || "";
@@ -185,6 +196,7 @@ export default function ReviewCard({ review = {} }) {
 
       setLikeCount(normalizeLikeCount(result.data?.likeCount));
       setLikedByCurrentUser(Boolean(result.data?.likedByCurrentUser));
+      onLikeUpdated?.(result.data);
     } catch (error) {
       setLikeError(error.message || "Unable to update this Review's likes.");
     } finally {
@@ -200,30 +212,50 @@ export default function ReviewCard({ review = {} }) {
     : likedByCurrentUser
       ? "Unlike this review"
       : "Like this review";
+  const reviewerAvatar = userAvatar ? (
+    <img
+      src={userAvatar}
+      alt={`${userName}'s profile`}
+      className="h-12 w-12 shrink-0 rounded-full object-cover sm:h-14 sm:w-14"
+    />
+  ) : (
+    <div
+      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-attraction-primary-soft-strong text-base font-semibold text-attraction-primary-dark sm:h-14 sm:w-14"
+      aria-hidden="true"
+    >
+      {getInitials(userName)}
+    </div>
+  );
 
   return (
     <article className="rounded-[18px] border border-attraction-border bg-white p-[18px] shadow-sm sm:p-6">
       <div className="flex items-start gap-4">
-        {review.userAvatar ? (
-          <img
-            src={review.userAvatar}
-            alt={`${userName}'s profile`}
-            className="h-12 w-12 shrink-0 rounded-full object-cover sm:h-14 sm:w-14"
-          />
-        ) : (
-          <div
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-attraction-primary-soft-strong text-base font-semibold text-attraction-primary-dark sm:h-14 sm:w-14"
-            aria-hidden="true"
+        {reviewerProfileHref ? (
+          <Link
+            href={reviewerProfileHref}
+            aria-label={`View ${userName}'s public profile`}
+            className="shrink-0 rounded-full transition-opacity duration-200 hover:opacity-85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-attraction-primary"
           >
-            {getInitials(userName)}
-          </div>
+            {reviewerAvatar}
+          </Link>
+        ) : (
+          reviewerAvatar
         )}
 
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h3 className="truncate text-base font-semibold leading-snug text-attraction-ink">
-                {userName}
+                {reviewerProfileHref ? (
+                  <Link
+                    href={reviewerProfileHref}
+                    className="rounded-sm transition-colors duration-200 hover:text-attraction-primary-dark hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-attraction-primary"
+                  >
+                    {userName}
+                  </Link>
+                ) : (
+                  userName
+                )}
               </h3>
               <div className="mt-1.5 flex flex-wrap items-center gap-2">
                 <div className="flex gap-0.5" aria-hidden="true">
@@ -244,6 +276,17 @@ export default function ReviewCard({ review = {} }) {
                   {rating}/5
                 </span>
               </div>
+              {attractionHref && review.attraction?.name && (
+                <p className="mt-2 text-sm text-attraction-muted">
+                  Reviewed{" "}
+                  <Link
+                    href={attractionHref}
+                    className="rounded-sm font-semibold text-attraction-primary-dark transition-colors duration-200 hover:text-attraction-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-attraction-primary"
+                  >
+                    {review.attraction.name}
+                  </Link>
+                </p>
+              )}
             </div>
 
             <time
@@ -499,6 +542,15 @@ function getInitials(userName) {
     .map((namePart) => namePart[0])
     .join("")
     .toUpperCase();
+}
+
+function createDocumentHref(basePath, documentId) {
+  const normalizedId =
+    typeof documentId === "string" ? documentId.trim() : "";
+
+  return /^[a-f\d]{24}$/i.test(normalizedId)
+    ? `${basePath}/${normalizedId}`
+    : "";
 }
 
 function formatReviewDate(value) {
