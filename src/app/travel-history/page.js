@@ -19,6 +19,7 @@ export default function TravelHistoryPage() {
   const [sortNewest, setSortNewest] = useState(true);
   const [expandedId, setExpandedId] = useState(null);
   const [visitedCount, setVisitedCount] = useState(0);
+  const [visitedAttractionIds, setVisitedAttractionIds] = useState([]);
   const [latestVerifiedAtByAttractionId, setLatestVerifiedAtByAttractionId] =
     useState({});
 
@@ -43,6 +44,7 @@ export default function TravelHistoryPage() {
         const result = await loadVisitedAttractionIds({ signal: controller.signal });
         if (!controller.signal.aborted && result.status === "success") {
           setVisitedCount(result.data.length);
+          setVisitedAttractionIds(result.data);
           setLatestVerifiedAtByAttractionId(
             result.latestVerifiedAtByAttractionId || {}
           );
@@ -59,13 +61,8 @@ export default function TravelHistoryPage() {
   }, [status]);
 
   useEffect(() => {
-    if (reviews && reviews.length > 0) {
-      buildActivities();
-    } else if (reviews && reviews.length === 0) {
-      setActivities([]);
-      setIsLoading(false);
-    }
-  }, [reviews]);
+    buildActivities();
+  }, [reviews, visitedAttractionIds, latestVerifiedAtByAttractionId]);
 
   useEffect(() => {
     applyFilters();
@@ -76,16 +73,12 @@ export default function TravelHistoryPage() {
     try {
       const activityMap = new Map();
 
-      if (!reviews || !Array.isArray(reviews)) {
-        setActivities([]);
-        setIsLoading(false);
-        return;
-      }
+      const reviewItems = Array.isArray(reviews) ? reviews : [];
 
-      const attractionIds = new Set();
-      reviews.forEach((review) => {
+      const attractionIds = new Set(visitedAttractionIds);
+      reviewItems.forEach((review) => {
         const id = review.attractionId?._id || review.attractionId;
-        if (id) attractionIds.add(id);
+        if (id) attractionIds.add(String(id));
       });
 
       const attractionDetails = {};
@@ -101,10 +94,13 @@ export default function TravelHistoryPage() {
         }
       }
 
-      reviews.forEach((review) => {
+      reviewItems.forEach((review) => {
         if (!review) return;
 
-        const attractionId = review.attractionId?._id || review.attractionId;
+        const rawAttractionId = review.attractionId?._id || review.attractionId;
+        if (!rawAttractionId) return;
+
+        const attractionId = String(rawAttractionId);
         const attractionData = attractionDetails[attractionId] || review.attractionId || {};
         
         const attractionName = attractionData.name || review.attractionId?.name || "Unknown attraction";
@@ -113,8 +109,6 @@ export default function TravelHistoryPage() {
         const attractionAddress = attractionData.address || review.attractionId?.address || "";
         const attractionRating = attractionData.rating || review.attractionId?.rating || 0;
         const attractionDescription = attractionData.description || review.attractionId?.description || "No description available for this attraction.";
-
-        if (!attractionId) return;
 
         if (!activityMap.has(attractionId)) {
           activityMap.set(attractionId, {
@@ -168,6 +162,28 @@ export default function TravelHistoryPage() {
         }
       });
 
+      visitedAttractionIds.forEach((attractionId) => {
+        if (activityMap.has(attractionId)) return;
+
+        const attractionData = attractionDetails[attractionId];
+        if (!attractionData) return;
+
+        activityMap.set(attractionId, {
+          id: attractionId,
+          name: attractionData.name || "Unknown attraction",
+          category: attractionData.category || "Uncategorized",
+          photos: attractionData.photos || [],
+          address: attractionData.address || "",
+          rating: attractionData.rating || 0,
+          description:
+            attractionData.description || "No description available for this attraction.",
+          reviews: [],
+          visitedDate: latestVerifiedAtByAttractionId[attractionId] || null,
+          firstReviewDate: null,
+          lastReviewDate: null,
+        });
+      });
+
       // Sort reviews by date for each activity (newest first)
       for (const entry of activityMap.values()) {
         entry.reviews.sort((a, b) => {
@@ -180,9 +196,11 @@ export default function TravelHistoryPage() {
       const activityArray = Array.from(activityMap.values());
       
       activityArray.sort((a, b) => {
-        const dateA = a.lastReviewDate ? new Date(a.lastReviewDate) : new Date(0);
-        const dateB = b.lastReviewDate ? new Date(b.lastReviewDate) : new Date(0);
-        return dateB - dateA;
+        const dateA = latestVerifiedAtByAttractionId[a.id] || a.lastReviewDate;
+        const dateB = latestVerifiedAtByAttractionId[b.id] || b.lastReviewDate;
+        const normalizedDateA = dateA ? new Date(dateA) : new Date(0);
+        const normalizedDateB = dateB ? new Date(dateB) : new Date(0);
+        return normalizedDateB - normalizedDateA;
       });
 
       setActivities(activityArray);
