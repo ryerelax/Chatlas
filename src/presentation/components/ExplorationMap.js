@@ -16,7 +16,11 @@ import VisitedAttractionsList from "@/presentation/components/VisitedAttractions
 import { loadGoogleMaps } from "@/presentation/lib/googleMapsLoader";
 import {
   ATTRACTION_DATA_STATUS,
+  createVisibleAttractions,
   createExplorationPageState,
+  getExplorationMapFilterCountLabel,
+  getNextExplorationMapFilter,
+  MAP_VISIT_FILTER,
   MAP_STATUS,
   normaliseMapAttractions,
   VISITED_DATA_STATUS,
@@ -110,10 +114,18 @@ function createVisitedDataState(result) {
     attractionIds:
       result.status === VISITED_DATA_STATUS.SUCCESS ? result.data : [],
     message: typeof result.message === "string" ? result.message : "",
+    latestVisitedDateByAttractionId:
+      result.status === VISITED_DATA_STATUS.SUCCESS
+        ? result.latestVisitedDateByAttractionId || {}
+        : {},
+    latestVerifiedAtByAttractionId:
+      result.status === VISITED_DATA_STATUS.SUCCESS
+        ? result.latestVerifiedAtByAttractionId || {}
+        : {},
   };
 }
 
-function MarkerLegend({ visitedDataStatus }) {
+function MarkerLegend({ visitedDataStatus, filter, onFilterChange }) {
   const visitStatusResolved =
     visitedDataStatus === VISITED_DATA_STATUS.SUCCESS;
   const statusLabel =
@@ -129,7 +141,7 @@ function MarkerLegend({ visitedDataStatus }) {
       aria-label="Map marker legend"
     >
       {visitStatusResolved && (
-        <span className="inline-flex items-center gap-2 rounded-full border border-[#B7E5D2] bg-white px-3 py-1.5">
+        <button type="button" onClick={() => onFilterChange("visited")} aria-pressed={filter === "visited"} className="inline-flex min-h-11 items-center gap-2 rounded-full border border-[#B7E5D2] bg-white px-3 py-1.5 focus-visible:outline-3 focus-visible:outline-[#006C56]">
           <span
             className="flex h-6 w-6 items-center justify-center rounded-full bg-[#006C56] text-sm font-bold text-white"
             aria-hidden="true"
@@ -137,9 +149,9 @@ function MarkerLegend({ visitedDataStatus }) {
             {"\u2713"}
           </span>
           Visited
-        </span>
+        </button>
       )}
-      <span className="inline-flex items-center gap-2 rounded-full border border-[#D8E1E7] bg-white px-3 py-1.5">
+      <button type="button" onClick={() => onFilterChange("unvisited")} disabled={!visitStatusResolved} aria-pressed={filter === "unvisited"} className="inline-flex min-h-11 items-center gap-2 rounded-full border border-[#D8E1E7] bg-white px-3 py-1.5 focus-visible:outline-3 focus-visible:outline-[#006C56] disabled:cursor-not-allowed disabled:opacity-60">
         <span
           className="flex h-6 w-6 items-center justify-center rounded-full border border-[#768780] bg-[#E3EAE7] text-[10px] font-bold text-[#31463F]"
           aria-hidden="true"
@@ -147,7 +159,7 @@ function MarkerLegend({ visitedDataStatus }) {
           1
         </span>
         {visitStatusResolved ? "Not visited" : "Supported place"}
-      </span>
+      </button>
       {!visitStatusResolved && (
         <span className="rounded-full bg-[#F1F4F6] px-3 py-1.5 text-[#65748A]">
           {statusLabel}
@@ -233,10 +245,13 @@ export default function ExplorationMap() {
   const [mapRequest, setMapRequest] = useState(0);
   const [visitedRequest, setVisitedRequest] = useState(0);
   const [previewActionPending, setPreviewActionPending] = useState(false);
+  const [mapVisitFilter, setMapVisitFilter] = useState(MAP_VISIT_FILTER.ALL);
   const [visitedData, setVisitedData] = useState({
     status: VISITED_DATA_STATUS.LOADING,
     attractionIds: [],
     message: "",
+    latestVisitedDateByAttractionId: {},
+    latestVerifiedAtByAttractionId: {},
   });
   const developmentPreviewQuery = useSyncExternalStore(
     subscribeToDevelopmentPreviewQuery,
@@ -406,7 +421,12 @@ export default function ExplorationMap() {
   );
   const explorationViewModel = explorationPageState.viewModel;
   const mapAttractions = explorationViewModel.attractions;
-  const visitedAttractions = explorationViewModel.visitedAttractions;
+  const visibleAttractions = createVisibleAttractions(mapAttractions, mapVisitFilter);
+  const visitedAttractions = explorationViewModel.visitedAttractions.map((attraction) => ({
+    ...attraction,
+    latestVisitedDate: visitedData.latestVisitedDateByAttractionId?.[attraction.id] || null,
+    latestVerifiedAt: visitedData.latestVerifiedAtByAttractionId?.[attraction.id] || null,
+  }));
   const verificationAuthenticationState =
     getVerificationAuthenticationState(
       explorationViewModel.visitedDataStatus,
@@ -512,7 +532,7 @@ export default function ExplorationMap() {
         infoWindowRef.current = infoWindow;
         pinElementConstructorRef.current = PinElement;
 
-        createdMarkers = attractions.map((attraction, index) => {
+        createdMarkers = visibleAttractions.map((attraction, index) => {
           const currentAttraction =
             mapAttractionByIdRef.current.get(attraction.id) || attraction;
           const position = {
@@ -556,13 +576,13 @@ export default function ExplorationMap() {
           return marker;
         });
 
-        if (attractions.length === 1) {
+        if (visibleAttractions.length === 1) {
           map.setCenter({
-            lat: attractions[0].latitude,
-            lng: attractions[0].longitude,
+            lat: visibleAttractions[0].latitude,
+            lng: visibleAttractions[0].longitude,
           });
           map.setZoom(15);
-        } else if (attractions.length > 1) {
+        } else if (visibleAttractions.length > 1) {
           map.fitBounds(bounds, 52);
         }
 
@@ -590,13 +610,13 @@ export default function ExplorationMap() {
       mapInstanceRef.current = null;
     };
   }, [
-    attractions,
     dataStatus,
     developmentMapPreviewMode,
     googleMapsApiKey,
     googleMapsMapId,
     isDevelopmentPreviewQueryReady,
     mapRequest,
+    visibleAttractions,
   ]);
 
   useEffect(() => {
@@ -785,12 +805,13 @@ export default function ExplorationMap() {
           </p>
           <MarkerLegend
             visitedDataStatus={explorationViewModel.visitedDataStatus}
+            filter={mapVisitFilter}
+            onFilterChange={(requested) => setMapVisitFilter((current) => getNextExplorationMapFilter(current, requested))}
           />
         </div>
 
         <div className="w-fit rounded-full bg-[#E6F7F0] px-4 py-2 text-sm font-semibold text-[#004638]">
-          {mapAttractions.length} attraction
-          {mapAttractions.length === 1 ? "" : "s"}
+          {getExplorationMapFilterCountLabel(visibleAttractions.length, mapVisitFilter)}
         </div>
       </div>
 
@@ -885,7 +906,7 @@ export default function ExplorationMap() {
             </p>
           </div>
 
-          {mapAttractions.length === 0 ? (
+          {visibleAttractions.length === 0 ? (
             <div className="p-8 text-center">
               <p className="font-semibold text-[#10213B]">No mapped attractions yet</p>
               <p className="mt-2 text-sm leading-6 text-[#65748A]">
@@ -894,7 +915,7 @@ export default function ExplorationMap() {
             </div>
           ) : (
             <ol className="max-h-[calc(34rem-92px)] divide-y divide-[#E8EDF1] overflow-y-auto">
-              {mapAttractions.map((attraction, index) => (
+              {visibleAttractions.map((attraction, index) => (
                 <li key={attraction.id} className="p-4">
                   <button
                     type="button"

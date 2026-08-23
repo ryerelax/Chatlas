@@ -21,6 +21,159 @@ const DEVELOPMENT_MAP_PREVIEW_MODES = new Set([
   "unavailable",
 ]);
 
+export const VISITED_ATTRACTIONS_SORT = Object.freeze({
+  MOST_RECENT: "most-recent",
+  OLDEST: "oldest",
+  NAME_ASC: "name-asc",
+});
+export const VISITED_ATTRACTIONS_PER_PAGE = 10;
+
+const VISITED_ATTRACTIONS_COPY = Object.freeze({
+  en: Object.freeze({
+    sortBy: "Sort by",
+    mostRecent: "Most recently verified",
+    oldest: "Oldest verified",
+    nameAsc: "Name A–Z",
+  }),
+  zh: Object.freeze({
+    sortBy: "排序方式",
+    mostRecent: "最近验证",
+    oldest: "最早验证",
+    nameAsc: "名称 A–Z",
+  }),
+  ms: Object.freeze({
+    sortBy: "Susun mengikut",
+    mostRecent: "Paling baru disahkan",
+    oldest: "Paling awal disahkan",
+    nameAsc: "Nama A–Z",
+  }),
+});
+
+const VERIFICATION_COPY = Object.freeze({
+  en: Object.freeze({
+    label: "Last verified",
+    timeUnavailable: "Time unavailable",
+    dateUnavailable: "Date unavailable",
+    locale: "en-MY",
+    dateTimeOptions: Object.freeze({
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    }),
+  }),
+  zh: Object.freeze({
+    label: "最后验证",
+    timeUnavailable: "时间不可用",
+    dateUnavailable: "日期不可用",
+    locale: "zh-CN",
+    dateTimeOptions: Object.freeze({
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }),
+  }),
+  ms: Object.freeze({
+    label: "Terakhir disahkan",
+    timeUnavailable: "Masa tidak tersedia",
+    dateUnavailable: "Tarikh tidak tersedia",
+    locale: "ms-MY",
+    dateTimeOptions: Object.freeze({
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }),
+  }),
+});
+
+function resolveVisitedLanguage(language) {
+  return Object.hasOwn(VISITED_ATTRACTIONS_COPY, language) ? language : "en";
+}
+
+export function getVisitedAttractionsCopy(language = "en") {
+  return VISITED_ATTRACTIONS_COPY[resolveVisitedLanguage(language)];
+}
+
+function compareNames(first, second, locale) {
+  const firstName = typeof first?.name === "string" ? first.name : "";
+  const secondName = typeof second?.name === "string" ? second.name : "";
+  const result = new Intl.Collator(locale || undefined, { sensitivity: "base", numeric: true })
+    .compare(firstName, secondName);
+  return result || String(first?.id || "").localeCompare(String(second?.id || ""));
+}
+
+function getVerifiedTimestamp(attraction) {
+  const timestamp = typeof attraction?.latestVerifiedAt === "string"
+    ? Date.parse(attraction.latestVerifiedAt)
+    : Number.NaN;
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+export function createVisitedVerificationPresentation(
+  attraction,
+  language = "en"
+) {
+  const resolvedLanguage = resolveVisitedLanguage(language);
+  const copy = VERIFICATION_COPY[resolvedLanguage];
+  const timestamp = getVerifiedTimestamp(attraction);
+  const hasTimestamp = timestamp !== null;
+  let value =
+    typeof attraction?.latestVisitedDate === "string" &&
+    attraction.latestVisitedDate.trim()
+      ? attraction.latestVisitedDate
+      : copy.dateUnavailable;
+
+  if (hasTimestamp) {
+    value = new Intl.DateTimeFormat(copy.locale, {
+      ...copy.dateTimeOptions,
+      timeZone: "Asia/Kuala_Lumpur",
+    }).format(timestamp);
+    if (resolvedLanguage === "en") {
+      value = value.replace(/\b(am|pm)\b/i, (period) => period.toUpperCase());
+    }
+  }
+
+  return {
+    label: copy.label,
+    value,
+    timeUnavailable: !hasTimestamp,
+    timeUnavailableLabel: copy.timeUnavailable,
+  };
+}
+
+export function sortVisitedAttractions(attractions, sort = VISITED_ATTRACTIONS_SORT.MOST_RECENT, locale) {
+  const source = Array.isArray(attractions) ? [...attractions] : [];
+  return source.sort((first, second) => {
+    if (sort === VISITED_ATTRACTIONS_SORT.NAME_ASC) return compareNames(first, second, locale);
+    const firstDate = getVerifiedTimestamp(first);
+    const secondDate = getVerifiedTimestamp(second);
+    if (firstDate === null && secondDate === null) return compareNames(first, second, locale);
+    if (firstDate === null) return 1;
+    if (secondDate === null) return -1;
+    if (firstDate !== secondDate) {
+      return sort === VISITED_ATTRACTIONS_SORT.OLDEST ? firstDate - secondDate : secondDate - firstDate;
+    }
+    return compareNames(first, second, locale);
+  });
+}
+
+export function paginateVisitedAttractions(attractions, requestedPage = 1) {
+  const source = Array.isArray(attractions) ? attractions : [];
+  const totalPages = Math.max(1, Math.ceil(source.length / VISITED_ATTRACTIONS_PER_PAGE));
+  const candidate = Number.isFinite(Number(requestedPage)) ? Math.trunc(Number(requestedPage)) : 1;
+  const page = Math.min(totalPages, Math.max(1, candidate));
+  const startIndex = (page - 1) * VISITED_ATTRACTIONS_PER_PAGE;
+  return { items: source.slice(startIndex, startIndex + VISITED_ATTRACTIONS_PER_PAGE), page, totalPages, startIndex };
+}
+
 function isAbortError(error) {
   return error?.name === "AbortError";
 }
@@ -196,6 +349,20 @@ export async function loadVisitedAttractionIds({
   return {
     status: VISITED_DATA_STATUS.SUCCESS,
     data: normaliseVisitedAttractionIds(result.data),
+    latestVisitedDateByAttractionId: Array.isArray(result.visitedAttractions)
+      ? Object.fromEntries(result.visitedAttractions.flatMap((item) => (
+          typeof item?.attractionId === "string" && typeof item?.latestVisitedDate === "string"
+            ? [[item.attractionId, item.latestVisitedDate]]
+            : []
+        )))
+      : {},
+    latestVerifiedAtByAttractionId: Array.isArray(result.visitedAttractions)
+      ? Object.fromEntries(result.visitedAttractions.flatMap((item) => (
+          typeof item?.attractionId === "string" && typeof item?.latestVerifiedAt === "string"
+            ? [[item.attractionId, item.latestVerifiedAt]]
+            : []
+        )))
+      : {},
     message: "",
   };
 }

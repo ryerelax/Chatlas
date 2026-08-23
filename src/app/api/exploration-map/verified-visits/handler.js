@@ -49,6 +49,7 @@ export function createVerifiedVisitsHandlers({
   auth,
   connectToDatabase,
   getVerifiedAttractionIdsForUser,
+  getVerifiedAttractionsForUser,
   verifyVisitPhoto,
   ServiceError,
   maxImageBytes = MAX_IMAGE_BYTES,
@@ -60,8 +61,14 @@ export function createVerifiedVisitsHandlers({
 
       await connectToDatabase();
       const data = await getVerifiedAttractionIdsForUser(googleId);
-
-      return Response.json({ success: true, data });
+      const visitedAttractions = typeof getVerifiedAttractionsForUser === "function"
+        ? await getVerifiedAttractionsForUser(googleId)
+        : undefined;
+      return Response.json({
+        success: true,
+        data,
+        ...(visitedAttractions ? { visitedAttractions } : {}),
+      });
     } catch (error) {
       return serviceErrorResponse(error, ServiceError, LOAD_ERROR_MESSAGE);
     }

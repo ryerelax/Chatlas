@@ -1,6 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo, useState } from "react";
+import { useLanguage } from "@/presentation/contexts/LanguageContext";
+import {
+  createVisitedVerificationPresentation,
+  getVisitedAttractionsCopy,
+  paginateVisitedAttractions,
+  sortVisitedAttractions,
+  VISITED_ATTRACTIONS_SORT,
+} from "@/presentation/lib/visitedAttractionsAdapter";
 import {
   getAttractionDetailsHref,
   getVisitedAuthenticationPresentation,
@@ -124,12 +133,24 @@ export default function VisitedAttractionsList({
   onFocusAttraction,
   onRetry,
 }) {
+  const { lang } = useLanguage();
   const hasValidAttractions = Array.isArray(attractions);
-  const visitedAttractions = hasValidAttractions ? attractions : [];
+  const visitedAttractions = useMemo(
+    () => (hasValidAttractions ? attractions : []),
+    [attractions, hasValidAttractions]
+  );
   const displayStatus =
     status === "success" && !hasValidAttractions ? "unavailable" : status;
   const canFocusMap =
     mapStatus === "ready" && typeof onFocusAttraction === "function";
+  const [sort, setSort] = useState(VISITED_ATTRACTIONS_SORT.MOST_RECENT);
+  const [page, setPage] = useState(1);
+  const copy = getVisitedAttractionsCopy(lang);
+  const sortedAttractions = useMemo(
+    () => sortVisitedAttractions(visitedAttractions, sort, lang),
+    [lang, visitedAttractions, sort]
+  );
+  const pagination = paginateVisitedAttractions(sortedAttractions, page);
   const announcement = getLiveAnnouncement(
     displayStatus,
     visitedAttractions,
@@ -218,8 +239,21 @@ export default function VisitedAttractionsList({
       )}
 
       {displayStatus === "success" && visitedAttractions.length > 0 && (
+        <>
+          <label className="mb-4 block text-sm font-semibold text-[#405066]">
+            {copy.sortBy}
+            <select value={sort} onChange={(event) => { setSort(event.target.value); setPage(1); }} className="mt-1 block min-h-11 w-full rounded-xl border border-[#BBC8D0] bg-white px-3">
+              <option value={VISITED_ATTRACTIONS_SORT.MOST_RECENT}>{copy.mostRecent}</option>
+              <option value={VISITED_ATTRACTIONS_SORT.OLDEST}>{copy.oldest}</option>
+              <option value={VISITED_ATTRACTIONS_SORT.NAME_ASC}>{copy.nameAsc}</option>
+            </select>
+          </label>
         <ul className="grid gap-3 sm:grid-cols-2">
-          {visitedAttractions.map((attraction) => (
+          {pagination.items.map((attraction) => {
+            const verificationPresentation =
+              createVisitedVerificationPresentation(attraction, lang);
+
+            return (
             <li
               key={attraction.id}
               className="rounded-2xl border border-[#D8E1E7] bg-white p-4"
@@ -255,6 +289,12 @@ export default function VisitedAttractionsList({
                   </span>
                 </div>
               </div>
+              <p className="mt-3 text-sm text-[#65748A]">
+                {verificationPresentation.label}: {verificationPresentation.value}
+                {verificationPresentation.timeUnavailable && (
+                  <> · {verificationPresentation.timeUnavailableLabel}</>
+                )}
+              </p>
 
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 <button
@@ -280,8 +320,17 @@ export default function VisitedAttractionsList({
                 </Link>
               </div>
             </li>
-          ))}
+            );
+          })}
         </ul>
+        {sortedAttractions.length > 10 && (
+          <div className="mt-4 flex items-center justify-between gap-3 text-sm">
+            <button type="button" disabled={pagination.page === 1} onClick={() => setPage(pagination.page - 1)} className="min-h-11 rounded-xl border px-4 disabled:opacity-50">Previous</button>
+            <span aria-live="polite">Page {pagination.page} of {pagination.totalPages}</span>
+            <button type="button" disabled={pagination.page === pagination.totalPages} onClick={() => setPage(pagination.page + 1)} className="min-h-11 rounded-xl border px-4 disabled:opacity-50">Next</button>
+          </div>
+        )}
+        </>
       )}
 
       {!["loading", "auth-required", "unavailable", "error", "success"].includes(

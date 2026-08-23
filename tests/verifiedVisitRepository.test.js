@@ -831,3 +831,42 @@ test("empty-visit cleanup only deletes a visit whose photos array is empty", asy
   assert.deepEqual(observed.filter, { _id: "visit-1", photos: { $size: 0 } });
   assert.equal(result, undefined);
 });
+
+test("private verified-attraction metadata groups each attraction with its latest visit date and server verification timestamp", async () => {
+  const observed = {};
+  const latestVerifiedAt = new Date("2026-08-23T09:08:00.000Z");
+  const repository = createVerifiedVisitRepository({
+    aggregate(pipeline) {
+      observed.pipeline = pipeline;
+      return Promise.resolve([
+        {
+          _id: { toString: () => "attraction-1" },
+          latestVisitedDate: "2026-08-23",
+          latestVerifiedAt,
+        },
+      ]);
+    },
+  });
+
+  const result = await repository.findVerifiedAttractionsWithLatestVisitDate(
+    "user-1"
+  );
+
+  assert.deepEqual(observed.pipeline, [
+    { $match: { userId: "user-1", "photos.0": { $exists: true } } },
+    {
+      $group: {
+        _id: "$attractionId",
+        latestVisitedDate: { $max: "$visitDateKey" },
+        latestVerifiedAt: { $max: "$createdAt" },
+      },
+    },
+  ]);
+  assert.deepEqual(result, [
+    {
+      attractionId: "attraction-1",
+      latestVisitedDate: "2026-08-23",
+      latestVerifiedAt,
+    },
+  ]);
+});

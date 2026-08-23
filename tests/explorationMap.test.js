@@ -459,6 +459,13 @@ test("production adapter loads and normalises verified attraction IDs", async ()
         JSON.stringify({
           success: true,
           data: ["a", " a ", "b", "", null],
+          visitedAttractions: [
+            {
+              attractionId: "a",
+              latestVisitedDate: "2026-08-23",
+              latestVerifiedAt: "2026-08-23T09:08:00.000Z",
+            },
+          ],
         }),
         { status: 200 }
       );
@@ -468,6 +475,10 @@ test("production adapter loads and normalises verified attraction IDs", async ()
   assert.deepEqual(result, {
     status: VISITED_DATA_STATUS.SUCCESS,
     data: ["a", "b"],
+    latestVisitedDateByAttractionId: { a: "2026-08-23" },
+    latestVerifiedAtByAttractionId: {
+      a: "2026-08-23T09:08:00.000Z",
+    },
     message: "",
   });
   assert.equal(request.url, "/api/exploration-map/verified-visits");

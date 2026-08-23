@@ -171,6 +171,31 @@ export function createVerifiedVisitRepository(VerifiedVisitModel) {
       return [...new Set(attractionIds.map((attractionId) => attractionId.toString()))];
     },
 
+    async findVerifiedAttractionsWithLatestVisitDate(userId) {
+      const records = await VerifiedVisitModel.aggregate([
+        { $match: { userId, "photos.0": { $exists: true } } },
+        {
+          $group: {
+            _id: "$attractionId",
+            latestVisitedDate: { $max: "$visitDateKey" },
+            latestVerifiedAt: { $max: "$createdAt" },
+          },
+        },
+      ]);
+      return records.flatMap((record) => {
+        const attractionId = record?._id?.toString?.();
+        return attractionId && typeof record?.latestVisitedDate === "string"
+          ? [{
+              attractionId,
+              latestVisitedDate: record.latestVisitedDate,
+              ...(record.latestVerifiedAt
+                ? { latestVerifiedAt: record.latestVerifiedAt }
+                : {}),
+            }]
+          : [];
+      });
+    },
+
     async findPublicVerifiedPhotos(attractionId, viewerId) {
       const visits = await VerifiedVisitModel.find({ attractionId })
         .select(PUBLIC_VERIFIED_VISIT_FIELDS)
@@ -240,6 +265,10 @@ export async function findDatedVisitBySubmissionKey(input) {
 
 export async function findDistinctVerifiedAttractionIds(userId) {
   return verifiedVisitRepository.findDistinctVerifiedAttractionIds(userId);
+}
+
+export async function findVerifiedAttractionsWithLatestVisitDate(userId) {
+  return verifiedVisitRepository.findVerifiedAttractionsWithLatestVisitDate(userId);
 }
 
 export async function findPublicVerifiedPhotos(attractionId, viewerId) {
