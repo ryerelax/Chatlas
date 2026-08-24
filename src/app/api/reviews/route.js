@@ -14,25 +14,53 @@ export async function GET(request) {
     const session = await auth();
     await connectToDatabase();
 
-    const attractionId = request.nextUrl.searchParams.get("attractionId");
-    const reviews = await getReviewsByAttraction(
-      attractionId,
-      session?.user?.email
-    );
+    const { searchParams } = request.nextUrl;
+    const result = await getReviewsByAttraction({
+      attractionId: searchParams.get("attractionId"),
+      page: searchParams.get("page"),
+      limit: searchParams.get("limit"),
+      sort: searchParams.get("sort"),
+      email: session?.user?.email,
+    });
 
-    if (reviews === null) {
+    if (result === null) {
       return NextResponse.json(
         { success: false, message: "A valid attraction id is required." },
         { status: 400 }
       );
     }
 
+    const {
+      reviews,
+      page,
+      limit,
+      sort,
+      totalReviews,
+      totalPages,
+    } = result;
+
     return NextResponse.json({
       success: true,
-      count: reviews.length,
+      count: totalReviews,
       data: reviews,
+      sort,
+      pagination: {
+        page,
+        limit,
+        totalReviews,
+        totalPages,
+        hasPreviousPage: page > 1 && totalPages > 0,
+        hasNextPage: page < totalPages,
+      },
     });
   } catch (error) {
+    if (error instanceof ReviewServiceError) {
+      return NextResponse.json(
+        { success: false, message: error.message },
+        { status: error.statusCode }
+      );
+    }
+
     console.error("Failed to retrieve reviews:", error);
 
     return NextResponse.json(

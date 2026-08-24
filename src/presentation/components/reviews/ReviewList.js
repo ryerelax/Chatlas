@@ -1,38 +1,100 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import ReviewCard from "./ReviewCard";
+
+const REVIEW_PAGE_SIZE = 5;
+const REVIEW_SORT_OPTIONS = [
+  { value: "newest", label: "Newest" },
+  { value: "oldest", label: "Oldest" },
+  { value: "highest-rating", label: "Highest Rating" },
+  { value: "lowest-rating", label: "Lowest Rating" },
+  { value: "most-liked", label: "Most Liked" },
+];
 
 export default function ReviewList({ attractionId, refreshVersion = 0 }) {
   const [reviews, setReviews] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [sort, setSort] = useState("newest");
+  const [page, setPage] = useState(1);
+  const [requestVersion, setRequestVersion] = useState(0);
+  const [lastRefreshVersion, setLastRefreshVersion] = useState(refreshVersion);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: REVIEW_PAGE_SIZE,
+    totalReviews: 0,
+    totalPages: 0,
+    hasPreviousPage: false,
+    hasNextPage: false,
+  });
+  const isBackgroundOrderRefreshRef = useRef(false);
+
+  if (lastRefreshVersion !== refreshVersion) {
+    setLastRefreshVersion(refreshVersion);
+    setPage(1);
+  }
 
   useEffect(() => {
     const controller = new AbortController();
 
     async function loadReviews() {
       try {
-        setIsLoading(true);
+        if (!isBackgroundOrderRefreshRef.current) {
+          setIsLoading(true);
+        }
         setError("");
 
-        const response = await fetch(
-          `/api/reviews?attractionId=${encodeURIComponent(attractionId)}`,
-          { signal: controller.signal }
-        );
+        const searchParams = new URLSearchParams({
+          attractionId,
+          page: String(page),
+          limit: String(REVIEW_PAGE_SIZE),
+          sort,
+        });
+        const response = await fetch(`/api/reviews?${searchParams}`, {
+          signal: controller.signal,
+        });
         const result = await response.json();
 
         if (!response.ok) {
           throw new Error(result.message || "Unable to load reviews.");
         }
 
-        setReviews(result.data);
+        const nextPagination = result.pagination;
+        const totalReviews = Number(nextPagination?.totalReviews);
+        const totalPages = Number(nextPagination?.totalPages);
+
+        if (
+          Number.isInteger(totalReviews) &&
+          totalReviews > 0 &&
+          Number.isInteger(totalPages) &&
+          totalPages > 0 &&
+          page > totalPages
+        ) {
+          setPage(totalPages);
+          return;
+        }
+
+        setReviews(Array.isArray(result.data) ? result.data : []);
+        setPagination({
+          page: Number(nextPagination?.page) || page,
+          limit: Number(nextPagination?.limit) || REVIEW_PAGE_SIZE,
+          totalReviews:
+            Number.isInteger(totalReviews) && totalReviews >= 0
+              ? totalReviews
+              : 0,
+          totalPages:
+            Number.isInteger(totalPages) && totalPages >= 0 ? totalPages : 0,
+          hasPreviousPage: Boolean(nextPagination?.hasPreviousPage),
+          hasNextPage: Boolean(nextPagination?.hasNextPage),
+        });
       } catch (error) {
         if (error.name !== "AbortError") {
           setError(error.message);
         }
       } finally {
         if (!controller.signal.aborted) {
+          isBackgroundOrderRefreshRef.current = false;
           setIsLoading(false);
         }
       }
@@ -43,7 +105,17 @@ export default function ReviewList({ attractionId, refreshVersion = 0 }) {
     }
 
     return () => controller.abort();
-  }, [attractionId, refreshVersion]);
+  }, [attractionId, page, refreshVersion, requestVersion, sort]);
+
+  const handleLikeUpdated = useCallback(() => {
+    isBackgroundOrderRefreshRef.current = true;
+    setRequestVersion((version) => version + 1);
+  }, []);
+
+  function handleSortChange(event) {
+    setSort(event.target.value);
+    setPage(1);
+  }
 
   if (isLoading) {
     return <ReviewListSkeleton />;
@@ -93,10 +165,76 @@ export default function ReviewList({ attractionId, refreshVersion = 0 }) {
   }
 
   return (
-    <div className="space-y-4">
-      {reviews.map((review) => (
-        <ReviewCard key={review._id} review={review} />
-      ))}
+    <div>
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <p className="text-sm text-attraction-muted" aria-live="polite">
+          {pagination.totalReviews}{" "}
+          {pagination.totalReviews === 1 ? "review" : "reviews"}
+        </p>
+
+        <div className="w-full sm:w-auto">
+          <label
+            htmlFor="review-sort"
+            className="mb-1.5 block text-sm font-semibold text-attraction-ink"
+          >
+            Sort reviews
+          </label>
+          <select
+            id="review-sort"
+            value={sort}
+            onChange={handleSortChange}
+            className="min-h-11 w-full rounded-[10px] border border-attraction-border-strong bg-white px-3 text-sm font-medium text-attraction-body transition-colors duration-200 focus:border-attraction-primary focus:outline-none focus:ring-2 focus:ring-attraction-primary/30 sm:min-w-48"
+          >
+            {REVIEW_SORT_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        {reviews.map((review) => (
+          <ReviewCard
+            key={review._id}
+            review={review}
+            onLikeUpdated={sort === "most-liked" ? handleLikeUpdated : undefined}
+          />
+        ))}
+      </div>
+
+      {pagination.totalPages > 1 && (
+        <nav
+          className="mt-6 flex items-center justify-between gap-3"
+          aria-label="Review pages"
+        >
+          <button
+            type="button"
+            onClick={() => setPage((currentPage) => currentPage - 1)}
+            disabled={!pagination.hasPreviousPage || isLoading}
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-[10px] border border-attraction-border-strong bg-white px-4 text-sm font-semibold text-attraction-body transition-colors duration-200 hover:bg-attraction-surface-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-attraction-primary disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Previous
+          </button>
+
+          <p
+            className="text-center text-sm font-medium text-attraction-muted"
+            aria-live="polite"
+          >
+            Page {pagination.page} of {pagination.totalPages}
+          </p>
+
+          <button
+            type="button"
+            onClick={() => setPage((currentPage) => currentPage + 1)}
+            disabled={!pagination.hasNextPage || isLoading}
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-[10px] border border-attraction-border-strong bg-white px-4 text-sm font-semibold text-attraction-body transition-colors duration-200 hover:bg-attraction-surface-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-attraction-primary disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Next
+          </button>
+        </nav>
+      )}
     </div>
   );
 }
