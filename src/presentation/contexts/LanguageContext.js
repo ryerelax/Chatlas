@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 
 const translations = {
   en: {
-    // Nav
+    // ——— Nav ———
     home: "Home",
     attractions: "Attractions",
     addAttraction: "+ Add Attraction",
@@ -17,19 +17,46 @@ const translations = {
     signIn: "Sign in",
     menu: "Menu",
 
-    // Home hero
+    // ——— Common ———
+    loading: "Loading...",
+    cancel: "Cancel",
+    save: "Save",
+    delete: "Delete",
+    edit: "Edit",
+    view: "View",
+    back: "Back",
+    search: "Search",
+    reset: "Reset",
+    submit: "Submit",
+    close: "Close",
+    yes: "Yes",
+    no: "No",
+    errorGeneric: "Something went wrong. Please try again.",
+    unauthorized: "Please sign in to continue.",
+    notFound: "Page not found",
+
+    // ——— Login ———
+    loginSubtitle:
+      "Sign in to save places, write reviews, and manage your profile",
+    loginGuestHint:
+      "You can still browse attractions, the map, and community as a guest.",
+    signInWithGoogle: "Sign in with Google",
+    signingIn: "Signing in...",
+    continueAsGuest: "Continue browsing as guest",
+    termsAgree: "By continuing, you agree to our Terms of Service",
+    googleAuthFailed: "Google authentication failed. Please try again.",
+
+    // ——— Home hero ———
     heroEyebrow: "Explore Melaka with the community",
     heroTitle: "Discover attractions and record your travel journey",
     heroSubtitle:
       "Browse popular and lesser-known attractions, read traveller experiences and start exploring Melaka.",
 
-    // Search / filters
+    // ——— Search / filters ———
     searchAttractions: "Search Attractions",
     searchPlaceholder: "Search attractions in Melaka",
     moreFilters: "More Filters",
     hideFilters: "Hide Filters",
-    search: "Search",
-    reset: "Reset",
     minimumRating: "Minimum Rating",
     anyRating: "Any Rating",
     ratingAndAbove: "and above",
@@ -60,7 +87,7 @@ const translations = {
     area: "area",
     rating: "rating",
 
-    // Categories
+    // ——— Categories (labels only; DB values stay English) ———
     cat_All: "All Categories",
     cat_Museum: "Museum",
     cat_Religious: "Religious",
@@ -70,14 +97,52 @@ const translations = {
     cat_Entertainment: "Entertainment",
     cat_Gallery: "Gallery",
 
-    // Profile
+    // ——— Attraction detail / actions ———
+    details: "Details",
+    address: "Address",
+    description: "Description",
+    photos: "Photos",
+    reviews: "Reviews",
+    writeReview: "Write a review",
+    addToWishlist: "Add to wishlist",
+    removeFromWishlist: "Remove from wishlist",
+    addToFavourites: "Add to favourites",
+    removeFromFavourites: "Remove from favourites",
+    signInToSave: "Sign in to save this place",
+    signInToReview: "Sign in to write a review",
+    editDescription: "Edit description",
+    saveDescription: "Save description",
+    onlyMelakaCanEdit:
+      "Only users whose home state is Melaka can edit descriptions.",
+    uploadPhoto: "Upload photo",
+    noPhotosYet: "No photos yet",
+    noReviewsYetAttraction: "No reviews yet",
+    communitySubmitted: "Community submitted",
+    openInMaps: "Open in maps",
+
+    // ——— Add attraction ———
+    addAttractionTitle: "Add Attraction",
+    attractionName: "Name",
+    attractionCategory: "Category",
+    attractionAddress: "Address",
+    attractionDescriptionOptional: "Description (optional)",
+    submitAttraction: "Submit attraction",
+    submitSuccess: "Attraction submitted successfully",
+    submitFailed: "Failed to submit attraction",
+    signInToAddAttraction: "Sign in to add an attraction",
+
+    // ——— Profile ———
     editProfile: "Edit Profile",
     displayName: "Display name",
     email: "Email",
     location: "Location",
+    homeState: "Home state",
+    selectStateTerritory: "Select state / territory",
+    locationLegacyHint:
+      'Previous value "{value}" is not in the list. Please choose a state or territory above.',
+    melakaEditHint: "You can edit Melaka attraction descriptions.",
     bio: "Bio",
     saveChanges: "Save changes",
-    cancel: "Cancel",
     saving: "Saving...",
     profileUpdated: "Profile updated successfully!",
     memberSince: "Member since",
@@ -94,17 +159,81 @@ const translations = {
     recentReviews: "Recent Reviews",
     noReviewsYet: "You haven't written any reviews yet.",
     youHaveReviews: "You have {count} reviews.",
-    loading: "Loading...",
     locationLabel: "Location",
     itemsSaved: "items saved",
     reviewsWrittenCount: "reviews written",
     photosUploadedCount: "photos uploaded",
-    view: "View",
     locationPlaceholder: "City or region you explore from",
     bioPlaceholder: "A short introduction shown on your public profile",
     fileTooLarge: "File is too large. Maximum size is 5MB.",
-    unsupportedFormat: "Unsupported file format. Please upload JPG, PNG, or WEBP.",
+    unsupportedFormat:
+      "Unsupported file format. Please upload JPG, PNG, or WEBP.",
     uploadHint: "JPG, PNG or WEBP, max 5MB",
+
+    // ——— Community / reviews ———
+    communityTitle: "Community",
+    allReviews: "All reviews",
+    latestReviews: "Latest reviews",
+    yourRating: "Your rating",
+    reviewPlaceholder: "Share your experience...",
+    postReview: "Post review",
+    editReview: "Edit review",
+    deleteReview: "Delete review",
+    confirmDeleteReview: "Delete this review?",
+    reviewPosted: "Review posted",
+    noCommunityReviews: "No reviews yet. Be the first to share.",
+    stars: "stars",
+
+    // ——— Map ———
+    mapTitle: "Exploration Map",
+    mapLoading: "Loading map...",
+    mapFailed: "Failed to load map",
+    showAll: "Show all",
+    visited: "Visited",
+    notVisited: "Not visited",
+    exploreProgress: "Exploration progress",
+    signInForMapFeatures: "Sign in to track places you've visited",
+    zoomIn: "Zoom in",
+    zoomOut: "Zoom out",
+
+    // ——— Travellers / social ———
+    travellersTitle: "Travellers",
+    searchTravellers: "Search travellers",
+    publicProfile: "Public profile",
+    noTravellersFound: "No travellers found",
+    compareVisits: "Compare visits",
+    commonPlaces: "Places in common",
+    differentPlaces: "Different places",
+    viewProfile: "View profile",
+
+    // ——— Collection pages ———
+    wishlistTitle: "Wishlist",
+    favouritesTitle: "Favourites",
+    myPhotosTitle: "My Photos",
+    travelHistoryTitle: "Travel History",
+    emptyWishlist: "Your wishlist is empty",
+    emptyFavourites: "No favourites yet",
+    emptyPhotos: "No photos uploaded yet",
+    emptyHistory: "No travel history yet",
+    remove: "Remove",
+
+    // ——— States (UI labels; stored values stay English) ———
+    state_Johor: "Johor",
+    state_Kedah: "Kedah",
+    state_Kelantan: "Kelantan",
+    state_Melaka: "Melaka",
+    state_NegeriSembilan: "Negeri Sembilan",
+    state_Pahang: "Pahang",
+    state_Penang: "Penang",
+    state_Perak: "Perak",
+    state_Perlis: "Perlis",
+    state_Sabah: "Sabah",
+    state_Sarawak: "Sarawak",
+    state_Selangor: "Selangor",
+    state_Terengganu: "Terengganu",
+    state_KualaLumpur: "Kuala Lumpur",
+    state_Labuan: "Labuan",
+    state_Putrajaya: "Putrajaya",
   },
 
   zh: {
@@ -120,6 +249,31 @@ const translations = {
     signIn: "登录",
     menu: "菜单",
 
+    loading: "加载中...",
+    cancel: "取消",
+    save: "保存",
+    delete: "删除",
+    edit: "编辑",
+    view: "查看",
+    back: "返回",
+    search: "搜索",
+    reset: "重置",
+    submit: "提交",
+    close: "关闭",
+    yes: "是",
+    no: "否",
+    errorGeneric: "出错了，请重试。",
+    unauthorized: "请先登录。",
+    notFound: "页面不存在",
+
+    loginSubtitle: "登录以收藏地点、撰写评价并管理个人资料",
+    loginGuestHint: "未登录仍可浏览景点、地图和社区。",
+    signInWithGoogle: "使用 Google 登录",
+    signingIn: "登录中...",
+    continueAsGuest: "以访客身份继续浏览",
+    termsAgree: "继续即表示同意服务条款",
+    googleAuthFailed: "Google 登录失败，请重试。",
+
     heroEyebrow: "与社区一起探索马六甲",
     heroTitle: "发现景点，记录你的旅行足迹",
     heroSubtitle:
@@ -129,8 +283,6 @@ const translations = {
     searchPlaceholder: "在马六甲搜索景点",
     moreFilters: "更多筛选",
     hideFilters: "收起筛选",
-    search: "搜索",
-    reset: "重置",
     minimumRating: "最低评分",
     anyRating: "不限评分",
     ratingAndAbove: "及以上",
@@ -150,7 +302,8 @@ const translations = {
     loadingAttractions: "正在加载景点...",
     failedLoadAttractions: "加载景点失败，请重试。",
     noAttractionsFound: "未找到景点",
-    tryChangingFilters: "请尝试更改关键词、分类、区域、评分，或清除所有筛选。",
+    tryChangingFilters:
+      "请尝试更改关键词、分类、区域、评分，或清除所有筛选。",
     clearSearchAndFilters: "清除搜索与筛选",
     previous: "上一页",
     next: "下一页",
@@ -169,13 +322,48 @@ const translations = {
     cat_Entertainment: "娱乐",
     cat_Gallery: "画廊",
 
+    details: "详情",
+    address: "地址",
+    description: "简介",
+    photos: "照片",
+    reviews: "评价",
+    writeReview: "写评价",
+    addToWishlist: "加入心愿单",
+    removeFromWishlist: "移出心愿单",
+    addToFavourites: "加入收藏",
+    removeFromFavourites: "取消收藏",
+    signInToSave: "登录以收藏此地",
+    signInToReview: "登录以撰写评价",
+    editDescription: "编辑简介",
+    saveDescription: "保存简介",
+    onlyMelakaCanEdit: "仅家在马六甲的用户可编辑简介。",
+    uploadPhoto: "上传照片",
+    noPhotosYet: "暂无照片",
+    noReviewsYetAttraction: "暂无评价",
+    communitySubmitted: "社区提交",
+    openInMaps: "在地图中打开",
+
+    addAttractionTitle: "添加景点",
+    attractionName: "名称",
+    attractionCategory: "分类",
+    attractionAddress: "地址",
+    attractionDescriptionOptional: "简介（可选）",
+    submitAttraction: "提交景点",
+    submitSuccess: "景点提交成功",
+    submitFailed: "提交失败",
+    signInToAddAttraction: "登录以添加景点",
+
     editProfile: "编辑资料",
     displayName: "显示名称",
     email: "邮箱",
     location: "所在地",
+    homeState: "所在州属",
+    selectStateTerritory: "选择州属 / 联邦直辖区",
+    locationLegacyHint:
+      "原值「{value}」不在列表中，请重新选择州属。",
+    melakaEditHint: "你可以编辑马六甲景点的简介。",
     bio: "简介",
     saveChanges: "保存修改",
-    cancel: "取消",
     saving: "保存中...",
     profileUpdated: "资料更新成功！",
     memberSince: "加入于",
@@ -192,17 +380,75 @@ const translations = {
     recentReviews: "最近评价",
     noReviewsYet: "你还没有写过任何评价。",
     youHaveReviews: "你有 {count} 条评价。",
-    loading: "加载中...",
     locationLabel: "所在地",
     itemsSaved: "项已保存",
     reviewsWrittenCount: "条评价",
     photosUploadedCount: "张照片",
-    view: "查看",
     locationPlaceholder: "你常探索的城市或地区",
     bioPlaceholder: "展示在公开资料上的简短介绍",
     fileTooLarge: "文件过大，最大 5MB。",
     unsupportedFormat: "不支持的格式，请上传 JPG、PNG 或 WEBP。",
     uploadHint: "JPG、PNG 或 WEBP，最大 5MB",
+
+    communityTitle: "社区",
+    allReviews: "全部评价",
+    latestReviews: "最新评价",
+    yourRating: "你的评分",
+    reviewPlaceholder: "分享你的体验...",
+    postReview: "发布评价",
+    editReview: "编辑评价",
+    deleteReview: "删除评价",
+    confirmDeleteReview: "确定删除这条评价？",
+    reviewPosted: "评价已发布",
+    noCommunityReviews: "还没有评价，来当第一个分享的人吧。",
+    stars: "星",
+
+    mapTitle: "探索地图",
+    mapLoading: "地图加载中...",
+    mapFailed: "地图加载失败",
+    showAll: "显示全部",
+    visited: "已去过",
+    notVisited: "未去过",
+    exploreProgress: "探索进度",
+    signInForMapFeatures: "登录以记录去过的地点",
+    zoomIn: "放大",
+    zoomOut: "缩小",
+
+    travellersTitle: "旅人",
+    searchTravellers: "搜索旅人",
+    publicProfile: "公开资料",
+    noTravellersFound: "未找到旅人",
+    compareVisits: "对比足迹",
+    commonPlaces: "共同去过",
+    differentPlaces: "不同足迹",
+    viewProfile: "查看资料",
+
+    wishlistTitle: "心愿单",
+    favouritesTitle: "收藏",
+    myPhotosTitle: "我的照片",
+    travelHistoryTitle: "旅行历史",
+    emptyWishlist: "心愿单是空的",
+    emptyFavourites: "暂无收藏",
+    emptyPhotos: "尚未上传照片",
+    emptyHistory: "暂无旅行记录",
+    remove: "移除",
+
+    state_Johor: "柔佛",
+    state_Kedah: "吉打",
+    state_Kelantan: "吉兰丹",
+    state_Melaka: "马六甲",
+    state_NegeriSembilan: "森美兰",
+    state_Pahang: "彭亨",
+    state_Penang: "槟城",
+    state_Perak: "霹雳",
+    state_Perlis: "玻璃市",
+    state_Sabah: "沙巴",
+    state_Sarawak: "砂拉越",
+    state_Selangor: "雪兰莪",
+    state_Terengganu: "登嘉楼",
+    state_KualaLumpur: "吉隆坡",
+    state_Labuan: "纳闽",
+    state_Putrajaya: "布城",
   },
 
   ms: {
@@ -218,6 +464,34 @@ const translations = {
     signIn: "Log Masuk",
     menu: "Menu",
 
+    loading: "Memuatkan...",
+    cancel: "Batal",
+    save: "Simpan",
+    delete: "Padam",
+    edit: "Edit",
+    view: "Lihat",
+    back: "Kembali",
+    search: "Cari",
+    reset: "Set Semula",
+    submit: "Hantar",
+    close: "Tutup",
+    yes: "Ya",
+    no: "Tidak",
+    errorGeneric: "Berlaku ralat. Sila cuba lagi.",
+    unauthorized: "Sila log masuk untuk teruskan.",
+    notFound: "Halaman tidak dijumpai",
+
+    loginSubtitle:
+      "Log masuk untuk simpan tempat, tulis ulasan dan urus profil",
+    loginGuestHint:
+      "Anda masih boleh layari tarikan, peta dan komuniti sebagai tetamu.",
+    signInWithGoogle: "Log masuk dengan Google",
+    signingIn: "Sedang log masuk...",
+    continueAsGuest: "Teruskan melayari sebagai tetamu",
+    termsAgree:
+      "Dengan meneruskan, anda bersetuju dengan Terma Perkhidmatan kami",
+    googleAuthFailed: "Pengesahan Google gagal. Sila cuba lagi.",
+
     heroEyebrow: "Terokai Melaka bersama komuniti",
     heroTitle: "Temui tarikan dan rekod perjalanan anda",
     heroSubtitle:
@@ -227,8 +501,6 @@ const translations = {
     searchPlaceholder: "Cari tarikan di Melaka",
     moreFilters: "Lagi Penapis",
     hideFilters: "Sembunyikan Penapis",
-    search: "Cari",
-    reset: "Set Semula",
     minimumRating: "Penilaian Minimum",
     anyRating: "Sebarang Penilaian",
     ratingAndAbove: "dan ke atas",
@@ -268,13 +540,49 @@ const translations = {
     cat_Entertainment: "Hiburan",
     cat_Gallery: "Galeri",
 
+    details: "Butiran",
+    address: "Alamat",
+    description: "Penerangan",
+    photos: "Foto",
+    reviews: "Ulasan",
+    writeReview: "Tulis ulasan",
+    addToWishlist: "Tambah ke senarai hajat",
+    removeFromWishlist: "Buang dari senarai hajat",
+    addToFavourites: "Tambah ke kegemaran",
+    removeFromFavourites: "Buang dari kegemaran",
+    signInToSave: "Log masuk untuk simpan tempat ini",
+    signInToReview: "Log masuk untuk tulis ulasan",
+    editDescription: "Edit penerangan",
+    saveDescription: "Simpan penerangan",
+    onlyMelakaCanEdit:
+      "Hanya pengguna yang negeri asal Melaka boleh edit penerangan.",
+    uploadPhoto: "Muat naik foto",
+    noPhotosYet: "Tiada foto lagi",
+    noReviewsYetAttraction: "Tiada ulasan lagi",
+    communitySubmitted: "Diserahkan komuniti",
+    openInMaps: "Buka dalam peta",
+
+    addAttractionTitle: "Tambah Tarikan",
+    attractionName: "Nama",
+    attractionCategory: "Kategori",
+    attractionAddress: "Alamat",
+    attractionDescriptionOptional: "Penerangan (pilihan)",
+    submitAttraction: "Hantar tarikan",
+    submitSuccess: "Tarikan berjaya dihantar",
+    submitFailed: "Gagal menghantar tarikan",
+    signInToAddAttraction: "Log masuk untuk tambah tarikan",
+
     editProfile: "Edit Profil",
     displayName: "Nama paparan",
     email: "E-mel",
     location: "Lokasi",
+    homeState: "Negeri asal",
+    selectStateTerritory: "Pilih negeri / wilayah persekutuan",
+    locationLegacyHint:
+      'Nilai lama "{value}" tiada dalam senarai. Sila pilih negeri di atas.',
+    melakaEditHint: "Anda boleh edit penerangan tarikan Melaka.",
     bio: "Bio",
     saveChanges: "Simpan perubahan",
-    cancel: "Batal",
     saving: "Menyimpan...",
     profileUpdated: "Profil berjaya dikemas kini!",
     memberSince: "Ahli sejak",
@@ -291,17 +599,76 @@ const translations = {
     recentReviews: "Ulasan Terkini",
     noReviewsYet: "Anda belum menulis sebarang ulasan.",
     youHaveReviews: "Anda mempunyai {count} ulasan.",
-    loading: "Memuatkan...",
     locationLabel: "Lokasi",
     itemsSaved: "item disimpan",
     reviewsWrittenCount: "ulasan ditulis",
     photosUploadedCount: "foto dimuat naik",
-    view: "Lihat",
     locationPlaceholder: "Bandar atau kawasan yang anda terokai",
     bioPlaceholder: "Pengenalan ringkas pada profil awam anda",
     fileTooLarge: "Fail terlalu besar. Maksimum 5MB.",
-    unsupportedFormat: "Format tidak disokong. Sila muat naik JPG, PNG, atau WEBP.",
+    unsupportedFormat:
+      "Format tidak disokong. Sila muat naik JPG, PNG, atau WEBP.",
     uploadHint: "JPG, PNG atau WEBP, maks 5MB",
+
+    communityTitle: "Komuniti",
+    allReviews: "Semua ulasan",
+    latestReviews: "Ulasan terkini",
+    yourRating: "Penilaian anda",
+    reviewPlaceholder: "Kongsi pengalaman anda...",
+    postReview: "Siarkan ulasan",
+    editReview: "Edit ulasan",
+    deleteReview: "Padam ulasan",
+    confirmDeleteReview: "Padam ulasan ini?",
+    reviewPosted: "Ulasan disiar",
+    noCommunityReviews: "Tiada ulasan lagi. Jadilah yang pertama.",
+    stars: "bintang",
+
+    mapTitle: "Peta Penerokaan",
+    mapLoading: "Memuatkan peta...",
+    mapFailed: "Gagal memuatkan peta",
+    showAll: "Papar semua",
+    visited: "Dilawati",
+    notVisited: "Belum dilawati",
+    exploreProgress: "Kemajuan penerokaan",
+    signInForMapFeatures: "Log masuk untuk jejak tempat dilawati",
+    zoomIn: "Zum masuk",
+    zoomOut: "Zum keluar",
+
+    travellersTitle: "Pengembara",
+    searchTravellers: "Cari pengembara",
+    publicProfile: "Profil awam",
+    noTravellersFound: "Tiada pengembara dijumpai",
+    compareVisits: "Banding lawatan",
+    commonPlaces: "Tempat sama",
+    differentPlaces: "Tempat berbeza",
+    viewProfile: "Lihat profil",
+
+    wishlistTitle: "Senarai Hajat",
+    favouritesTitle: "Kegemaran",
+    myPhotosTitle: "Foto Saya",
+    travelHistoryTitle: "Sejarah Perjalanan",
+    emptyWishlist: "Senarai hajat kosong",
+    emptyFavourites: "Tiada kegemaran lagi",
+    emptyPhotos: "Belum muat naik foto",
+    emptyHistory: "Tiada sejarah perjalanan",
+    remove: "Buang",
+
+    state_Johor: "Johor",
+    state_Kedah: "Kedah",
+    state_Kelantan: "Kelantan",
+    state_Melaka: "Melaka",
+    state_NegeriSembilan: "Negeri Sembilan",
+    state_Pahang: "Pahang",
+    state_Penang: "Pulau Pinang",
+    state_Perak: "Perak",
+    state_Perlis: "Perlis",
+    state_Sabah: "Sabah",
+    state_Sarawak: "Sarawak",
+    state_Selangor: "Selangor",
+    state_Terengganu: "Terengganu",
+    state_KualaLumpur: "Kuala Lumpur",
+    state_Labuan: "Labuan",
+    state_Putrajaya: "Putrajaya",
   },
 };
 
@@ -334,11 +701,21 @@ export function LanguageProvider({ children }) {
   const translateCategory = (name) => {
     if (!name || name === "All") return t("cat_All");
     const key = `cat_${name.replace(/\s+/g, "")}`;
-    return t(key) !== key ? t(key) : name;
+    const translated = t(key);
+    return translated !== key ? translated : name;
+  };
+
+  const translateState = (name) => {
+    if (!name) return "";
+    const key = `state_${name.replace(/\s+/g, "")}`;
+    const translated = t(key);
+    return translated !== key ? translated : name;
   };
 
   return (
-    <LanguageContext.Provider value={{ lang, changeLang, t, translateCategory }}>
+    <LanguageContext.Provider
+      value={{ lang, changeLang, t, translateCategory, translateState }}
+    >
       {children}
     </LanguageContext.Provider>
   );

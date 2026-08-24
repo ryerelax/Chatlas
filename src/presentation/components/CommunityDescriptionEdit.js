@@ -3,6 +3,7 @@
 import { useSession } from "next-auth/react";
 import { useState } from "react";
 import { isMelakaBasedUser } from "@/business/services/locationGate";
+import { useLanguage } from "@/presentation/contexts/LanguageContext";
 
 const MAX_DESCRIPTION_LENGTH = 2000;
 
@@ -18,6 +19,7 @@ export default function CommunityDescriptionEdit({
   onDescriptionUpdated,
 }) {
   const { data: session } = useSession();
+  const { t } = useLanguage();
   const isEligible = isMelakaBasedUser(session);
 
   const [isEditing, setIsEditing] = useState(false);
@@ -29,7 +31,8 @@ export default function CommunityDescriptionEdit({
 
   // The moment a community edit sets descriptionLastEditedBy, this stops
   // rendering on its own - no separate "clear the caption" logic needed.
-  const showWikidataCaption = descriptionSource === "wikidata" && !descriptionLastEditedBy;
+  const showWikidataCaption =
+    descriptionSource === "wikidata" && !descriptionLastEditedBy;
 
   function handleStartEditing() {
     setDraftText(description || "");
@@ -45,7 +48,7 @@ export default function CommunityDescriptionEdit({
 
   async function handleSave() {
     if (draftText.length > MAX_DESCRIPTION_LENGTH) {
-      setError(`Description must be ${MAX_DESCRIPTION_LENGTH} characters or fewer.`);
+      setError(t("errorGeneric"));
       return;
     }
 
@@ -53,16 +56,19 @@ export default function CommunityDescriptionEdit({
     setError("");
 
     try {
-      const response = await fetch(`/api/attractions/${attractionId}/description`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ description: draftText }),
-      });
+      const response = await fetch(
+        `/api/attractions/${attractionId}/description`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ description: draftText }),
+        }
+      );
 
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-        throw new Error(result.message || "Unable to update description.");
+        throw new Error(result.message || t("errorGeneric"));
       }
 
       onDescriptionUpdated?.({
@@ -71,9 +77,9 @@ export default function CommunityDescriptionEdit({
         descriptionLastEditedBy: result.data.descriptionLastEditedBy,
       });
       setIsEditing(false);
-    } catch (error) {
-      console.error("Failed to update attraction description:", error);
-      setError(error.message);
+    } catch (err) {
+      console.error("Failed to update attraction description:", err);
+      setError(err.message);
     } finally {
       setIsSaving(false);
     }
@@ -82,7 +88,9 @@ export default function CommunityDescriptionEdit({
   return (
     <div className="mt-7 rounded-[18px] border border-attraction-border bg-white p-6">
       <div className="mb-3.5 flex items-center justify-between gap-3">
-        <h2 className="text-lg font-bold text-attraction-ink">About this attraction</h2>
+        <h2 className="text-lg font-bold text-attraction-ink">
+          {t("aboutAttraction")}
+        </h2>
 
         {!isEditing && isEligible && (
           <button
@@ -90,16 +98,16 @@ export default function CommunityDescriptionEdit({
             onClick={handleStartEditing}
             className="shrink-0 text-sm font-semibold text-attraction-primary hover:text-attraction-primary-hover"
           >
-            Edit
+            {t("edit")}
           </button>
         )}
 
         {!isEditing && !isEligible && (
           <span
-            title="Available to Melaka-based users"
+            title={t("melakaOnlyFeature")}
             className="shrink-0 cursor-not-allowed text-sm font-semibold text-attraction-muted opacity-70"
           >
-            Edit
+            {t("edit")}
           </span>
         )}
       </div>
@@ -111,14 +119,16 @@ export default function CommunityDescriptionEdit({
             onChange={(event) => setDraftText(event.target.value)}
             rows={5}
             maxLength={MAX_DESCRIPTION_LENGTH}
-            placeholder="Share what makes this attraction worth visiting…"
+            placeholder={t("descriptionPlaceholder")}
             className="w-full rounded-lg border border-attraction-border px-4 py-3 text-base leading-relaxed text-attraction-body outline-none focus:border-attraction-primary"
           />
           <p className="mt-1 text-right text-xs text-attraction-muted">
             {draftText.length} / {MAX_DESCRIPTION_LENGTH}
           </p>
 
-          {error && <p className="mb-2 text-sm text-attraction-error">{error}</p>}
+          {error && (
+            <p className="mb-2 text-sm text-attraction-error">{error}</p>
+          )}
 
           <div className="flex gap-2">
             <button
@@ -127,7 +137,7 @@ export default function CommunityDescriptionEdit({
               disabled={isSaving}
               className="rounded-[10px] bg-attraction-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-attraction-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isSaving ? "Saving…" : "Save"}
+              {isSaving ? t("saving") : t("save")}
             </button>
             <button
               type="button"
@@ -135,7 +145,7 @@ export default function CommunityDescriptionEdit({
               disabled={isSaving}
               className="rounded-[10px] border border-attraction-border-strong bg-white px-4 py-2 text-sm font-semibold text-attraction-body transition hover:bg-attraction-surface-soft"
             >
-              Cancel
+              {t("cancel")}
             </button>
           </div>
         </div>
@@ -147,12 +157,14 @@ export default function CommunityDescriptionEdit({
               : "text-base italic leading-relaxed text-attraction-muted"
           }
         >
-          {hasDescription ? description : "No description available for this attraction yet."}
+          {hasDescription ? description : t("noDescription")}
         </p>
       )}
 
       {!isEditing && showWikidataCaption && (
-        <p className="mt-2 text-xs text-attraction-muted">Source: Wikipedia</p>
+        <p className="mt-2 text-xs text-attraction-muted">
+          {t("sourceWikipedia")}
+        </p>
       )}
     </div>
   );

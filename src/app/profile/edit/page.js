@@ -1,14 +1,35 @@
 "use client";
+
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useLanguage } from "@/presentation/contexts/LanguageContext";
 
+/** Malaysia states + federal territories (stored values stay English) */
+const MALAYSIA_LOCATIONS = [
+  "Johor",
+  "Kedah",
+  "Kelantan",
+  "Melaka",
+  "Negeri Sembilan",
+  "Pahang",
+  "Penang",
+  "Perak",
+  "Perlis",
+  "Sabah",
+  "Sarawak",
+  "Selangor",
+  "Terengganu",
+  "Kuala Lumpur",
+  "Labuan",
+  "Putrajaya",
+];
+
 export default function EditProfilePage() {
   const { data: session, status, update } = useSession();
   const router = useRouter();
-  const { t } = useLanguage();
+  const { t, translateState } = useLanguage();
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
   const [location, setLocation] = useState("");
@@ -18,6 +39,9 @@ export default function EditProfilePage() {
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  const locationInList = !location || MALAYSIA_LOCATIONS.includes(location);
+  const isMelakaHome = location === "Melaka";
 
   useEffect(() => {
     let cancelled = false;
@@ -63,17 +87,11 @@ export default function EditProfilePage() {
     const file = e.target.files[0];
     if (file) {
       if (file.size > 5 * 1024 * 1024) {
-        setMessage({
-          type: "error",
-          text: t("fileTooLarge"),
-        });
+        setMessage({ type: "error", text: t("fileTooLarge") });
         return;
       }
       if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-        setMessage({
-          type: "error",
-          text: t("unsupportedFormat"),
-        });
+        setMessage({ type: "error", text: t("unsupportedFormat") });
         return;
       }
       setImageFile(file);
@@ -87,6 +105,10 @@ export default function EditProfilePage() {
     setMessage(null);
 
     try {
+      if (location && !MALAYSIA_LOCATIONS.includes(location)) {
+        throw new Error(t("selectStateTerritory"));
+      }
+
       let profilePictureUrl = null;
 
       if (imageFile) {
@@ -135,10 +157,10 @@ export default function EditProfilePage() {
         ...session,
         user: {
           ...session.user,
-          displayName: displayName,
+          displayName,
           image: newImageUrl,
-          bio: bio,
-          location: location,
+          bio,
+          location,
         },
       });
 
@@ -155,7 +177,7 @@ export default function EditProfilePage() {
       console.error("Error:", error);
       setMessage({
         type: "error",
-        text: error.message || "Failed to update profile.",
+        text: error.message || t("errorGeneric"),
       });
     } finally {
       setIsLoading(false);
@@ -265,15 +287,32 @@ export default function EditProfilePage() {
 
           <div>
             <label className="mb-1 block text-sm font-medium text-black">
-              {t("location")}
+              {t("homeState")}
             </label>
-            <input
-              type="text"
-              value={location}
+            <select
+              value={locationInList ? location : ""}
               onChange={(e) => setLocation(e.target.value)}
-              placeholder={t("locationPlaceholder")}
               className="w-full rounded border border-[#D8E1E7] px-4 py-2 text-black focus:border-[#006C56] focus:outline-none"
-            />
+            >
+              <option value="">{t("selectStateTerritory")}</option>
+              {MALAYSIA_LOCATIONS.map((state) => (
+                <option key={state} value={state}>
+                  {translateState ? translateState(state) : state}
+                </option>
+              ))}
+            </select>
+
+            {!locationInList && location && (
+              <p className="mt-1 text-xs text-amber-600">
+                {t("locationLegacyHint", { value: location })}
+              </p>
+            )}
+
+            {isMelakaHome && (
+              <p className="mt-2 rounded-lg bg-[#E8F7EF] px-3 py-2 text-sm text-[#16845B]">
+                {t("melakaEditHint")}
+              </p>
+            )}
           </div>
 
           <div>

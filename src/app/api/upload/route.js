@@ -18,9 +18,26 @@ export async function POST(request) {
     }
 
     const formData = await request.formData();
-    const url = await uploadProfileImage(formData.get("file"), session.user.id);
+    const file = formData.get("file");
 
-    return NextResponse.json({ success: true, data: { url } });
+    const result = await uploadProfileImage(file, session.user.id);
+
+    // Support both string URL and { url, publicId }
+    const url = typeof result === "string" ? result : result?.url;
+    const publicId =
+      typeof result === "object" && result ? result.publicId : undefined;
+
+    if (!url) {
+      return NextResponse.json(
+        { success: false, message: "Upload did not return an image URL." },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: { url, publicId },
+    });
   } catch (error) {
     if (error instanceof ProfileImageValidationError) {
       return NextResponse.json(

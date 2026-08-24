@@ -46,8 +46,6 @@ import {
   loadVisitedAttractionIds,
 } from "@/presentation/lib/visitedAttractionsAdapter";
 import { getVerificationAuthenticationState } from "@/presentation/lib/visitVerificationPresentation";
-const MAP_UNAVAILABLE_MESSAGE =
-  "We couldn't load the map. You can still explore the attraction lists below.";
 
 function createLiveLocationMarkerContent() {
   const marker = document.createElement("div");
@@ -61,7 +59,6 @@ function subscribeToDevelopmentPreviewQuery(onStoreChange) {
   if (process.env.NODE_ENV !== "development") {
     return () => {};
   }
-
   window.addEventListener("popstate", onStoreChange);
   return () => window.removeEventListener("popstate", onStoreChange);
 }
@@ -70,7 +67,6 @@ function getDevelopmentPreviewQuerySnapshot() {
   if (process.env.NODE_ENV !== "development") {
     return "";
   }
-
   return window.location.search;
 }
 
@@ -78,13 +74,18 @@ function getServerDevelopmentPreviewQuerySnapshot() {
   return null;
 }
 
-function createInfoWindowContent(attraction) {
+function createInfoWindowContent(attraction, t, translateCategory) {
   const content = document.createElement("article");
   content.className = "max-w-64 p-1 text-[#10213B]";
 
   const category = document.createElement("p");
-  category.className = "text-xs font-semibold uppercase tracking-wide text-[#006C56]";
-  category.textContent = attraction.category;
+  category.className =
+    "text-xs font-semibold uppercase tracking-wide text-[#006C56]";
+  category.textContent = attraction.category
+    ? translateCategory
+      ? translateCategory(attraction.category)
+      : attraction.category
+    : "";
 
   const heading = document.createElement("h2");
   heading.className = "mt-1 text-base font-bold";
@@ -97,19 +98,18 @@ function createInfoWindowContent(attraction) {
   const visitedStatus = document.createElement("p");
   visitedStatus.className =
     "mt-3 w-fit rounded-full bg-[#E6F7F0] px-2.5 py-1 text-xs font-bold text-[#004638]";
-  visitedStatus.textContent = "\u2713 Visited";
+  visitedStatus.textContent = "\u2713 " + t("visited");
 
   const link = document.createElement("a");
-  link.className = "mt-3 inline-block font-semibold text-[#006C56] underline-offset-4 hover:underline";
+  link.className =
+    "mt-3 inline-block font-semibold text-[#006C56] underline-offset-4 hover:underline";
   link.href = getAttractionDetailsHref(attraction.id);
-  link.textContent = "View attraction details";
+  link.textContent = t("details");
 
   content.append(category, heading, address);
-
   if (attraction.isVisited) {
     content.append(visitedStatus);
   }
-
   content.append(link);
   return content;
 }
@@ -140,40 +140,51 @@ function createVisitedDataState(result) {
   };
 }
 
-function MarkerLegend({ visitedDataStatus, filter, onFilterChange }) {
+function MarkerLegend({ visitedDataStatus, filter, onFilterChange, t }) {
   const visitStatusResolved =
     visitedDataStatus === VISITED_DATA_STATUS.SUCCESS;
   const statusLabel =
     visitedDataStatus === VISITED_DATA_STATUS.LOADING
-      ? "Checking visited history"
+      ? t("loading")
       : visitedDataStatus === VISITED_DATA_STATUS.AUTH_REQUIRED
-        ? "Sign in for visited status"
-      : "Visited status unavailable";
+        ? t("signInForMapFeatures")
+        : t("mapFailed");
 
   return (
     <div
       className="mt-4 flex flex-wrap items-center gap-3 text-xs font-semibold text-[#405066]"
-      aria-label="Map marker legend"
+      aria-label={t("mapTitle")}
     >
       {visitStatusResolved && (
-        <button type="button" onClick={() => onFilterChange("visited")} aria-pressed={filter === "visited"} className="inline-flex min-h-11 items-center gap-2 rounded-full border border-[#B7E5D2] bg-white px-3 py-1.5 focus-visible:outline-3 focus-visible:outline-[#006C56]">
+        <button
+          type="button"
+          onClick={() => onFilterChange("visited")}
+          aria-pressed={filter === "visited"}
+          className="inline-flex min-h-11 items-center gap-2 rounded-full border border-[#B7E5D2] bg-white px-3 py-1.5 focus-visible:outline-3 focus-visible:outline-[#006C56]"
+        >
           <span
             className="flex h-6 w-6 items-center justify-center rounded-full bg-[#006C56] text-sm font-bold text-white"
             aria-hidden="true"
           >
             {"\u2713"}
           </span>
-          Visited
+          {t("visited")}
         </button>
       )}
-      <button type="button" onClick={() => onFilterChange("unvisited")} disabled={!visitStatusResolved} aria-pressed={filter === "unvisited"} className="inline-flex min-h-11 items-center gap-2 rounded-full border border-[#D8E1E7] bg-white px-3 py-1.5 focus-visible:outline-3 focus-visible:outline-[#006C56] disabled:cursor-not-allowed disabled:opacity-60">
+      <button
+        type="button"
+        onClick={() => onFilterChange("unvisited")}
+        disabled={!visitStatusResolved}
+        aria-pressed={filter === "unvisited"}
+        className="inline-flex min-h-11 items-center gap-2 rounded-full border border-[#D8E1E7] bg-white px-3 py-1.5 focus-visible:outline-3 focus-visible:outline-[#006C56] disabled:cursor-not-allowed disabled:opacity-60"
+      >
         <span
           className="flex h-6 w-6 items-center justify-center rounded-full border border-[#768780] bg-[#E3EAE7] text-[10px] font-bold text-[#31463F]"
           aria-hidden="true"
         >
           1
         </span>
-        {visitStatusResolved ? "Not visited" : "Supported place"}
+        {visitStatusResolved ? t("notVisited") : t("attractions")}
       </button>
       {!visitStatusResolved && (
         <span className="rounded-full bg-[#F1F4F6] px-3 py-1.5 text-[#65748A]">
@@ -184,7 +195,7 @@ function MarkerLegend({ visitedDataStatus, filter, onFilterChange }) {
   );
 }
 
-function LoadingSkeleton({ mapOnly = false }) {
+function LoadingSkeleton({ mapOnly = false, t }) {
   if (mapOnly) {
     return (
       <div
@@ -197,7 +208,7 @@ function LoadingSkeleton({ mapOnly = false }) {
             className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-[#CDF5E5] border-t-[#006C56]"
             aria-hidden="true"
           />
-          <p className="mt-4 font-semibold text-[#405066]">Loading map...</p>
+          <p className="mt-4 font-semibold text-[#405066]">{t("mapLoading")}</p>
         </div>
       </div>
     );
@@ -217,7 +228,7 @@ function LoadingSkeleton({ mapOnly = false }) {
               aria-hidden="true"
             />
             <p className="mt-4 font-semibold text-[#405066]">
-              Loading map...
+              {t("mapLoading")}
             </p>
           </div>
         </div>
@@ -228,11 +239,9 @@ function LoadingSkeleton({ mapOnly = false }) {
         >
           <div className="h-5 w-40 animate-pulse rounded bg-[#E8EDF1]" />
           <div className="mt-3 h-4 w-56 animate-pulse rounded bg-[#E8EDF1]" />
-
           <p className="mt-5 text-sm font-semibold text-[#405066]" role="status">
-            Loading supported attractions...
+            {t("loadingAttractions")}
           </p>
-
           <div className="mt-4 space-y-3" aria-hidden="true">
             {[1, 2, 3, 4].map((item) => (
               <div
@@ -248,7 +257,6 @@ function LoadingSkeleton({ mapOnly = false }) {
         <ExplorationProgress
           progress={{ status: VISITED_DATA_STATUS.LOADING }}
         />
-
         <VisitedAttractionsList
           status={VISITED_DATA_STATUS.LOADING}
           attractions={[]}
@@ -261,7 +269,7 @@ function LoadingSkeleton({ mapOnly = false }) {
 
 export default function ExplorationMap({ mapOnly = false }) {
   const { data: session, status: sessionStatus } = useSession();
-  const { lang } = useLanguage();
+  const { lang, t, translateCategory } = useLanguage();
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markerByAttractionIdRef = useRef(new Map());
@@ -271,6 +279,8 @@ export default function ExplorationMap({ mapOnly = false }) {
   const selectedAttractionIdRef = useRef(null);
   const liveLocationOverlayRef = useRef(null);
   const latestLiveLocationRef = useRef(null);
+  const tRef = useRef(t);
+  const translateCategoryRef = useRef(translateCategory);
   const liveLocationMarkerLabelRef = useRef(
     getLiveLocationCopy(lang).markerLabel
   );
@@ -292,6 +302,12 @@ export default function ExplorationMap({ mapOnly = false }) {
     latestVisitedDateByAttractionId: {},
     latestVerifiedAtByAttractionId: {},
   });
+
+  useEffect(() => {
+    tRef.current = t;
+    translateCategoryRef.current = translateCategory;
+  }, [t, translateCategory]);
+
   const updateLiveLocationOverlay = useCallback((position, options) => {
     latestLiveLocationRef.current = position;
     liveLocationOverlayRef.current?.update(position, options);
@@ -310,8 +326,7 @@ export default function ExplorationMap({ mapOnly = false }) {
     getDevelopmentPreviewQuerySnapshot,
     getServerDevelopmentPreviewQuerySnapshot
   );
-  const isDevelopmentPreviewQueryReady =
-    developmentPreviewQuery !== null;
+  const isDevelopmentPreviewQueryReady = developmentPreviewQuery !== null;
   const developmentVisitedPreviewMode =
     process.env.NODE_ENV === "development"
       ? getDevelopmentVisitedPreviewMode(
@@ -392,9 +407,7 @@ export default function ExplorationMap({ mapOnly = false }) {
         }
 
         setAttractions([]);
-        setDataError(
-          "We could not load the supported Melaka attractions. Please try again."
-        );
+        setDataError(tRef.current("failedLoadAttractions"));
         setDataStatus(ATTRACTION_DATA_STATUS.ERROR);
       }
     }
@@ -419,11 +432,12 @@ export default function ExplorationMap({ mapOnly = false }) {
       }
 
       try {
-        const result = developmentVisitedPreviewMode !== null
-          ? await developmentPreviewAdapter.load({
-              signal: controller.signal,
-            })
-          : await loadVisitedAttractionIds({ signal: controller.signal });
+        const result =
+          developmentVisitedPreviewMode !== null
+            ? await developmentPreviewAdapter.load({
+                signal: controller.signal,
+              })
+            : await loadVisitedAttractionIds({ signal: controller.signal });
 
         if (controller.signal.aborted) {
           return;
@@ -438,8 +452,7 @@ export default function ExplorationMap({ mapOnly = false }) {
         setVisitedData({
           status: VISITED_DATA_STATUS.ERROR,
           attractionIds: [],
-          message:
-            "We could not load your visited attractions. Please try again.",
+          message: tRef.current("errorGeneric"),
         });
       }
     }
@@ -477,16 +490,19 @@ export default function ExplorationMap({ mapOnly = false }) {
     () => createVisibleAttractions(mapAttractions, mapVisitFilter),
     [mapAttractions, mapVisitFilter]
   );
-  const visitedAttractions = explorationViewModel.visitedAttractions.map((attraction) => ({
-    ...attraction,
-    latestVisitedDate: visitedData.latestVisitedDateByAttractionId?.[attraction.id] || null,
-    latestVerifiedAt: visitedData.latestVerifiedAtByAttractionId?.[attraction.id] || null,
-  }));
-  const verificationAuthenticationState =
-    getVerificationAuthenticationState(
-      explorationViewModel.visitedDataStatus,
-      { developmentPreviewActive: developmentVisitedPreviewMode !== null }
-    );
+  const visitedAttractions = explorationViewModel.visitedAttractions.map(
+    (attraction) => ({
+      ...attraction,
+      latestVisitedDate:
+        visitedData.latestVisitedDateByAttractionId?.[attraction.id] || null,
+      latestVerifiedAt:
+        visitedData.latestVerifiedAtByAttractionId?.[attraction.id] || null,
+    })
+  );
+  const verificationAuthenticationState = getVerificationAuthenticationState(
+    explorationViewModel.visitedDataStatus,
+    { developmentPreviewActive: developmentVisitedPreviewMode !== null }
+  );
 
   useEffect(() => {
     mapAttractionByIdRef.current = new Map(
@@ -519,8 +535,7 @@ export default function ExplorationMap({ mapOnly = false }) {
         setVisitedData({
           status: VISITED_DATA_STATUS.ERROR,
           attractionIds: [],
-          message:
-            "We could not update the development visited preview. Please try again.",
+          message: tRef.current("errorGeneric"),
         });
       } finally {
         setPreviewActionPending(false);
@@ -621,13 +636,17 @@ export default function ExplorationMap({ mapOnly = false }) {
 
           marker.append(pin);
           marker.addEventListener("gmp-click", () => {
-            const currentAttraction =
+            const current =
               mapAttractionByIdRef.current.get(attraction.id) || attraction;
 
             selectedAttractionIdRef.current = attraction.id;
             infoWindow.close();
             infoWindow.setContent(
-              createInfoWindowContent(currentAttraction)
+              createInfoWindowContent(
+                current,
+                tRef.current,
+                translateCategoryRef.current
+              )
             );
             infoWindow.open({ map, anchor: marker, shouldFocus: false });
           });
@@ -729,10 +748,7 @@ export default function ExplorationMap({ mapOnly = false }) {
         return;
       }
 
-      const markerPresentation = getMapMarkerPresentation(
-        attraction,
-        index
-      );
+      const markerPresentation = getMapMarkerPresentation(attraction, index);
       const pin = new PinElement({
         background: markerPresentation.background,
         borderColor: markerPresentation.borderColor,
@@ -752,10 +768,14 @@ export default function ExplorationMap({ mapOnly = false }) {
 
     if (selectedAttraction && infoWindowRef.current) {
       infoWindowRef.current.setContent(
-        createInfoWindowContent(selectedAttraction)
+        createInfoWindowContent(
+          selectedAttraction,
+          tRef.current,
+          translateCategoryRef.current
+        )
       );
     }
-  }, [mapAttractions, mapStatus]);
+  }, [mapAttractions, mapStatus, t, translateCategory]);
 
   function focusAttraction(attraction) {
     const map = mapInstanceRef.current;
@@ -771,7 +791,7 @@ export default function ExplorationMap({ mapOnly = false }) {
   }
 
   if (dataStatus === ATTRACTION_DATA_STATUS.LOADING) {
-    return <LoadingSkeleton mapOnly={mapOnly} />;
+    return <LoadingSkeleton mapOnly={mapOnly} t={t} />;
   }
 
   if (dataStatus === ATTRACTION_DATA_STATUS.ERROR) {
@@ -785,17 +805,15 @@ export default function ExplorationMap({ mapOnly = false }) {
             !
           </div>
           <h2 className="mt-5 text-xl font-bold text-[#10213B]">
-            Attractions unavailable
+            {t("failedLoadAttractions")}
           </h2>
-          <p className="mx-auto mt-2 max-w-lg text-[#405066]">
-            {dataError}
-          </p>
+          <p className="mx-auto mt-2 max-w-lg text-[#405066]">{dataError}</p>
           <button
             type="button"
             onClick={loadAttractions}
-            className="mt-6 min-h-11 rounded-xl bg-[#006C56] px-5 py-3 font-semibold text-white transition hover:bg-[#005E4B] focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#006C56]"
+            className="mt-6 min-h-11 rounded-xl bg-[#006C56] px-5 py-3 font-semibold text-white transition hover:bg-[#005E4B]"
           >
-            Try again
+            {t("reset")}
           </button>
         </section>
 
@@ -811,8 +829,11 @@ export default function ExplorationMap({ mapOnly = false }) {
   }
 
   return (
-    <section aria-labelledby={mapOnly ? undefined : "exploration-map-heading"}>
-      {!mapOnly && process.env.NODE_ENV === "development" &&
+    <section
+      aria-labelledby={mapOnly ? undefined : "exploration-map-heading"}
+    >
+      {!mapOnly &&
+        process.env.NODE_ENV === "development" &&
         developmentPreviewRequested && (
           <div className="mb-6 rounded-2xl border border-[#E9B949] bg-[#FFF7DD] px-4 py-3 text-sm text-[#704A00] shadow-sm">
             <div className="flex items-center gap-3 font-semibold" role="status">
@@ -822,9 +843,9 @@ export default function ExplorationMap({ mapOnly = false }) {
               >
                 Dev
               </span>
-              <span>{"Development preview — mock visited data"}</span>
+              <span>Development preview — mock visited data</span>
             </div>
-
+            {/* Dev controls unchanged (English) */}
             <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold">
               {developmentVisitedPreviewMode && (
                 <span className="rounded-full bg-white/80 px-2.5 py-1">
@@ -837,7 +858,6 @@ export default function ExplorationMap({ mapOnly = false }) {
                 </span>
               )}
             </div>
-
             {developmentVisitedPreviewMode === "visited" && (
               <div
                 className="mt-3 flex flex-wrap gap-2 border-t border-[#E9B949]/60 pt-3"
@@ -853,7 +873,7 @@ export default function ExplorationMap({ mapOnly = false }) {
                       VISITED_DATA_STATUS.SUCCESS ||
                     visitedAttractions.length >= mapAttractions.length
                   }
-                  className="min-h-11 rounded-xl bg-[#704A00] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#5D3E00] focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#704A00] disabled:cursor-not-allowed disabled:bg-[#C5AD7B]"
+                  className="min-h-11 rounded-xl bg-[#704A00] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-[#C5AD7B]"
                 >
                   Add mock visited place
                 </button>
@@ -866,7 +886,7 @@ export default function ExplorationMap({ mapOnly = false }) {
                       VISITED_DATA_STATUS.SUCCESS ||
                     visitedAttractions.length === 0
                   }
-                  className="min-h-11 rounded-xl border border-[#B88924] bg-white px-4 py-2 text-sm font-semibold text-[#704A00] transition hover:bg-[#FFF1C2] focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#704A00] disabled:cursor-not-allowed disabled:border-[#D8CAB0] disabled:text-[#9B8968]"
+                  className="min-h-11 rounded-xl border border-[#B88924] bg-white px-4 py-2 text-sm font-semibold text-[#704A00] disabled:cursor-not-allowed"
                 >
                   Remove mock visited place
                 </button>
@@ -878,7 +898,7 @@ export default function ExplorationMap({ mapOnly = false }) {
                     explorationViewModel.visitedDataStatus !==
                       VISITED_DATA_STATUS.SUCCESS
                   }
-                  className="min-h-11 rounded-xl border border-[#B88924] bg-transparent px-4 py-2 text-sm font-semibold text-[#704A00] transition hover:bg-[#FFF1C2] focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#704A00] disabled:cursor-not-allowed disabled:border-[#D8CAB0] disabled:text-[#9B8968]"
+                  className="min-h-11 rounded-xl border border-[#B88924] bg-transparent px-4 py-2 text-sm font-semibold text-[#704A00] disabled:cursor-not-allowed"
                 >
                   Reset preview
                 </button>
@@ -888,67 +908,85 @@ export default function ExplorationMap({ mapOnly = false }) {
         )}
 
       {!mapOnly && (
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#006C56]">
-            Melaka map
-          </p>
-          <h2
-            id="exploration-map-heading"
-            className="mt-1 text-2xl font-bold tracking-tight text-[#10213B] sm:text-3xl"
-          >
-            Supported attractions
-          </h2>
-          <p className="mt-2 max-w-2xl text-[#405066]">
-            Select a marker or a place in the list to explore its location.
-          </p>
-          <MarkerLegend
-            visitedDataStatus={explorationViewModel.visitedDataStatus}
-            filter={mapVisitFilter}
-            onFilterChange={(requested) => setMapVisitFilter((current) => getNextExplorationMapFilter(current, requested))}
-          />
-        </div>
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#006C56]">
+              {t("mapTitle")}
+            </p>
+            <h2
+              id="exploration-map-heading"
+              className="mt-1 text-2xl font-bold tracking-tight text-[#10213B] sm:text-3xl"
+            >
+              {t("attractions")}
+            </h2>
+            <p className="mt-2 max-w-2xl text-[#405066]">
+              {t("exploreProgress")}
+            </p>
+            <MarkerLegend
+              visitedDataStatus={explorationViewModel.visitedDataStatus}
+              filter={mapVisitFilter}
+              onFilterChange={(requested) =>
+                setMapVisitFilter((current) =>
+                  getNextExplorationMapFilter(current, requested)
+                )
+              }
+              t={t}
+            />
+          </div>
 
-        <div className="w-fit rounded-full bg-[#E6F7F0] px-4 py-2 text-sm font-semibold text-[#004638]">
-          {getExplorationMapFilterCountLabel(visibleAttractions.length, mapVisitFilter)}
+          <div className="w-fit rounded-full bg-[#E6F7F0] px-4 py-2 text-sm font-semibold text-[#004638]">
+            {getExplorationMapFilterCountLabel(
+              visibleAttractions.length,
+              mapVisitFilter
+            )}
+          </div>
         </div>
-      </div>
       )}
 
-      {!mapOnly && <VisitVerificationFlow
-        attractions={mapAttractions}
-        authenticationState={
-          verificationAuthenticationState.authenticationState
-        }
-        authenticationConfirmed={
-          verificationAuthenticationState.authenticationConfirmed
-        }
-        authenticationRequired={
-          verificationAuthenticationState.authenticationRequired
-        }
-        authenticationPending={
-          verificationAuthenticationState.authenticationPending
-        }
-        authenticationUnavailable={
-          verificationAuthenticationState.authenticationUnavailable
-        }
-        onAuthenticationRetry={loadVisitedAttractions}
-        onVerified={loadVisitedAttractions}
-      />}
+      {!mapOnly && (
+        <VisitVerificationFlow
+          attractions={mapAttractions}
+          authenticationState={
+            verificationAuthenticationState.authenticationState
+          }
+          authenticationConfirmed={
+            verificationAuthenticationState.authenticationConfirmed
+          }
+          authenticationRequired={
+            verificationAuthenticationState.authenticationRequired
+          }
+          authenticationPending={
+            verificationAuthenticationState.authenticationPending
+          }
+          authenticationUnavailable={
+            verificationAuthenticationState.authenticationUnavailable
+          }
+          onAuthenticationRetry={loadVisitedAttractions}
+          onVerified={loadVisitedAttractions}
+        />
+      )}
 
-      {!mapOnly && <LiveLocationControls
-        status={liveLocation.status}
-        errorKey={liveLocation.errorKey}
-        hasPosition={
-          Boolean(liveLocation.position) && mapStatus === MAP_STATUS.READY
-        }
-        canStart={liveLocation.canStart}
-        onStart={liveLocation.start}
-        onRecenter={() => liveLocationOverlayRef.current?.recenter()}
-        onStop={liveLocation.stop}
-      />}
+      {!mapOnly && (
+        <LiveLocationControls
+          status={liveLocation.status}
+          errorKey={liveLocation.errorKey}
+          hasPosition={
+            Boolean(liveLocation.position) && mapStatus === MAP_STATUS.READY
+          }
+          canStart={liveLocation.canStart}
+          onStart={liveLocation.start}
+          onRecenter={() => liveLocationOverlayRef.current?.recenter()}
+          onStop={liveLocation.stop}
+        />
+      )}
 
-      <div className={mapOnly ? "" : "grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]"}>
+      <div
+        className={
+          mapOnly
+            ? ""
+            : "grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]"
+        }
+      >
         <div className="relative min-h-80 overflow-hidden rounded-3xl border border-[#D8E1E7] bg-[#F1F6F4] shadow-sm lg:min-h-136">
           <div
             ref={mapContainerRef}
@@ -956,7 +994,7 @@ export default function ExplorationMap({ mapOnly = false }) {
             aria-label={
               explorationPageState.isMapUnavailable
                 ? undefined
-                : "Interactive map of supported Melaka attractions"
+                : t("mapTitle")
             }
             aria-hidden={explorationPageState.isMapUnavailable}
           />
@@ -972,7 +1010,9 @@ export default function ExplorationMap({ mapOnly = false }) {
                   className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-[#CDF5E5] border-t-[#006C56]"
                   aria-hidden="true"
                 />
-                <p className="mt-4 font-semibold text-[#405066]">Loading map...</p>
+                <p className="mt-4 font-semibold text-[#405066]">
+                  {t("mapLoading")}
+                </p>
               </div>
             </div>
           )}
@@ -987,10 +1027,10 @@ export default function ExplorationMap({ mapOnly = false }) {
                   ⌖
                 </div>
                 <h3 className="mt-4 text-lg font-bold text-[#10213B]">
-                  Map unavailable
+                  {t("mapFailed")}
                 </h3>
                 <p className="mt-2 text-sm leading-6 text-[#405066]">
-                  {MAP_UNAVAILABLE_MESSAGE}
+                  {t("mapFailed")}
                 </p>
                 {googleMapsApiKey &&
                   developmentMapPreviewMode !== MAP_STATUS.UNAVAILABLE && (
@@ -1000,9 +1040,9 @@ export default function ExplorationMap({ mapOnly = false }) {
                         setMapStatus(MAP_STATUS.LOADING);
                         setMapRequest((request) => request + 1);
                       }}
-                      className="mt-5 min-h-11 rounded-xl border border-[#BBC8D0] bg-white px-4 py-2.5 text-sm font-semibold text-[#004638] transition hover:bg-[#E6F7F0] focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#006C56]"
+                      className="mt-5 min-h-11 rounded-xl border border-[#BBC8D0] bg-white px-4 py-2.5 text-sm font-semibold text-[#004638] transition hover:bg-[#E6F7F0]"
                     >
-                      Retry map
+                      {t("reset")}
                     </button>
                   )}
               </div>
@@ -1010,92 +1050,98 @@ export default function ExplorationMap({ mapOnly = false }) {
           )}
         </div>
 
-        {!mapOnly && <aside className="max-h-136 overflow-hidden rounded-3xl border border-[#D8E1E7] bg-white shadow-sm">
-          <div className="border-b border-[#E8EDF1] p-5">
-            <h3 className="text-lg font-bold text-[#10213B]">Places on this map</h3>
-            <p className="mt-1 text-sm text-[#65748A]">
-              Location details remain available if the map cannot load.
-            </p>
-          </div>
-
-          {visibleAttractions.length === 0 ? (
-            <div className="p-8 text-center">
-              <p className="font-semibold text-[#10213B]">No mapped attractions yet</p>
-              <p className="mt-2 text-sm leading-6 text-[#65748A]">
-                Supported attractions will appear here once coordinates are available.
+        {!mapOnly && (
+          <aside className="max-h-136 overflow-hidden rounded-3xl border border-[#D8E1E7] bg-white shadow-sm">
+            <div className="border-b border-[#E8EDF1] p-5">
+              <h3 className="text-lg font-bold text-[#10213B]">
+                {t("attractions")}
+              </h3>
+              <p className="mt-1 text-sm text-[#65748A]">
+                {t("mapFailed")}
               </p>
             </div>
-          ) : (
-            <ol className="max-h-[calc(34rem-92px)] divide-y divide-[#E8EDF1] overflow-y-auto">
-              {visibleAttractions.map((attraction, index) => (
-                <li key={attraction.id} className="p-4">
-                  <button
-                    type="button"
-                    onClick={() => focusAttraction(attraction)}
-                    disabled={mapStatus !== MAP_STATUS.READY}
-                    className="group flex min-h-11 w-full items-start gap-3 rounded-xl text-left focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#006C56] disabled:cursor-default"
-                  >
-                    <span
-                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-sm font-bold ${
-                        attraction.isVisited
-                          ? "border-[#004638] bg-[#006C56] text-white"
-                          : "border-[#768780] bg-[#E3EAE7] text-[#31463F]"
-                      }`}
-                      aria-hidden="true"
-                    >
-                      {attraction.isVisited ? "\u2713" : index + 1}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block font-semibold text-[#10213B] transition group-enabled:group-hover:text-[#006C56]">
-                        {attraction.name}
-                      </span>
-                      <span className="mt-1 block text-sm leading-5 text-[#65748A]">
-                        {attraction.address}
-                      </span>
-                    </span>
-                  </button>
 
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 pl-12 text-xs max-sm:pl-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-full bg-[#E6F7F0] px-2.5 py-1 font-semibold text-[#004638]">
-                        {attraction.category}
-                      </span>
-                      {attraction.isVisited && (
-                        <span className="rounded-full bg-[#006C56] px-2.5 py-1 font-semibold text-white">
-                          {"\u2713"} Visited
-                        </span>
-                      )}
-                    </div>
-                    <Link
-                      href={getAttractionDetailsHref(attraction.id)}
-                      className="inline-flex min-h-11 items-center font-semibold text-[#006C56] underline-offset-4 hover:underline focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#006C56]"
+            {visibleAttractions.length === 0 ? (
+              <div className="p-8 text-center">
+                <p className="font-semibold text-[#10213B]">
+                  {t("noAttractionsFound")}
+                </p>
+              </div>
+            ) : (
+              <ol className="max-h-[calc(34rem-92px)] divide-y divide-[#E8EDF1] overflow-y-auto">
+                {visibleAttractions.map((attraction, index) => (
+                  <li key={attraction.id} className="p-4">
+                    <button
+                      type="button"
+                      onClick={() => focusAttraction(attraction)}
+                      disabled={mapStatus !== MAP_STATUS.READY}
+                      className="group flex min-h-11 w-full items-start gap-3 rounded-xl text-left focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#006C56] disabled:cursor-default"
                     >
-                      View details
-                    </Link>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          )}
-        </aside>}
+                      <span
+                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-sm font-bold ${
+                          attraction.isVisited
+                            ? "border-[#004638] bg-[#006C56] text-white"
+                            : "border-[#768780] bg-[#E3EAE7] text-[#31463F]"
+                        }`}
+                        aria-hidden="true"
+                      >
+                        {attraction.isVisited ? "\u2713" : index + 1}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block font-semibold text-[#10213B] transition group-enabled:group-hover:text-[#006C56]">
+                          {attraction.name}
+                        </span>
+                        <span className="mt-1 block text-sm leading-5 text-[#65748A]">
+                          {attraction.address}
+                        </span>
+                      </span>
+                    </button>
+
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 pl-12 text-xs max-sm:pl-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full bg-[#E6F7F0] px-2.5 py-1 font-semibold text-[#004638]">
+                          {translateCategory
+                            ? translateCategory(attraction.category)
+                            : attraction.category}
+                        </span>
+                        {attraction.isVisited && (
+                          <span className="rounded-full bg-[#006C56] px-2.5 py-1 font-semibold text-white">
+                            {"\u2713"} {t("visited")}
+                          </span>
+                        )}
+                      </div>
+                      <Link
+                        href={getAttractionDetailsHref(attraction.id)}
+                        className="inline-flex min-h-11 items-center font-semibold text-[#006C56] underline-offset-4 hover:underline"
+                      >
+                        {t("details")}
+                      </Link>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </aside>
+        )}
       </div>
 
-      {!mapOnly && <div className="mt-8 grid items-start gap-6 xl:grid-cols-[minmax(300px,0.8fr)_minmax(0,1.2fr)]">
-        <ExplorationProgress progress={explorationViewModel.progress} />
-
-        <VisitedAttractionsList
-          status={explorationViewModel.visitedDataStatus}
-          attractions={visitedAttractions}
-          mapStatus={mapStatus}
-          message={visitedData.message}
-          onFocusAttraction={focusAttraction}
-          onRetry={
-            visitedData.status === VISITED_DATA_STATUS.ERROR
-              ? loadVisitedAttractions
-              : undefined
-          }
-        />
-      </div>}
+      {!mapOnly && (
+        <div className="mt-8 grid items-start gap-6 xl:grid-cols-[minmax(300px,0.8fr)_minmax(0,1.2fr)]">
+          <ExplorationProgress progress={explorationViewModel.progress} />
+          <VisitedAttractionsList
+            status={explorationViewModel.visitedDataStatus}
+            attractions={visitedAttractions}
+            mapStatus={mapStatus}
+            message={visitedData.message}
+            onFocusAttraction={focusAttraction}
+            onRetry={
+              visitedData.status === VISITED_DATA_STATUS.ERROR
+                ? loadVisitedAttractions
+                : undefined
+            }
+          />
+        </div>
+      )}
     </section>
   );
 }

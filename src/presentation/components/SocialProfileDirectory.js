@@ -4,8 +4,10 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import ProfileAvatar from "@/presentation/components/ProfileAvatar";
 import SocialProfileStatus from "@/presentation/components/SocialProfileStatus";
+import { useLanguage } from "@/presentation/contexts/LanguageContext";
 
 export default function SocialProfileDirectory() {
+  const { t, translateState } = useLanguage();
   const [profiles, setProfiles] = useState([]);
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
@@ -28,7 +30,7 @@ export default function SocialProfileDirectory() {
         const result = await response.json();
 
         if (!response.ok) {
-          throw new Error(result.message || "Unable to load traveller profiles.");
+          throw new Error(result.message || t("errorGeneric"));
         }
 
         setProfiles(result.data || []);
@@ -46,7 +48,7 @@ export default function SocialProfileDirectory() {
 
     loadProfiles();
     return () => controller.abort();
-  }, [appliedSearch, page]);
+  }, [appliedSearch, page, t]);
 
   function handleSearch(event) {
     event.preventDefault();
@@ -72,12 +74,12 @@ export default function SocialProfileDirectory() {
     <main className="min-h-screen bg-attraction-page-bg">
       <section className="bg-attraction-primary text-white">
         <div className="mx-auto max-w-[1120px] px-4 py-11 md:px-6 lg:px-[38px] lg:py-14">
-          <p className="font-semibold text-white/80">Chatlas community</p>
+          <p className="font-semibold text-white/80">{t("community")}</p>
           <h1 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl">
-            Meet fellow Melaka travellers
+            {t("travellersTitle")}
           </h1>
           <p className="mt-3 max-w-2xl text-base leading-relaxed text-white/80">
-            Discover public traveller profiles and learn from the places they explore.
+            {t("searchTravellers")}
           </p>
 
           <form
@@ -85,22 +87,22 @@ export default function SocialProfileDirectory() {
             className="mt-7 flex max-w-2xl flex-col gap-2 sm:flex-row"
           >
             <label htmlFor="profile-search" className="sr-only">
-              Search travellers by name or location
+              {t("searchTravellers")}
             </label>
             <input
               id="profile-search"
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search by name or location"
+              placeholder={t("searchTravellers")}
               maxLength={80}
               className="min-h-[50px] w-full rounded-[14px] border border-white/40 bg-white px-4 text-attraction-ink outline-none focus:ring-2 focus:ring-white sm:flex-1"
             />
             <button
               type="submit"
-              className="min-h-[50px] rounded-[10px] bg-[#FFAB00] px-6 font-semibold text-[#142033] transition hover:bg-[#E89B00] focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-attraction-primary"
+              className="min-h-[50px] rounded-[10px] bg-[#FFAB00] px-6 font-semibold text-[#142033] transition hover:bg-[#E89B00]"
             >
-              Search
+              {t("search")}
             </button>
           </form>
         </div>
@@ -109,11 +111,13 @@ export default function SocialProfileDirectory() {
       <section className="mx-auto max-w-[1120px] px-4 py-10 md:px-6 lg:px-[38px]">
         <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 className="text-2xl font-bold text-attraction-ink">Traveller profiles</h2>
+            <h2 className="text-2xl font-bold text-attraction-ink">
+              {t("travellersTitle")}
+            </h2>
             {!isLoading && !error && (
               <p className="mt-1 text-sm text-attraction-muted">
-                {total} public profile{total === 1 ? "" : "s"}
-                {appliedSearch ? ` matching “${appliedSearch}”` : ""}
+                {total} {t("publicProfile")}
+                {appliedSearch ? ` — “${appliedSearch}”` : ""}
               </p>
             )}
           </div>
@@ -121,19 +125,19 @@ export default function SocialProfileDirectory() {
             <button
               type="button"
               onClick={clearSearch}
-              className="min-h-11 rounded-[10px] border border-attraction-border-strong bg-white px-4 text-sm font-semibold text-attraction-primary-dark transition hover:bg-attraction-primary-soft focus:outline-none focus:ring-2 focus:ring-attraction-primary"
+              className="min-h-11 rounded-[10px] border border-attraction-border-strong bg-white px-4 text-sm font-semibold text-attraction-primary-dark transition hover:bg-attraction-primary-soft"
             >
-              Clear search
+              {t("clearSearchAndFilters")}
             </button>
           )}
         </div>
 
-        {isLoading && <DirectorySkeleton />}
+        {isLoading && <DirectorySkeleton t={t} />}
 
         {!isLoading && error && (
           <SocialProfileStatus
             icon="!"
-            title="Unable to load traveller profiles"
+            title={t("errorGeneric")}
             message={error}
             tone="error"
           />
@@ -142,15 +146,20 @@ export default function SocialProfileDirectory() {
         {!isLoading && !error && profiles.length === 0 && (
           <SocialProfileStatus
             icon="?"
-            title="No traveller profiles found"
-            message="Try another name or location, or clear the current search."
+            title={t("noTravellersFound")}
+            message={t("tryChangingFilters")}
           />
         )}
 
         {!isLoading && !error && profiles.length > 0 && (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {profiles.map((profile) => (
-              <ProfileCard key={profile.id} profile={profile} />
+              <ProfileCard
+                key={profile.id}
+                profile={profile}
+                t={t}
+                translateState={translateState}
+              />
             ))}
           </div>
         )}
@@ -158,7 +167,7 @@ export default function SocialProfileDirectory() {
         {!isLoading && !error && totalPages > 1 && (
           <nav
             className="mt-8 flex items-center justify-center gap-3"
-            aria-label="Traveller profile pages"
+            aria-label={t("travellersTitle")}
           >
             <button
               type="button"
@@ -166,10 +175,10 @@ export default function SocialProfileDirectory() {
               disabled={page === 1}
               className="min-h-11 rounded-[10px] border border-attraction-border-strong bg-white px-4 text-sm font-semibold text-attraction-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Previous
+              {t("previous")}
             </button>
             <span className="text-sm text-attraction-muted">
-              Page {page} of {totalPages}
+              {t("pageOf", { page, total: totalPages })}
             </span>
             <button
               type="button"
@@ -177,7 +186,7 @@ export default function SocialProfileDirectory() {
               disabled={page === totalPages}
               className="min-h-11 rounded-[10px] border border-attraction-border-strong bg-white px-4 text-sm font-semibold text-attraction-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Next
+              {t("next")}
             </button>
           </nav>
         )}
@@ -186,7 +195,13 @@ export default function SocialProfileDirectory() {
   );
 }
 
-function ProfileCard({ profile }) {
+function ProfileCard({ profile, t, translateState }) {
+  const locationLabel = profile.location
+    ? translateState
+      ? translateState(profile.location)
+      : profile.location
+    : "—";
+
   return (
     <article className="flex h-full flex-col rounded-[14px] border border-attraction-border bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
       <div className="flex items-center gap-4">
@@ -200,26 +215,29 @@ function ProfileCard({ profile }) {
             {profile.displayName}
           </h3>
           <p className="mt-0.5 truncate text-sm text-attraction-muted">
-            {profile.location || "Location not shared"}
+            {locationLabel}
           </p>
         </div>
       </div>
       <p className="mt-4 line-clamp-3 flex-1 text-sm leading-relaxed text-attraction-body">
-        {profile.bio || "This traveller has not added a public bio yet."}
+        {profile.bio || "—"}
       </p>
       <Link
         href={`/profiles/${profile.id}`}
-        className="mt-5 inline-flex min-h-11 items-center justify-center rounded-[10px] border border-attraction-border-strong text-sm font-semibold text-attraction-primary-dark transition hover:bg-attraction-primary-soft focus:outline-none focus:ring-2 focus:ring-attraction-primary"
+        className="mt-5 inline-flex min-h-11 items-center justify-center rounded-[10px] border border-attraction-border-strong text-sm font-semibold text-attraction-primary-dark transition hover:bg-attraction-primary-soft"
       >
-        View public profile
+        {t("viewProfile")}
       </Link>
     </article>
   );
 }
 
-function DirectorySkeleton() {
+function DirectorySkeleton({ t }) {
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-label="Loading profiles">
+    <div
+      className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+      aria-label={t("loading")}
+    >
       {[1, 2, 3, 4, 5, 6].map((item) => (
         <div
           key={item}

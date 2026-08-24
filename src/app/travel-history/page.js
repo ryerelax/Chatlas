@@ -5,12 +5,14 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useSession } from "next-auth/react";
 import { useReviews } from "@/presentation/contexts/ReviewsContext";
+import { useLanguage } from "@/presentation/contexts/LanguageContext";
 import ExplorationMap from "@/presentation/components/ExplorationMap";
 import { loadVisitedAttractionIds } from "@/presentation/lib/visitedAttractionsAdapter";
 
 export default function TravelHistoryPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
+  const { t, translateCategory } = useLanguage();
   const { reviews, loadReviews } = useReviews();
   const [activities, setActivities] = useState([]);
   const [filteredActivities, setFilteredActivities] = useState([]);
@@ -28,7 +30,7 @@ export default function TravelHistoryPage() {
       router.push("/login?redirect=/travel-history");
       return;
     }
-    
+
     if (status === "authenticated") {
       loadReviews(true);
     }
@@ -41,7 +43,9 @@ export default function TravelHistoryPage() {
 
     async function loadVisitedCount() {
       try {
-        const result = await loadVisitedAttractionIds({ signal: controller.signal });
+        const result = await loadVisitedAttractionIds({
+          signal: controller.signal,
+        });
         if (!controller.signal.aborted && result.status === "success") {
           setVisitedCount(result.data.length);
           setVisitedAttractionIds(result.data);
@@ -101,14 +105,27 @@ export default function TravelHistoryPage() {
         if (!rawAttractionId) return;
 
         const attractionId = String(rawAttractionId);
-        const attractionData = attractionDetails[attractionId] || review.attractionId || {};
-        
-        const attractionName = attractionData.name || review.attractionId?.name || "Unknown attraction";
-        const attractionCategory = attractionData.category || review.attractionId?.category || "Uncategorized";
-        const attractionPhotos = attractionData.photos || review.attractionId?.photos || [];
-        const attractionAddress = attractionData.address || review.attractionId?.address || "";
-        const attractionRating = attractionData.rating || review.attractionId?.rating || 0;
-        const attractionDescription = attractionData.description || review.attractionId?.description || "No description available for this attraction.";
+        const attractionData =
+          attractionDetails[attractionId] || review.attractionId || {};
+
+        const attractionName =
+          attractionData.name ||
+          review.attractionId?.name ||
+          "Unknown attraction";
+        const attractionCategory =
+          attractionData.category ||
+          review.attractionId?.category ||
+          "Uncategorized";
+        const attractionPhotos =
+          attractionData.photos || review.attractionId?.photos || [];
+        const attractionAddress =
+          attractionData.address || review.attractionId?.address || "";
+        const attractionRating =
+          attractionData.rating || review.attractionId?.rating || 0;
+        const attractionDescription =
+          attractionData.description ||
+          review.attractionId?.description ||
+          "";
 
         if (!activityMap.has(attractionId)) {
           activityMap.set(attractionId, {
@@ -127,9 +144,13 @@ export default function TravelHistoryPage() {
         }
 
         const entry = activityMap.get(attractionId);
-        
+
         const reviewPhotos = [];
-        if (review.photos && Array.isArray(review.photos) && review.photos.length > 0) {
+        if (
+          review.photos &&
+          Array.isArray(review.photos) &&
+          review.photos.length > 0
+        ) {
           review.photos.forEach((photo) => {
             if (photo) {
               reviewPhotos.push({
@@ -150,11 +171,19 @@ export default function TravelHistoryPage() {
           photos: reviewPhotos,
         });
 
-        const reviewDate = review.createdAt ? new Date(review.createdAt) : new Date();
-        if (!entry.firstReviewDate || reviewDate < new Date(entry.firstReviewDate)) {
+        const reviewDate = review.createdAt
+          ? new Date(review.createdAt)
+          : new Date();
+        if (
+          !entry.firstReviewDate ||
+          reviewDate < new Date(entry.firstReviewDate)
+        ) {
           entry.firstReviewDate = review.createdAt || new Date();
         }
-        if (!entry.lastReviewDate || reviewDate > new Date(entry.lastReviewDate)) {
+        if (
+          !entry.lastReviewDate ||
+          reviewDate > new Date(entry.lastReviewDate)
+        ) {
           entry.lastReviewDate = review.createdAt || new Date();
         }
         if (!entry.visitedDate || reviewDate > new Date(entry.visitedDate)) {
@@ -175,8 +204,7 @@ export default function TravelHistoryPage() {
           photos: attractionData.photos || [],
           address: attractionData.address || "",
           rating: attractionData.rating || 0,
-          description:
-            attractionData.description || "No description available for this attraction.",
+          description: attractionData.description || "",
           reviews: [],
           visitedDate: latestVerifiedAtByAttractionId[attractionId] || null,
           firstReviewDate: null,
@@ -184,7 +212,6 @@ export default function TravelHistoryPage() {
         });
       });
 
-      // Sort reviews by date for each activity (newest first)
       for (const entry of activityMap.values()) {
         entry.reviews.sort((a, b) => {
           const dateA = a.date ? new Date(a.date) : new Date(0);
@@ -194,10 +221,12 @@ export default function TravelHistoryPage() {
       }
 
       const activityArray = Array.from(activityMap.values());
-      
+
       activityArray.sort((a, b) => {
-        const dateA = latestVerifiedAtByAttractionId[a.id] || a.lastReviewDate;
-        const dateB = latestVerifiedAtByAttractionId[b.id] || b.lastReviewDate;
+        const dateA =
+          latestVerifiedAtByAttractionId[a.id] || a.lastReviewDate;
+        const dateB =
+          latestVerifiedAtByAttractionId[b.id] || b.lastReviewDate;
         const normalizedDateA = dateA ? new Date(dateA) : new Date(0);
         const normalizedDateB = dateB ? new Date(dateB) : new Date(0);
         return normalizedDateB - normalizedDateA;
@@ -217,9 +246,10 @@ export default function TravelHistoryPage() {
 
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
-      filtered = filtered.filter(activity => 
-        (activity.name || "").toLowerCase().includes(query) ||
-        (activity.category || "").toLowerCase().includes(query)
+      filtered = filtered.filter(
+        (activity) =>
+          (activity.name || "").toLowerCase().includes(query) ||
+          (activity.category || "").toLowerCase().includes(query)
       );
     }
 
@@ -247,19 +277,22 @@ export default function TravelHistoryPage() {
     }
   };
 
-  const getReviewCount = (reviews) => {
-    return reviews ? reviews.length : 0;
+  const getReviewCount = (reviewsList) => {
+    return reviewsList ? reviewsList.length : 0;
   };
 
-  const getTotalPhotos = (reviews) => {
-    if (!reviews) return 0;
-    return reviews.reduce((sum, review) => sum + (review.photos ? review.photos.length : 0), 0);
+  const getTotalPhotos = (reviewsList) => {
+    if (!reviewsList) return 0;
+    return reviewsList.reduce(
+      (sum, review) => sum + (review.photos ? review.photos.length : 0),
+      0
+    );
   };
 
   if (status === "loading" || isLoading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <p className="text-[#65748A]">Loading your travel history...</p>
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-[#65748A]">{t("loading")}</p>
       </div>
     );
   }
@@ -269,39 +302,52 @@ export default function TravelHistoryPage() {
   }
 
   const totalAttractions = visitedCount;
-  const totalReviews = activities ? activities.reduce((sum, a) => sum + (a.reviews ? a.reviews.length : 0), 0) : 0;
-  const totalPhotos = activities ? activities.reduce((sum, a) => sum + getTotalPhotos(a.reviews), 0) : 0;
+  const totalReviews = activities
+    ? activities.reduce(
+        (sum, a) => sum + (a.reviews ? a.reviews.length : 0),
+        0
+      )
+    : 0;
+  const totalPhotos = activities
+    ? activities.reduce((sum, a) => sum + getTotalPhotos(a.reviews), 0)
+    : 0;
 
   return (
     <div className="min-h-screen bg-[#F7F9FB]">
-      <div className="bg-[#006C56] text-white py-12 px-4">
-        <div className="max-w-6xl mx-auto">
+      <div className="bg-[#006C56] px-4 py-12 text-white">
+        <div className="mx-auto max-w-6xl">
           <button
             onClick={() => router.push("/profile")}
-            className="text-white/80 hover:text-white mb-4 flex items-center gap-2 transition-colors"
+            className="mb-4 flex items-center gap-2 text-white/80 transition-colors hover:text-white"
           >
-            ← Back to Profile
+            ← {t("back")}
           </button>
-          <h1 className="text-3xl md:text-4xl font-bold">My Travel History</h1>
-          <p className="text-white/80 mt-2">
-            Explore your journey across Melaka
-          </p>
+          <h1 className="text-3xl font-bold md:text-4xl">
+            {t("travelHistoryTitle")}
+          </h1>
+          <p className="mt-2 text-white/80">{t("exploreProgress")}</p>
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        <div className="grid grid-cols-3 gap-4 mb-8">
-          <div className="bg-white border border-[#D8E1E7] rounded-[14px] p-5 text-center">
-            <p className="text-[#10213B] font-bold text-3xl tracking-tight">{totalAttractions}</p>
-            <p className="text-[#65748A] text-sm mt-1">Attractions visited</p>
+      <div className="mx-auto max-w-6xl px-4 py-8">
+        <div className="mb-8 grid grid-cols-3 gap-4">
+          <div className="rounded-[14px] border border-[#D8E1E7] bg-white p-5 text-center">
+            <p className="text-3xl font-bold tracking-tight text-[#10213B]">
+              {totalAttractions}
+            </p>
+            <p className="mt-1 text-sm text-[#65748A]">{t("placesVisited")}</p>
           </div>
-          <div className="bg-white border border-[#D8E1E7] rounded-[14px] p-5 text-center">
-            <p className="text-[#10213B] font-bold text-3xl tracking-tight">{totalReviews}</p>
-            <p className="text-[#65748A] text-sm mt-1">Reviews written</p>
+          <div className="rounded-[14px] border border-[#D8E1E7] bg-white p-5 text-center">
+            <p className="text-3xl font-bold tracking-tight text-[#10213B]">
+              {totalReviews}
+            </p>
+            <p className="mt-1 text-sm text-[#65748A]">{t("reviewsWritten")}</p>
           </div>
-          <div className="bg-white border border-[#D8E1E7] rounded-[14px] p-5 text-center">
-            <p className="text-[#10213B] font-bold text-3xl tracking-tight">{totalPhotos}</p>
-            <p className="text-[#65748A] text-sm mt-1">Photos uploaded</p>
+          <div className="rounded-[14px] border border-[#D8E1E7] bg-white p-5 text-center">
+            <p className="text-3xl font-bold tracking-tight text-[#10213B]">
+              {totalPhotos}
+            </p>
+            <p className="mt-1 text-sm text-[#65748A]">{t("photosUploaded")}</p>
           </div>
         </div>
 
@@ -309,83 +355,91 @@ export default function TravelHistoryPage() {
           <ExplorationMap mapOnly />
         </div>
 
-        <div className="flex items-center gap-4 mb-6">
+        <div className="mb-6 flex items-center gap-4">
           <div className="flex-1">
             <div className="relative">
               <svg
-                className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-[#98A2B3]"
+                className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-[#98A2B3]"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
               </svg>
               <input
                 type="text"
-                placeholder="Search by attraction name or category..."
+                placeholder={t("search")}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-white border border-[#D8E1E7] rounded-lg text-[#10213B] placeholder-[#98A2B3] focus:outline-none focus:border-[#006C56] focus:ring-2 focus:ring-[#006C56]/20 transition-all"
+                className="w-full rounded-lg border border-[#D8E1E7] bg-white py-2 pl-10 pr-4 text-[#10213B] placeholder-[#98A2B3] transition-all focus:border-[#006C56] focus:outline-none focus:ring-2 focus:ring-[#006C56]/20"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery("")}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#98A2B3] hover:text-[#65748A]"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 transform text-[#98A2B3] hover:text-[#65748A]"
                 >
                   ✕
                 </button>
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <span className="text-sm text-[#65748A]">Sort by:</span>
+          <div className="flex flex-shrink-0 items-center gap-2">
+            <span className="text-sm text-[#65748A]">{t("sortBy")}:</span>
             <select
               value={sortNewest ? "newest" : "oldest"}
               onChange={(e) => setSortNewest(e.target.value === "newest")}
-              className="border border-[#D8E1E7] text-[#10213B] bg-white rounded-lg px-3 py-2 text-sm outline-none cursor-pointer focus:border-[#006C56]"
+              className="cursor-pointer rounded-lg border border-[#D8E1E7] bg-white px-3 py-2 text-sm text-[#10213B] outline-none focus:border-[#006C56]"
             >
-              <option value="newest">Newest first</option>
-              <option value="oldest">Oldest first</option>
+              <option value="newest">{t("sortNewest")}</option>
+              <option value="oldest">{t("sortNameAsc")}</option>
             </select>
           </div>
         </div>
 
         {!filteredActivities || filteredActivities.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
-            <svg className="w-16 h-16 text-[#98A2B3] mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-            </svg>
             <h3 className="text-xl font-semibold text-[#10213B]">
-              {searchQuery ? "No matching attractions found" : "No travel history yet"}
+              {searchQuery ? t("noAttractionsFound") : t("emptyHistory")}
             </h3>
-            <p className="text-[#65748A] mt-2">
-              {searchQuery 
-                ? `No attractions match "${searchQuery}". Try a different search term.`
-                : "You haven't explored any attractions yet. Start your journey today!"}
+            <p className="mt-2 text-[#65748A]">
+              {searchQuery ? t("tryChangingFilters") : t("emptyHistory")}
             </p>
             <button
-              onClick={() => router.push("/")}
-              className="mt-6 px-6 py-2 bg-[#FFAB00] text-[#142033] font-semibold rounded-lg hover:bg-[#E89B00] transition-colors"
+              onClick={() =>
+                searchQuery ? setSearchQuery("") : router.push("/")
+              }
+              className="mt-6 rounded-lg bg-[#FFAB00] px-6 py-2 font-semibold text-[#142033] transition-colors hover:bg-[#E89B00]"
             >
-              {searchQuery ? "Clear search" : "Explore Attractions"}
+              {searchQuery ? t("clearSearchAndFilters") : t("browseAttractions")}
             </button>
           </div>
         ) : (
           <div className="space-y-4">
             {filteredActivities.map((activity) => {
               const isExpanded = expandedId === activity.id;
-              const coverPhoto = activity.photos && activity.photos.length > 0 ? activity.photos[0] : null;
+              const coverPhoto =
+                activity.photos && activity.photos.length > 0
+                  ? activity.photos[0]
+                  : null;
               const reviewCount = getReviewCount(activity.reviews);
               const totalPhotosForActivity = getTotalPhotos(activity.reviews);
-              const latestReview = activity.reviews && activity.reviews.length > 0 ? activity.reviews[0] : null;
+              const latestReview =
+                activity.reviews && activity.reviews.length > 0
+                  ? activity.reviews[0]
+                  : null;
 
               return (
                 <div
                   key={activity.id}
-                  className="bg-white border border-[#D8E1E7] rounded-[18px] overflow-hidden hover:shadow-lg transition-shadow"
+                  className="overflow-hidden rounded-[18px] border border-[#D8E1E7] bg-white transition-shadow hover:shadow-lg"
                 >
                   <div className="flex flex-col md:flex-row">
-                    <div className="relative w-full md:w-56 h-48 md:h-auto flex-shrink-0 bg-[#CDF5E5]">
+                    <div className="relative h-48 w-full flex-shrink-0 bg-[#CDF5E5] md:h-auto md:w-56">
                       {coverPhoto ? (
                         <Image
                           src={coverPhoto}
@@ -395,7 +449,7 @@ export default function TravelHistoryPage() {
                           sizes="(max-width: 768px) 100vw, 224px"
                         />
                       ) : (
-                        <div className="flex items-center justify-center h-full text-[#006C56]/30 text-4xl">
+                        <div className="flex h-full items-center justify-center text-4xl text-[#006C56]/30">
                           📍
                         </div>
                       )}
@@ -405,17 +459,23 @@ export default function TravelHistoryPage() {
                       <div className="flex items-start justify-between">
                         <div>
                           <h3 className="text-xl font-bold text-[#10213B]">
-                            {activity.name || "Unknown attraction"}
+                            {activity.name || "—"}
                           </h3>
-                          <span className="inline-block mt-1 px-2 py-0.5 bg-[#E6F7F0] text-[#004638] text-xs rounded-full border border-[#A7D7C5]">
-                            {activity.category || "Uncategorized"}
+                          <span className="mt-1 inline-block rounded-full border border-[#A7D7C5] bg-[#E6F7F0] px-2 py-0.5 text-xs text-[#004638]">
+                            {activity.category
+                              ? translateCategory
+                                ? translateCategory(activity.category)
+                                : activity.category
+                              : "—"}
                           </span>
                         </div>
                         <div className="text-right">
                           <p className="text-sm text-[#65748A]">
                             {latestVerifiedAtByAttractionId[activity.id]
-                              ? `Last visited: ${formatDate(latestVerifiedAtByAttractionId[activity.id])}`
-                              : `Last reviewed: ${formatDate(activity.lastReviewDate)}`}
+                              ? formatDate(
+                                  latestVerifiedAtByAttractionId[activity.id]
+                                )
+                              : formatDate(activity.lastReviewDate)}
                           </p>
                         </div>
                       </div>
@@ -430,37 +490,46 @@ export default function TravelHistoryPage() {
                         <div className="flex items-center gap-1">
                           <span className="text-[#FFAB00]">★</span>
                           <span className="font-medium text-[#10213B]">
-                            {activity.rating ? Number(activity.rating).toFixed(1) : "N/A"}
+                            {activity.rating
+                              ? Number(activity.rating).toFixed(1)
+                              : "N/A"}
                           </span>
                         </div>
-                        <span className="text-[#65748A] text-sm">
-                          {reviewCount} {reviewCount === 1 ? "review" : "reviews"}
+                        <span className="text-sm text-[#65748A]">
+                          {reviewCount} {t("reviews")}
                         </span>
                         {totalPhotosForActivity > 0 && (
-                          <span className="text-[#65748A] text-sm">
-                            • {totalPhotosForActivity} {totalPhotosForActivity === 1 ? "photo" : "photos"}
+                          <span className="text-sm text-[#65748A]">
+                            • {totalPhotosForActivity} {t("photos")}
                           </span>
                         )}
                       </div>
 
-                      <div className="mt-4 flex items-center gap-3 flex-wrap">
+                      <div className="mt-4 flex flex-wrap items-center gap-3">
                         <button
                           onClick={() => toggleExpand(activity.id)}
-                          className="flex items-center gap-1.5 px-4 py-2 bg-[#F7F9FB] border border-[#D8E1E7] rounded-lg text-sm font-medium text-[#10213B] hover:bg-[#EAF3FA] transition-colors"
+                          className="flex items-center gap-1.5 rounded-lg border border-[#D8E1E7] bg-[#F7F9FB] px-4 py-2 text-sm font-medium text-[#10213B] transition-colors hover:bg-[#EAF3FA]"
                         >
-                          {isExpanded ? "Hide details" : "View details"}
+                          {isExpanded ? t("hideFilters") : t("details")}
                           <svg
-                            className={`w-4 h-4 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                            className={`h-4 w-4 transition-transform ${
+                              isExpanded ? "rotate-180" : ""
+                            }`}
                             fill="none"
                             stroke="currentColor"
                             viewBox="0 0 24 24"
                           >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M19 9l-7 7-7-7"
+                            />
                           </svg>
                         </button>
-                        {latestReview && (
+                        {latestReview && latestReview.text && (
                           <span className="text-sm text-[#65748A]">
-                            Latest: {latestReview.text?.substring(0, 30) || ""}...
+                            {latestReview.text.substring(0, 30)}...
                           </span>
                         )}
                       </div>
@@ -468,16 +537,13 @@ export default function TravelHistoryPage() {
                   </div>
 
                   {isExpanded && (
-                    <div className="border-t border-[#D8E1E7] p-6 bg-[#F7F9FB]">
+                    <div className="border-t border-[#D8E1E7] bg-[#F7F9FB] p-6">
                       {activity.description && (
-                        <div className="mb-6 pb-6 border-b border-[#D8E1E7]">
-                          <h4 className="text-base font-semibold text-[#10213B] mb-2 flex items-center gap-2">
-                            <svg className="w-5 h-5 text-[#006C56]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            About this attraction
+                        <div className="mb-6 border-b border-[#D8E1E7] pb-6">
+                          <h4 className="mb-2 flex items-center gap-2 text-base font-semibold text-[#10213B]">
+                            {t("description")}
                           </h4>
-                          <p className="text-sm text-[#405066] leading-relaxed">
+                          <p className="text-sm leading-relaxed text-[#405066]">
                             {activity.description}
                           </p>
                         </div>
@@ -485,66 +551,86 @@ export default function TravelHistoryPage() {
 
                       {activity.reviews && activity.reviews.length > 0 && (
                         <div>
-                          <h4 className="text-base font-semibold text-[#10213B] mb-3 flex items-center gap-2">
-                            <svg className="w-5 h-5 text-[#2F6DA1]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                            Reviews ({activity.reviews.length})
+                          <h4 className="mb-3 flex items-center gap-2 text-base font-semibold text-[#10213B]">
+                            {t("reviews")} ({activity.reviews.length})
                           </h4>
                           <div className="space-y-4">
                             {activity.reviews.map((review, index) => (
-                              <div key={review.id || index} className="bg-white border border-[#D8E1E7] rounded-[12px] p-4">
-                                <div className="flex items-center gap-3 mb-2">
-                                  <div className="w-8 h-8 rounded-full bg-[#CDF5E5] flex items-center justify-center text-[#006C56] font-semibold text-xs overflow-hidden">
+                              <div
+                                key={review.id || index}
+                                className="rounded-[12px] border border-[#D8E1E7] bg-white p-4"
+                              >
+                                <div className="mb-2 flex items-center gap-3">
+                                  <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-[#CDF5E5] text-xs font-semibold text-[#006C56]">
                                     {review.userAvatar ? (
-                                      <Image src={review.userAvatar} alt={review.userName || "User"} width={32} height={32} className="object-cover" />
+                                      <Image
+                                        src={review.userAvatar}
+                                        alt={review.userName || "User"}
+                                        width={32}
+                                        height={32}
+                                        className="object-cover"
+                                      />
                                     ) : (
-                                      (review.userName && review.userName.charAt(0)) || "U"
+                                      (review.userName &&
+                                        review.userName.charAt(0)) ||
+                                      "U"
                                     )}
                                   </div>
                                   <div>
-                                    <p className="text-sm font-medium text-[#10213B]">{review.userName || "Anonymous"}</p>
-                                    <p className="text-xs text-[#65748A]">{formatDate(review.date)}</p>
+                                    <p className="text-sm font-medium text-[#10213B]">
+                                      {review.userName || "Anonymous"}
+                                    </p>
+                                    <p className="text-xs text-[#65748A]">
+                                      {formatDate(review.date)}
+                                    </p>
                                   </div>
                                   <div className="ml-auto flex items-center gap-0.5">
                                     {[...Array(5)].map((_, i) => (
-                                      <span key={i} className={i < (review.rating || 0) ? "text-[#FFAB00]" : "text-[#D8E1E7]"}>
+                                      <span
+                                        key={i}
+                                        className={
+                                          i < (review.rating || 0)
+                                            ? "text-[#FFAB00]"
+                                            : "text-[#D8E1E7]"
+                                        }
+                                      >
                                         ★
                                       </span>
                                     ))}
                                   </div>
                                 </div>
-                                <p className="text-sm text-[#405066] leading-relaxed">{review.text || ""}</p>
-                                
+                                <p className="text-sm leading-relaxed text-[#405066]">
+                                  {review.text || ""}
+                                </p>
+
                                 {review.photos && review.photos.length > 0 && (
-                                  <div className="mt-3 pt-3 border-t border-[#D8E1E7]">
-                                    <div className="flex gap-2 flex-wrap">
-                                      {review.photos.slice(0, 6).map((photo, idx) => (
-                                        <div
-                                          key={photo.publicId || idx}
-                                          className="relative w-16 h-16 rounded-lg overflow-hidden bg-[#CDF5E5] border border-[#D8E1E7] cursor-pointer hover:scale-105 transition-transform"
-                                          onClick={() => window.open(photo.url, "_blank")}
-                                        >
-                                          {photo.url ? (
-                                            <Image
-                                              src={photo.url}
-                                              alt={`Photo ${idx + 1}`}
-                                              fill
-                                              className="object-cover"
-                                              sizes="64px"
-                                            />
-                                          ) : (
-                                            <div className="flex items-center justify-center h-full text-[#006C56]/30 text-lg">
-                                              📷
-                                            </div>
-                                          )}
-                                        </div>
-                                      ))}
-                                      {review.photos.length > 6 && (
-                                        <div className="w-16 h-16 rounded-lg bg-[#F1F6F4] border border-[#D8E1E7] flex items-center justify-center text-[#65748A] text-xs font-medium">
-                                          +{review.photos.length - 6}
-                                        </div>
-                                      )}
+                                  <div className="mt-3 border-t border-[#D8E1E7] pt-3">
+                                    <div className="flex flex-wrap gap-2">
+                                      {review.photos
+                                        .slice(0, 6)
+                                        .map((photo, idx) => (
+                                          <div
+                                            key={photo.publicId || idx}
+                                            className="relative h-16 w-16 cursor-pointer overflow-hidden rounded-lg border border-[#D8E1E7] bg-[#CDF5E5] transition-transform hover:scale-105"
+                                            onClick={() =>
+                                              window.open(photo.url, "_blank")
+                                            }
+                                          >
+                                            {photo.url ? (
+                                              <Image
+                                                src={photo.url}
+                                                alt={`Photo ${idx + 1}`}
+                                                fill
+                                                className="object-cover"
+                                                sizes="64px"
+                                              />
+                                            ) : (
+                                              <div className="flex h-full items-center justify-center text-lg text-[#006C56]/30">
+                                                📷
+                                              </div>
+                                            )}
+                                          </div>
+                                        ))}
                                     </div>
                                   </div>
                                 )}
