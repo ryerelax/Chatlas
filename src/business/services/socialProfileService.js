@@ -8,7 +8,6 @@ import {
 import {
   countPublicReviewsByUserId,
   findPublicReviewsByUserId,
-  findReviewedAttractionIdsByUserId,
 } from "@/data/repositories/reviewRepository";
 import { findDistinctVerifiedAttractionIds } from "@/data/repositories/verifiedVisitRepository";
 import { getPublicExplorationSummaries } from "@/business/services/publicExplorationSummaryService";
@@ -63,7 +62,7 @@ export async function getPublicProfileOverview(userId) {
   return getPublicProfileOverviewService(userId);
 }
 
-function normalizeReviewedAttractions(attractions = []) {
+function normalizeExploredAttractions(attractions = []) {
   const uniqueAttractions = new Map();
 
   for (const attraction of attractions) {
@@ -84,13 +83,13 @@ function normalizeReviewedAttractions(attractions = []) {
   return [...uniqueAttractions.values()];
 }
 
-function calculateCoverage(reviewedCount, totalAttractions) {
+function calculateCoverage(exploredCount, totalAttractions) {
   const normalizedTotal = Math.max(0, Number(totalAttractions) || 0);
   if (normalizedTotal === 0) return 0;
 
   return Math.min(
     100,
-    Math.round((reviewedCount / normalizedTotal) * 1000) / 10
+    Math.round((exploredCount / normalizedTotal) * 1000) / 10
   );
 }
 
@@ -99,18 +98,18 @@ export function buildExplorationComparison({
   targetAttractions = [],
   totalAttractions = 0,
 } = {}) {
-  const viewer = normalizeReviewedAttractions(viewerAttractions);
-  const target = normalizeReviewedAttractions(targetAttractions);
+  const viewer = normalizeExploredAttractions(viewerAttractions);
+  const target = normalizeExploredAttractions(targetAttractions);
   const viewerIds = new Set(viewer.map((attraction) => attraction.id));
   const targetIds = new Set(target.map((attraction) => attraction.id));
 
   return {
     viewer: {
-      reviewedCount: viewer.length,
+      exploredCount: viewer.length,
       coveragePercentage: calculateCoverage(viewer.length, totalAttractions),
     },
     target: {
-      reviewedCount: target.length,
+      exploredCount: target.length,
       coveragePercentage: calculateCoverage(target.length, totalAttractions),
     },
     common: viewer.filter((attraction) => targetIds.has(attraction.id)),
@@ -224,7 +223,7 @@ export async function getPublicExplorationForProfile(userId) {
 export function createPublicExplorationComparisonService({
   getPublicProfileById: getProfileById,
   getExplorationMapAttractions: getMapAttractions,
-  findReviewedAttractionIdsByUserId: findReviewedAttractionIds,
+  findDistinctVerifiedAttractionIds: findVerifiedAttractionIds,
 }) {
   return async function compareExploration(viewerId, targetUserId) {
     const targetProfile = await getProfileById(targetUserId);
@@ -234,25 +233,25 @@ export function createPublicExplorationComparisonService({
     if (normalizedViewerId === String(targetProfile.id)) {
       throw new SocialProfileDependencyError(
         "SELF_COMPARISON_NOT_ALLOWED",
-        "Choose another traveller to compare reviewed places."
+        "Choose another traveller to compare explored places."
       );
     }
 
-    const [mapAttractionRecords, viewerReviewedIds, targetReviewedIds] =
+    const [mapAttractionRecords, viewerVerifiedIds, targetVerifiedIds] =
       await Promise.all([
         getMapAttractions(),
-        findReviewedAttractionIds(normalizedViewerId),
-        findReviewedAttractionIds(targetProfile.id),
+        findVerifiedAttractionIds(normalizedViewerId),
+        findVerifiedAttractionIds(targetProfile.id),
       ]);
     const supportedAttractions = normaliseMapAttractions(mapAttractionRecords);
     const viewerViewModel = createExplorationMapViewModel(
       supportedAttractions,
-      viewerReviewedIds,
+      viewerVerifiedIds,
       VISITED_DATA_STATUS.SUCCESS
     );
     const targetViewModel = createExplorationMapViewModel(
       supportedAttractions,
-      targetReviewedIds,
+      targetVerifiedIds,
       VISITED_DATA_STATUS.SUCCESS
     );
 
@@ -267,7 +266,7 @@ export function createPublicExplorationComparisonService({
 const compareExploration = createPublicExplorationComparisonService({
   getPublicProfileById,
   getExplorationMapAttractions,
-  findReviewedAttractionIdsByUserId,
+  findDistinctVerifiedAttractionIds,
 });
 
 export async function comparePublicExploration(viewerId, targetUserId) {

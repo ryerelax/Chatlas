@@ -15,7 +15,7 @@ export async function GET(request, { params }) {
         {
           success: false,
           code: "AUTHENTICATION_REQUIRED",
-          message: "Please log in with Google to compare reviewed places.",
+          message: "Please log in with Google to compare explored places.",
         },
         { status: 401 }
       );
@@ -53,9 +53,9 @@ export async function GET(request, { params }) {
       );
     }
 
-    console.error("Failed to compare reviewed-place data:", error);
+    console.error("Failed to compare verified exploration data:", error);
     return NextResponse.json(
-      { success: false, message: "Reviewed-place comparison is currently unavailable." },
+      { success: false, message: "Exploration comparison is currently unavailable." },
       { status: 500 }
     );
   }

@@ -129,7 +129,7 @@ src/
 - Display public profiles without exposing email addresses or Google IDs
 - Display public reviews with attraction links and available photos
 - Let registered users view another traveller's verified exploration progress and visited-attraction map without exposing verification evidence
-- Compare two travellers' public reviewed places with separate maps, common places, and unique places
+- Compare two travellers' Verified Visit attractions with coverage, separate maps, common places, and unique places
 - Provide wishlist, favourites, photos, and travel-history pages
 - Cache supported attraction pages, images, searches, and an offline fallback through the PWA service worker
 - Provide shared responsive navigation with English, Chinese, and Malay labels
@@ -303,7 +303,7 @@ Displays a traveller's public profile and reviews. Registered users can also vie
 - `/api/profiles/[id]` — one display-safe public profile
 - `/api/profiles/[id]/reviews` — public reviews
 - `/api/profiles/[id]/exploration` — registered-user verified exploration progress and visited-attraction map
-- `/api/profiles/[id]/comparison` — registered-user reviewed-place comparison
+- `/api/profiles/[id]/comparison` — registered-user Verified Visit exploration comparison
 
 ## Development Guidelines
 

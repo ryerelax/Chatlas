@@ -855,10 +855,10 @@ The Social Profile module supports:
 - Guest and registered-user access to a searchable public traveller directory
 - Public profile pages that expose only display-safe profile fields
 - Public reviews loaded from the Review & Community records, including ratings, attraction links, and available review photos
-- Profile tabs for public reviews, verified exploration progress, and reviewed-place comparison
+- Profile tabs for public reviews, verified exploration progress, and Verified Visit comparison
 - Registered-user access controls for exploration maps and comparisons
 - Registered-user exploration maps derived from distinct Verified Visit attractions, exposing only display-safe attraction details while keeping verification evidence private
-- Registered-user comparison of common and unique reviewed places derived from published reviews; comparison maps do not expose Verified Visit evidence
+- Registered-user comparison of Verified Visit attraction coverage, common explored places, and places explored by only one traveller; comparison maps expose only display-safe attraction details and never verification evidence
 
 Maintenance/data-quality scripts (`scripts/`, run via `npm run <script>`, not part of the live app) exist for one-time or re-runnable backfill and repair jobs: photo sync, description sync, location-area classification, and address repair. See `package.json` for the exact commands.
 

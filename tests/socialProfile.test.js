@@ -676,7 +676,7 @@ test("public profile exploration does not query map data for a missing profile",
   assert.equal(dependencyCalls, 0);
 });
 
-test("public exploration comparison groups common and unique reviewed attractions", async () => {
+test("public exploration comparison groups common and unique verified attractions", async () => {
   const observedUserIds = [];
   const compareExploration = createPublicExplorationComparisonService({
     getPublicProfileById: async (userId) => {
@@ -717,7 +717,7 @@ test("public exploration comparison groups common and unique reviewed attraction
         longitude: 102.5,
       },
     ],
-    findReviewedAttractionIdsByUserId: async (userId) => {
+    findDistinctVerifiedAttractionIds: async (userId) => {
       observedUserIds.push(userId);
       return userId === "viewer-user-id"
         ? ["common-attraction", "viewer-attraction"]
@@ -732,11 +732,11 @@ test("public exploration comparison groups common and unique reviewed attraction
 
   assert.deepEqual(observedUserIds, ["viewer-user-id", "target-user-id"]);
   assert.deepEqual(comparison.viewer, {
-    reviewedCount: 2,
+    exploredCount: 2,
     coveragePercentage: 50,
   });
   assert.deepEqual(comparison.target, {
-    reviewedCount: 2,
+    exploredCount: 2,
     coveragePercentage: 50,
   });
   assert.deepEqual(
@@ -754,7 +754,7 @@ test("public exploration comparison groups common and unique reviewed attraction
   assert.equal(comparison.common[0].address, "Common Street");
 });
 
-test("public reviewed-place comparison keeps one decimal place of coverage precision", () => {
+test("public verified exploration comparison keeps one decimal place of coverage precision", () => {
   const comparison = buildExplorationComparison({
     viewerAttractions: [{ id: "visited-attraction", name: "Museum" }],
     targetAttractions: [],
@@ -773,7 +773,7 @@ test("public exploration comparison stops before dependencies for a missing targ
       dependencyCalls += 1;
       return [];
     },
-    findReviewedAttractionIdsByUserId: async () => {
+    findDistinctVerifiedAttractionIds: async () => {
       dependencyCalls += 1;
       return [];
     },
@@ -791,7 +791,7 @@ test("public exploration comparison rejects comparison with the signed-in user",
       dependencyCalls += 1;
       return [];
     },
-    findReviewedAttractionIdsByUserId: async () => {
+    findDistinctVerifiedAttractionIds: async () => {
       dependencyCalls += 1;
       return [];
     },
