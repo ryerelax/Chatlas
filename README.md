@@ -291,7 +291,7 @@ Displays the searchable public Traveller Directory. The signed-in user is exclud
 
 ### `/profiles/[id]`
 
-Displays a traveller's public profile and reviews. Registered users can also view the traveller's exploration map and compare both users' exploration progress. Each distinct reviewed attraction counts as one visited attraction.
+Displays a traveller's public profile and reviews. Registered users can also view the traveller's verified exploration progress and compare the attractions both users have genuinely visited. Each distinct attraction with a valid Verified Visit counts as one explored attraction; private verification evidence is never exposed.
 
 ### Collection routes
 
