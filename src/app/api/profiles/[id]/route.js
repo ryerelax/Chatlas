@@ -1,26 +1,8 @@
-import { NextResponse } from "next/server";
-import { getPublicProfileById } from "@/business/services/userService";
+import { getPublicProfileOverview } from "@/business/services/socialProfileService";
 import { connectToDatabase } from "@/infrastructure/database/mongodb";
+import { createPublicProfileHandler } from "./handler.js";
 
-export async function GET(request, { params }) {
-  try {
-    const { id } = await params;
-    await connectToDatabase();
-    const profile = await getPublicProfileById(id);
-
-    if (!profile) {
-      return NextResponse.json(
-        { success: false, message: "User profile not found." },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json({ success: true, data: profile });
-  } catch (error) {
-    console.error("Failed to retrieve public profile:", error);
-    return NextResponse.json(
-      { success: false, message: "Failed to retrieve the public profile." },
-      { status: 500 }
-    );
-  }
-}
+export const GET = createPublicProfileHandler({
+  connectToDatabase,
+  getPublicProfileOverview,
+});

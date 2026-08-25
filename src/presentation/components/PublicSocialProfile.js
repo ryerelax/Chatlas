@@ -234,7 +234,8 @@ function OverviewSection({ profile }) {
         <SummaryCard label="Exploration progress" value={profile.activitySummary.explorationProgress} suffix="%" />
       </div>
       <p className="mt-5 rounded-[10px] bg-[#EAF3FA] px-4 py-3 text-sm leading-relaxed text-attraction-body">
-        Open the Reviews and Exploration map tabs to view this traveller&apos;s published activity. A combined overview summary is still being prepared.
+        Review totals come from published reviews. Visit totals and progress use
+        safe aggregate Verified Visit data without exposing verification details.
       </p>
     </div>
   );

@@ -6,9 +6,11 @@ import {
   VISITED_DATA_STATUS,
 } from "@/business/services/explorationMapService";
 import {
+  countPublicReviewsByUserId,
   findPublicReviewsByUserId,
   findReviewedAttractionIdsByUserId,
 } from "@/data/repositories/reviewRepository";
+import { getPublicExplorationSummaries } from "@/business/services/publicExplorationSummaryService";
 
 export class SocialProfileDependencyError extends Error {
   constructor(code, message) {
@@ -16,6 +18,48 @@ export class SocialProfileDependencyError extends Error {
     this.name = "SocialProfileDependencyError";
     this.code = code;
   }
+}
+
+export function createPublicProfileOverviewService({
+  getPublicProfileById: getProfileById,
+  countPublicReviewsByUserId: countReviews,
+  getPublicExplorationSummaries: getExplorationSummaries,
+}) {
+  return async function getOverview(userId) {
+    const profile = await getProfileById(userId);
+    if (!profile) return null;
+
+    const [reviewsWritten, summaries] = await Promise.all([
+      countReviews(profile.id),
+      getExplorationSummaries([profile.id]),
+    ]);
+    const explorationSummary = summaries.get(String(profile.id)) || null;
+    const hasExplorationSummary = explorationSummary?.status === "success";
+
+    return {
+      ...profile,
+      activitySummary: {
+        reviewsWritten: Math.max(0, Math.trunc(Number(reviewsWritten) || 0)),
+        visitedAttractions: hasExplorationSummary
+          ? explorationSummary.visitedCount
+          : null,
+        explorationProgress: hasExplorationSummary
+          ? explorationSummary.progressPercentage
+          : null,
+        status: hasExplorationSummary ? "success" : "partial",
+      },
+    };
+  };
+}
+
+const getPublicProfileOverviewService = createPublicProfileOverviewService({
+  getPublicProfileById,
+  countPublicReviewsByUserId,
+  getPublicExplorationSummaries,
+});
+
+export async function getPublicProfileOverview(userId) {
+  return getPublicProfileOverviewService(userId);
 }
 
 function normalizeVisitedAttractions(attractions = []) {
