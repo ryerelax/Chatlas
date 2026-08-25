@@ -62,7 +62,7 @@ export async function getPublicProfileOverview(userId) {
   return getPublicProfileOverviewService(userId);
 }
 
-function normalizeVisitedAttractions(attractions = []) {
+function normalizeReviewedAttractions(attractions = []) {
   const uniqueAttractions = new Map();
 
   for (const attraction of attractions) {
@@ -83,13 +83,13 @@ function normalizeVisitedAttractions(attractions = []) {
   return [...uniqueAttractions.values()];
 }
 
-function calculateProgress(visitedCount, totalAttractions) {
+function calculateCoverage(reviewedCount, totalAttractions) {
   const normalizedTotal = Math.max(0, Number(totalAttractions) || 0);
   if (normalizedTotal === 0) return 0;
 
   return Math.min(
     100,
-    Math.round((visitedCount / normalizedTotal) * 1000) / 10
+    Math.round((reviewedCount / normalizedTotal) * 1000) / 10
   );
 }
 
@@ -98,19 +98,19 @@ export function buildExplorationComparison({
   targetAttractions = [],
   totalAttractions = 0,
 } = {}) {
-  const viewer = normalizeVisitedAttractions(viewerAttractions);
-  const target = normalizeVisitedAttractions(targetAttractions);
+  const viewer = normalizeReviewedAttractions(viewerAttractions);
+  const target = normalizeReviewedAttractions(targetAttractions);
   const viewerIds = new Set(viewer.map((attraction) => attraction.id));
   const targetIds = new Set(target.map((attraction) => attraction.id));
 
   return {
     viewer: {
-      visitedCount: viewer.length,
-      progressPercentage: calculateProgress(viewer.length, totalAttractions),
+      reviewedCount: viewer.length,
+      coveragePercentage: calculateCoverage(viewer.length, totalAttractions),
     },
     target: {
-      visitedCount: target.length,
-      progressPercentage: calculateProgress(target.length, totalAttractions),
+      reviewedCount: target.length,
+      coveragePercentage: calculateCoverage(target.length, totalAttractions),
     },
     common: viewer.filter((attraction) => targetIds.has(attraction.id)),
     viewerOnly: viewer.filter((attraction) => !targetIds.has(attraction.id)),
@@ -167,7 +167,7 @@ export async function getPublicReviewsForProfile(userId) {
   return getReviewsForProfile(userId);
 }
 
-function serializeVisitedAttraction(attraction) {
+function serializeReviewedAttraction(attraction) {
   return {
     id: attraction.id,
     name: attraction.name,
@@ -199,12 +199,13 @@ export function createPublicProfileExplorationService({
     );
 
     return {
-      visitedAttractions: viewModel.visitedAttractions.map(
-        serializeVisitedAttraction
+      source: "public_reviews",
+      reviewedAttractions: viewModel.visitedAttractions.map(
+        serializeReviewedAttraction
       ),
-      visitedCount: viewModel.progress.visitedCount,
+      reviewedCount: viewModel.progress.visitedCount,
       totalAttractions: viewModel.progress.totalCount,
-      progressPercentage: viewModel.progress.percentage,
+      coveragePercentage: viewModel.progress.percentage,
     };
   };
 }
@@ -232,7 +233,7 @@ export function createPublicExplorationComparisonService({
     if (normalizedViewerId === String(targetProfile.id)) {
       throw new SocialProfileDependencyError(
         "SELF_COMPARISON_NOT_ALLOWED",
-        "Choose another traveller to compare exploration progress."
+        "Choose another traveller to compare reviewed places."
       );
     }
 

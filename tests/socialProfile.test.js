@@ -575,7 +575,7 @@ test("public profile API returns the completed activity summary", async () => {
   });
 });
 
-test("public profile exploration uses reviewed attractions as visited map locations", async () => {
+test("public profile exploration exposes reviewed places without calling them verified visits", async () => {
   const observed = {};
   const getExploration = createPublicProfileExplorationService({
     getPublicProfileById: async (userId) => {
@@ -585,7 +585,7 @@ test("public profile exploration uses reviewed attractions as visited map locati
     getExplorationMapAttractions: async () => [
       {
         _id: "507f1f77bcf86cd799439021",
-        name: "Visited Museum",
+        name: "Reviewed Museum",
         address: "Museum Street",
         category: "Museum",
         latitude: 2.2,
@@ -594,7 +594,7 @@ test("public profile exploration uses reviewed attractions as visited map locati
       },
       {
         _id: "507f1f77bcf86cd799439022",
-        name: "Unvisited Gallery",
+        name: "Unreviewed Gallery",
         address: "Gallery Street",
         category: "Gallery",
         latitude: 2.3,
@@ -616,23 +616,24 @@ test("public profile exploration uses reviewed attractions as visited map locati
     "507f1f77bcf86cd799439011"
   );
   assert.deepEqual(exploration, {
-    visitedAttractions: [
+    source: "public_reviews",
+    reviewedAttractions: [
       {
         id: "507f1f77bcf86cd799439021",
-        name: "Visited Museum",
+        name: "Reviewed Museum",
         address: "Museum Street",
         category: "Museum",
         latitude: 2.2,
         longitude: 102.2,
       },
     ],
-    visitedCount: 1,
+    reviewedCount: 1,
     totalAttractions: 2,
-    progressPercentage: 50,
+    coveragePercentage: 50,
   });
 });
 
-test("public profile exploration returns a truthful zero progress state", async () => {
+test("public profile reviewed places returns truthful zero coverage", async () => {
   const getExploration = createPublicProfileExplorationService({
     getPublicProfileById: async () => ({ id: "existing-profile" }),
     getExplorationMapAttractions: async () => [
@@ -649,10 +650,11 @@ test("public profile exploration returns a truthful zero progress state", async 
   });
 
   assert.deepEqual(await getExploration("existing-profile"), {
-    visitedAttractions: [],
-    visitedCount: 0,
+    source: "public_reviews",
+    reviewedAttractions: [],
+    reviewedCount: 0,
     totalAttractions: 1,
-    progressPercentage: 0,
+    coveragePercentage: 0,
   });
 });
 
@@ -730,12 +732,12 @@ test("public exploration comparison groups common and unique reviewed attraction
 
   assert.deepEqual(observedUserIds, ["viewer-user-id", "target-user-id"]);
   assert.deepEqual(comparison.viewer, {
-    visitedCount: 2,
-    progressPercentage: 50,
+    reviewedCount: 2,
+    coveragePercentage: 50,
   });
   assert.deepEqual(comparison.target, {
-    visitedCount: 2,
-    progressPercentage: 50,
+    reviewedCount: 2,
+    coveragePercentage: 50,
   });
   assert.deepEqual(
     comparison.common.map((attraction) => attraction.id),
@@ -752,15 +754,15 @@ test("public exploration comparison groups common and unique reviewed attraction
   assert.equal(comparison.common[0].address, "Common Street");
 });
 
-test("public exploration comparison keeps one decimal place of progress precision", () => {
+test("public reviewed-place comparison keeps one decimal place of coverage precision", () => {
   const comparison = buildExplorationComparison({
     viewerAttractions: [{ id: "visited-attraction", name: "Museum" }],
     targetAttractions: [],
     totalAttractions: 41,
   });
 
-  assert.equal(comparison.viewer.progressPercentage, 2.4);
-  assert.equal(comparison.target.progressPercentage, 0);
+  assert.equal(comparison.viewer.coveragePercentage, 2.4);
+  assert.equal(comparison.target.coveragePercentage, 0);
 });
 
 test("public exploration comparison stops before dependencies for a missing target", async () => {

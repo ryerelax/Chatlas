@@ -14,7 +14,7 @@ export async function GET(request, { params }) {
         {
           success: false,
           code: "AUTHENTICATION_REQUIRED",
-          message: "Please log in with Google to view exploration maps.",
+          message: "Please log in with Google to view reviewed-place maps.",
         },
         { status: 401 }
       );
@@ -40,9 +40,9 @@ export async function GET(request, { params }) {
       );
     }
 
-    console.error("Failed to retrieve public exploration data:", error);
+    console.error("Failed to retrieve public reviewed-place data:", error);
     return NextResponse.json(
-      { success: false, message: "Exploration map is currently unavailable." },
+      { success: false, message: "Reviewed-place map is currently unavailable." },
       { status: 500 }
     );
   }
