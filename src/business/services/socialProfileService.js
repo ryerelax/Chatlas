@@ -10,6 +10,7 @@ import {
   findPublicReviewsByUserId,
   findReviewedAttractionIdsByUserId,
 } from "@/data/repositories/reviewRepository";
+import { findDistinctVerifiedAttractionIds } from "@/data/repositories/verifiedVisitRepository";
 import { getPublicExplorationSummaries } from "@/business/services/publicExplorationSummaryService";
 
 export class SocialProfileDependencyError extends Error {
@@ -167,7 +168,7 @@ export async function getPublicReviewsForProfile(userId) {
   return getReviewsForProfile(userId);
 }
 
-function serializeReviewedAttraction(attraction) {
+function serializeVerifiedAttraction(attraction) {
   return {
     id: attraction.id,
     name: attraction.name,
@@ -181,31 +182,31 @@ function serializeReviewedAttraction(attraction) {
 export function createPublicProfileExplorationService({
   getPublicProfileById: getProfileById,
   getExplorationMapAttractions: getMapAttractions,
-  findReviewedAttractionIdsByUserId: findReviewedAttractionIds,
+  findDistinctVerifiedAttractionIds: findVerifiedAttractionIds,
 }) {
   return async function getExplorationForProfile(userId) {
     const profile = await getProfileById(userId);
     if (!profile) return null;
 
-    const [mapAttractionRecords, reviewedAttractionIds] = await Promise.all([
+    const [mapAttractionRecords, verifiedAttractionIds] = await Promise.all([
       getMapAttractions(),
-      findReviewedAttractionIds(profile.id),
+      findVerifiedAttractionIds(profile.id),
     ]);
     const supportedAttractions = normaliseMapAttractions(mapAttractionRecords);
     const viewModel = createExplorationMapViewModel(
       supportedAttractions,
-      reviewedAttractionIds,
+      verifiedAttractionIds,
       VISITED_DATA_STATUS.SUCCESS
     );
 
     return {
-      source: "public_reviews",
-      reviewedAttractions: viewModel.visitedAttractions.map(
-        serializeReviewedAttraction
+      source: "verified_visits",
+      visitedAttractions: viewModel.visitedAttractions.map(
+        serializeVerifiedAttraction
       ),
-      reviewedCount: viewModel.progress.visitedCount,
+      visitedCount: viewModel.progress.visitedCount,
       totalAttractions: viewModel.progress.totalCount,
-      coveragePercentage: viewModel.progress.percentage,
+      progressPercentage: viewModel.progress.percentage,
     };
   };
 }
@@ -213,7 +214,7 @@ export function createPublicProfileExplorationService({
 const getExplorationForProfile = createPublicProfileExplorationService({
   getPublicProfileById,
   getExplorationMapAttractions,
-  findReviewedAttractionIdsByUserId,
+  findDistinctVerifiedAttractionIds,
 });
 
 export async function getPublicExplorationForProfile(userId) {

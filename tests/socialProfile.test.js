@@ -575,7 +575,7 @@ test("public profile API returns the completed activity summary", async () => {
   });
 });
 
-test("public profile exploration exposes reviewed places without calling them verified visits", async () => {
+test("public profile exploration exposes only verified visit attractions", async () => {
   const observed = {};
   const getExploration = createPublicProfileExplorationService({
     getPublicProfileById: async (userId) => {
@@ -585,7 +585,7 @@ test("public profile exploration exposes reviewed places without calling them ve
     getExplorationMapAttractions: async () => [
       {
         _id: "507f1f77bcf86cd799439021",
-        name: "Reviewed Museum",
+        name: "Verified Museum",
         address: "Museum Street",
         category: "Museum",
         latitude: 2.2,
@@ -594,7 +594,7 @@ test("public profile exploration exposes reviewed places without calling them ve
       },
       {
         _id: "507f1f77bcf86cd799439022",
-        name: "Unreviewed Gallery",
+        name: "Unverified Gallery",
         address: "Gallery Street",
         category: "Gallery",
         latitude: 2.3,
@@ -602,8 +602,8 @@ test("public profile exploration exposes reviewed places without calling them ve
         rating: 4,
       },
     ],
-    findReviewedAttractionIdsByUserId: async (userId) => {
-      observed.requestedReviewUserId = userId;
+    findDistinctVerifiedAttractionIds: async (userId) => {
+      observed.requestedVerifiedVisitUserId = userId;
       return ["507f1f77bcf86cd799439021"];
     },
   });
@@ -612,28 +612,28 @@ test("public profile exploration exposes reviewed places without calling them ve
 
   assert.equal(observed.requestedProfileId, "selected-profile-id");
   assert.equal(
-    observed.requestedReviewUserId,
+    observed.requestedVerifiedVisitUserId,
     "507f1f77bcf86cd799439011"
   );
   assert.deepEqual(exploration, {
-    source: "public_reviews",
-    reviewedAttractions: [
+    source: "verified_visits",
+    visitedAttractions: [
       {
         id: "507f1f77bcf86cd799439021",
-        name: "Reviewed Museum",
+        name: "Verified Museum",
         address: "Museum Street",
         category: "Museum",
         latitude: 2.2,
         longitude: 102.2,
       },
     ],
-    reviewedCount: 1,
+    visitedCount: 1,
     totalAttractions: 2,
-    coveragePercentage: 50,
+    progressPercentage: 50,
   });
 });
 
-test("public profile reviewed places returns truthful zero coverage", async () => {
+test("public profile exploration returns truthful zero verified progress", async () => {
   const getExploration = createPublicProfileExplorationService({
     getPublicProfileById: async () => ({ id: "existing-profile" }),
     getExplorationMapAttractions: async () => [
@@ -646,15 +646,15 @@ test("public profile reviewed places returns truthful zero coverage", async () =
         longitude: 102.2,
       },
     ],
-    findReviewedAttractionIdsByUserId: async () => [],
+    findDistinctVerifiedAttractionIds: async () => [],
   });
 
   assert.deepEqual(await getExploration("existing-profile"), {
-    source: "public_reviews",
-    reviewedAttractions: [],
-    reviewedCount: 0,
+    source: "verified_visits",
+    visitedAttractions: [],
+    visitedCount: 0,
     totalAttractions: 1,
-    coveragePercentage: 0,
+    progressPercentage: 0,
   });
 });
 
@@ -666,7 +666,7 @@ test("public profile exploration does not query map data for a missing profile",
       dependencyCalls += 1;
       return [];
     },
-    findReviewedAttractionIdsByUserId: async () => {
+    findDistinctVerifiedAttractionIds: async () => {
       dependencyCalls += 1;
       return [];
     },

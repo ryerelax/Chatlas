@@ -13,7 +13,7 @@ import StarRating from "@/presentation/components/StarRating";
 const TABS = [
   { id: "overview", label: "Overview" },
   { id: "reviews", label: "Reviews" },
-  { id: "exploration", label: "Reviewed places" },
+  { id: "exploration", label: "Explore progress" },
   { id: "compare", label: "Compare" },
 ];
 
@@ -201,7 +201,7 @@ export default function PublicSocialProfile() {
           {activeTab === "overview" && <OverviewSection profile={profile} />}
           {activeTab === "reviews" && <ReviewsSection state={sectionState} />}
           {activeTab === "exploration" && (
-            <ReviewedPlacesSection authStatus={status} state={sectionState} />
+            <ExplorationProgressSection authStatus={status} state={sectionState} />
           )}
           {activeTab === "compare" && (
             <ComparisonSection
@@ -320,47 +320,47 @@ function ReviewsSection({ state }) {
   );
 }
 
-function ReviewedPlacesSection({ authStatus, state }) {
+function ExplorationProgressSection({ authStatus, state }) {
   if (authStatus === "loading") return <SectionSkeleton label="Checking access" />;
   if (authStatus !== "authenticated") {
     return (
       <SocialProfileStatus
         icon="⌖"
-        title="Log in to view reviewed places"
-        message="Reviewed-place maps are available to registered Chatlas users."
+        title="Log in to view explore progress"
+        message="Verified exploration maps are available to registered Chatlas users."
         actionHref="/login"
         actionLabel="Log in with Google"
         tone="info"
       />
     );
   }
-  if (state.status === "loading") return <SectionSkeleton label="Loading reviewed places" />;
+  if (state.status === "loading") return <SectionSkeleton label="Loading explore progress" />;
   if (state.status === "error") {
     return (
       <SocialProfileStatus
         icon="⌖"
-        title={state.code === "EXPLORATION_UNAVAILABLE" ? "Reviewed places are not available yet" : "Reviewed places are currently unavailable"}
+        title={state.code === "EXPLORATION_UNAVAILABLE" ? "Explore progress is not available yet" : "Explore progress is currently unavailable"}
         message={state.message}
         tone={state.code === "EXPLORATION_UNAVAILABLE" ? "info" : "error"}
       />
     );
   }
 
-  const attractions = state.data?.reviewedAttractions || [];
+  const attractions = state.data?.visitedAttractions || [];
   if (attractions.length === 0) {
     return (
       <div>
         <div className="mb-5 flex justify-end">
           <SummaryCard
-            label="Reviewed-attraction coverage"
-            value={state.data?.coveragePercentage ?? 0}
+            label="Exploration progress"
+            value={state.data?.progressPercentage ?? 0}
             suffix="%"
           />
         </div>
         <SocialProfileStatus
           icon="⌖"
-          title="No reviewed attractions available"
-          message="This traveller has not reviewed any supported attractions yet."
+          title="No verified visits available"
+          message="This traveller has not verified a visit to any supported attraction yet."
         />
       </div>
     );
@@ -370,15 +370,18 @@ function ReviewedPlacesSection({ authStatus, state }) {
     <div>
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-attraction-ink">Reviewed attraction map</h2>
+          <h2 className="text-xl font-bold text-attraction-ink">Verified exploration map</h2>
           <p className="mt-1 text-sm text-attraction-muted">
-            {attractions.length} reviewed attraction{attractions.length === 1 ? "" : "s"}
+            {attractions.length} verified attraction{attractions.length === 1 ? "" : "s"}
           </p>
         </div>
-        <SummaryCard label="Reviewed-attraction coverage" value={state.data.coveragePercentage} suffix="%" />
+        <SummaryCard label="Exploration progress" value={state.data.progressPercentage} suffix="%" />
       </div>
       <SocialExplorationMap attractions={attractions} />
-      <ReviewedAttractionList title="Reviewed locations" attractions={attractions} />
+      <p className="mt-4 rounded-[10px] bg-[#EAF3FA] px-4 py-3 text-sm leading-relaxed text-attraction-body">
+        Only verified visits are shown. Precise verification coordinates and photo evidence remain private.
+      </p>
+      <ReviewedAttractionList title="Verified locations" attractions={attractions} />
     </div>
   );
 }
