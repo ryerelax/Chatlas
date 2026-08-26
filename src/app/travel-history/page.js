@@ -320,7 +320,7 @@ export default function TravelHistoryPage() {
             onClick={() => router.push("/profile")}
             className="mb-4 flex items-center gap-2 text-white/80 transition-colors hover:text-white"
           >
-            ← {t("back")}
+            ← {t("backToProfile")}
           </button>
           <h1 className="text-3xl font-bold md:text-4xl">
             {t("travelHistoryTitle")}

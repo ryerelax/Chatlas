@@ -727,7 +727,7 @@ export default function MyReviewsPage() {
             onClick={() => router.push("/profile")}
             className="mb-4 flex items-center gap-2 text-white/80 transition-colors hover:text-white"
           >
-            ← {t("back")}
+            ← {t("backToProfile")}
           </button>
           <h1 className="text-3xl font-bold md:text-4xl">{t("myReviews")}</h1>
           <p className="mt-2 text-white/80">
@@ -833,6 +833,15 @@ export default function MyReviewsPage() {
                             }
                           )}
                         </span>
+                        {review.lastEditedAt && (
+                          <span className="text-sm text-[#65748A]">
+                            | {t("editedAt", {
+                              date: new Date(
+                                review.lastEditedAt
+                              ).toLocaleDateString(),
+                            })}
+                          </span>
+                        )}
                       </div>
 
                       <p className="mb-4 text-lg leading-relaxed text-[#405066]">
@@ -913,11 +922,11 @@ export default function MyReviewsPage() {
                       </div>
                       {isEditable ? (
                         <span className="text-xs font-medium text-[#16845B]">
-                          {t("edit")}
+                          {t("readyToEdit")}
                         </span>
                       ) : (
                         <span className="text-xs font-medium text-[#C2413B]">
-                          {daysUntilEdit}
+                          {t("daysUntilEdit", { count: daysUntilEdit })}
                         </span>
                       )}
                     </div>

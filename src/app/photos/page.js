@@ -324,7 +324,7 @@ export default function MyPhotosPage() {
             onClick={() => router.push("/profile")}
             className="mb-4 flex items-center gap-2 text-white/80 transition-colors hover:text-white"
           >
-            ← {t("back")}
+            ← {t("backToProfile")}
           </button>
           <h1 className="text-3xl font-bold md:text-4xl">
             {t("myPhotosTitle")}
@@ -332,7 +332,7 @@ export default function MyPhotosPage() {
           <p className="mt-2 text-white/80">
             {photos.length === 0
               ? t("emptyPhotos")
-              : t("attractionsAvailable", { count: photos.length })}
+              : t("photosShowing", { count: photos.length })}
           </p>
         </div>
       </div>
@@ -385,7 +385,7 @@ export default function MyPhotosPage() {
                 </div>
                 <div>
                   <p className="font-semibold text-[#10213B]">
-                    {t("myPhotos")}
+                    {t("currentProfilePicture")}
                   </p>
                   <p className="text-sm text-[#65748A]">
                     {profilePic.attractionName} / {profilePic.uploadedAt}
@@ -437,7 +437,9 @@ export default function MyPhotosPage() {
                         disabled={isSettingProfile}
                         className="rounded-md bg-[#FFAB00] px-3 py-1.5 text-xs font-medium text-[#142033] transition-colors hover:bg-[#E89B00] disabled:opacity-50"
                       >
-                        {isSettingProfile ? t("saving") : t("save")}
+                        {isSettingProfile
+                          ? t("settingProfile")
+                          : t("setAsProfile")}
                       </button>
                     )}
                     <button
