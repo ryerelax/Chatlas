@@ -19,6 +19,12 @@ export const MAP_STATUS = Object.freeze({
   UNAVAILABLE: "unavailable",
 });
 
+export const MAP_VISIT_FILTER = Object.freeze({
+  ALL: "all",
+  VISITED: "visited",
+  UNVISITED: "unvisited",
+});
+
 const VISITED_DATA_STATUS_VALUES = new Set(
   Object.values(VISITED_DATA_STATUS)
 );
@@ -26,6 +32,35 @@ const ATTRACTION_DATA_STATUS_VALUES = new Set(
   Object.values(ATTRACTION_DATA_STATUS)
 );
 const MAP_STATUS_VALUES = new Set(Object.values(MAP_STATUS));
+const MAP_VISIT_FILTER_VALUES = new Set(Object.values(MAP_VISIT_FILTER));
+
+function normaliseMapVisitFilter(value) {
+  return MAP_VISIT_FILTER_VALUES.has(value) ? value : MAP_VISIT_FILTER.ALL;
+}
+
+export function getNextExplorationMapFilter(current, requested) {
+  const next = normaliseMapVisitFilter(requested);
+  return next === MAP_VISIT_FILTER.ALL || normaliseMapVisitFilter(current) === next
+    ? MAP_VISIT_FILTER.ALL
+    : next;
+}
+
+export function createVisibleAttractions(attractions, filter = MAP_VISIT_FILTER.ALL) {
+  if (!Array.isArray(attractions)) return [];
+  const resolvedFilter = normaliseMapVisitFilter(filter);
+  if (resolvedFilter === MAP_VISIT_FILTER.ALL) return attractions;
+  const isVisited = resolvedFilter === MAP_VISIT_FILTER.VISITED;
+  return attractions.filter((attraction) => attraction?.isVisited === isVisited);
+}
+
+export function getExplorationMapFilterCountLabel(count, filter = MAP_VISIT_FILTER.ALL) {
+  const amount = Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0;
+  const noun = amount === 1 ? "attraction" : "attractions";
+  const resolvedFilter = normaliseMapVisitFilter(filter);
+  if (resolvedFilter === MAP_VISIT_FILTER.VISITED) return `${amount} visited ${noun}`;
+  if (resolvedFilter === MAP_VISIT_FILTER.UNVISITED) return `${amount} not visited ${noun}`;
+  return `${amount} ${noun}`;
+}
 
 export function normaliseAttractionId(value) {
   if (value === null || value === undefined) {

@@ -1,15 +1,22 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createProfilesHandler } from "../src/app/api/profiles/handler.js";
+import { createPublicProfileHandler } from "../src/app/api/profiles/[id]/handler.js";
 import {
   buildExplorationComparison,
+  createPublicProfileOverviewService,
   createPublicExplorationComparisonService,
   createPublicProfileExplorationService,
   createPublicProfileReviewsService,
   SocialProfileDependencyError,
 } from "../src/business/services/socialProfileService.js";
+import {
+  createPublicExplorationSummaryService,
+  createSafePublicExplorationSummary,
+} from "../src/business/services/publicExplorationSummaryService.js";
 import { createSocialProfileUserService } from "../src/business/services/userService.js";
 import { createPublicReviewRepository } from "../src/data/repositories/reviewRepository.js";
+import { createSocialProfileExplorationRepository } from "../src/data/repositories/socialProfileExplorationRepository.js";
 import { createPublicUserRepository } from "../src/data/repositories/userRepository.js";
 
 test("public profile repository searches safe public fields and excludes the viewer", async () => {
@@ -387,7 +394,188 @@ test("public review repository derives distinct visited attraction ids for one u
   });
 });
 
-test("public profile exploration uses reviewed attractions as visited map locations", async () => {
+test("public review repository counts one user's published reviews", async () => {
+  const observed = {};
+  const repository = createPublicReviewRepository({
+    ReviewModel: {
+      countDocuments(query) {
+        observed.query = query;
+        return 4;
+      },
+    },
+  });
+
+  const count = await repository.countPublicReviewsByUserId(
+    "507f1f77bcf86cd799439011"
+  );
+
+  assert.equal(count, 4);
+  assert.deepEqual(observed.query, {
+    userId: "507f1f77bcf86cd799439011",
+  });
+});
+
+test("public verified-visit repository counts distinct supported attractions only", async () => {
+  const observed = {};
+  const repository = createSocialProfileExplorationRepository({
+    VerifiedVisitModel: {
+      aggregate(pipeline) {
+        observed.pipeline = pipeline;
+        return [
+          {
+            _id: { toString: () => "507f1f77bcf86cd799439011" },
+            visitedCount: 2,
+          },
+        ];
+      },
+    },
+    toObjectId: (value) => `object-id:${value}`,
+  });
+
+  const result =
+    await repository.findDistinctVerifiedAttractionCountsByUserIds(
+      ["507f1f77bcf86cd799439011"],
+      ["507f1f77bcf86cd799439021", "507f1f77bcf86cd799439022"]
+    );
+
+  assert.deepEqual(result, [
+    { userId: "507f1f77bcf86cd799439011", visitedCount: 2 },
+  ]);
+  assert.deepEqual(observed.pipeline, [
+    {
+      $match: {
+        userId: { $in: ["object-id:507f1f77bcf86cd799439011"] },
+        attractionId: {
+          $in: [
+            "object-id:507f1f77bcf86cd799439021",
+            "object-id:507f1f77bcf86cd799439022",
+          ],
+        },
+        "photos.0": { $exists: true },
+      },
+    },
+    {
+      $group: {
+        _id: { userId: "$userId", attractionId: "$attractionId" },
+      },
+    },
+    { $group: { _id: "$_id.userId", visitedCount: { $sum: 1 } } },
+  ]);
+});
+
+test("public exploration summary exposes safe aggregate progress", async () => {
+  const observed = {};
+  const service = createPublicExplorationSummaryService({
+    getExplorationMapAttractions: async () =>
+      Array.from({ length: 10 }, (_, index) => ({
+        _id: `attraction-${index}`,
+        name: `Attraction ${index}`,
+        latitude: 2.2 + index / 100,
+        longitude: 102.2 + index / 100,
+      })),
+    findDistinctVerifiedAttractionCountsByUserIds: async (
+      userIds,
+      supportedAttractionIds
+    ) => {
+      observed.userIds = userIds;
+      observed.supportedAttractionIds = supportedAttractionIds;
+      return [{ userId: "user-one", visitedCount: 1 }];
+    },
+  });
+
+  const summaries = await service(["user-one", "user-two"]);
+
+  assert.deepEqual(observed.userIds, ["user-one", "user-two"]);
+  assert.deepEqual(
+    observed.supportedAttractionIds,
+    Array.from({ length: 10 }, (_, index) => `attraction-${index}`)
+  );
+  assert.deepEqual(summaries.get("user-two"), {
+    status: "success",
+    visitedCount: 0,
+    totalCount: 10,
+    progressPercentage: 0,
+    rank: {
+      id: "new",
+      nextRankId: "bronze",
+      normalizedPercentage: 0,
+      percentageToNext: 10,
+      isComplete: false,
+    },
+  });
+  assert.equal(summaries.get("user-one").visitedCount, 1);
+  assert.equal(summaries.get("user-one").progressPercentage, 10);
+});
+
+test("public profile overview combines reviews and verified-visit progress", async () => {
+  const explorationSummary = createSafePublicExplorationSummary({
+    visitedCount: 13,
+    totalCount: 232,
+  });
+  const service = createPublicProfileOverviewService({
+    getPublicProfileById: async () => ({
+      id: "profile-one",
+      displayName: "Traveller",
+      activitySummary: { status: "unavailable" },
+    }),
+    countPublicReviewsByUserId: async (userId) => {
+      assert.equal(userId, "profile-one");
+      return 4;
+    },
+    getPublicExplorationSummaries: async (userIds) => {
+      assert.deepEqual(userIds, ["profile-one"]);
+      return new Map([["profile-one", explorationSummary]]);
+    },
+  });
+
+  const profile = await service("profile-one");
+
+  assert.deepEqual(profile.activitySummary, {
+    reviewsWritten: 4,
+    visitedAttractions: 13,
+    explorationProgress: 5.6,
+    status: "success",
+  });
+});
+
+test("public profile API returns the completed activity summary", async () => {
+  let connected = false;
+  const handler = createPublicProfileHandler({
+    connectToDatabase: async () => {
+      connected = true;
+    },
+    getPublicProfileOverview: async (userId) => ({
+      id: userId,
+      activitySummary: {
+        reviewsWritten: 4,
+        visitedAttractions: 13,
+        explorationProgress: 5.6,
+        status: "success",
+      },
+    }),
+  });
+
+  const response = await handler(new Request("http://localhost"), {
+    params: Promise.resolve({ id: "profile-one" }),
+  });
+
+  assert.equal(connected, true);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    success: true,
+    data: {
+      id: "profile-one",
+      activitySummary: {
+        reviewsWritten: 4,
+        visitedAttractions: 13,
+        explorationProgress: 5.6,
+        status: "success",
+      },
+    },
+  });
+});
+
+test("public profile exploration exposes only verified visit attractions", async () => {
   const observed = {};
   const getExploration = createPublicProfileExplorationService({
     getPublicProfileById: async (userId) => {
@@ -397,7 +585,7 @@ test("public profile exploration uses reviewed attractions as visited map locati
     getExplorationMapAttractions: async () => [
       {
         _id: "507f1f77bcf86cd799439021",
-        name: "Visited Museum",
+        name: "Verified Museum",
         address: "Museum Street",
         category: "Museum",
         latitude: 2.2,
@@ -406,7 +594,7 @@ test("public profile exploration uses reviewed attractions as visited map locati
       },
       {
         _id: "507f1f77bcf86cd799439022",
-        name: "Unvisited Gallery",
+        name: "Unverified Gallery",
         address: "Gallery Street",
         category: "Gallery",
         latitude: 2.3,
@@ -414,8 +602,8 @@ test("public profile exploration uses reviewed attractions as visited map locati
         rating: 4,
       },
     ],
-    findReviewedAttractionIdsByUserId: async (userId) => {
-      observed.requestedReviewUserId = userId;
+    findDistinctVerifiedAttractionIds: async (userId) => {
+      observed.requestedVerifiedVisitUserId = userId;
       return ["507f1f77bcf86cd799439021"];
     },
   });
@@ -424,14 +612,15 @@ test("public profile exploration uses reviewed attractions as visited map locati
 
   assert.equal(observed.requestedProfileId, "selected-profile-id");
   assert.equal(
-    observed.requestedReviewUserId,
+    observed.requestedVerifiedVisitUserId,
     "507f1f77bcf86cd799439011"
   );
   assert.deepEqual(exploration, {
+    source: "verified_visits",
     visitedAttractions: [
       {
         id: "507f1f77bcf86cd799439021",
-        name: "Visited Museum",
+        name: "Verified Museum",
         address: "Museum Street",
         category: "Museum",
         latitude: 2.2,
@@ -444,7 +633,7 @@ test("public profile exploration uses reviewed attractions as visited map locati
   });
 });
 
-test("public profile exploration returns a truthful zero progress state", async () => {
+test("public profile exploration returns truthful zero verified progress", async () => {
   const getExploration = createPublicProfileExplorationService({
     getPublicProfileById: async () => ({ id: "existing-profile" }),
     getExplorationMapAttractions: async () => [
@@ -457,10 +646,11 @@ test("public profile exploration returns a truthful zero progress state", async 
         longitude: 102.2,
       },
     ],
-    findReviewedAttractionIdsByUserId: async () => [],
+    findDistinctVerifiedAttractionIds: async () => [],
   });
 
   assert.deepEqual(await getExploration("existing-profile"), {
+    source: "verified_visits",
     visitedAttractions: [],
     visitedCount: 0,
     totalAttractions: 1,
@@ -476,7 +666,7 @@ test("public profile exploration does not query map data for a missing profile",
       dependencyCalls += 1;
       return [];
     },
-    findReviewedAttractionIdsByUserId: async () => {
+    findDistinctVerifiedAttractionIds: async () => {
       dependencyCalls += 1;
       return [];
     },
@@ -486,7 +676,7 @@ test("public profile exploration does not query map data for a missing profile",
   assert.equal(dependencyCalls, 0);
 });
 
-test("public exploration comparison groups common and unique reviewed attractions", async () => {
+test("public exploration comparison groups common and unique verified attractions", async () => {
   const observedUserIds = [];
   const compareExploration = createPublicExplorationComparisonService({
     getPublicProfileById: async (userId) => {
@@ -527,7 +717,7 @@ test("public exploration comparison groups common and unique reviewed attraction
         longitude: 102.5,
       },
     ],
-    findReviewedAttractionIdsByUserId: async (userId) => {
+    findDistinctVerifiedAttractionIds: async (userId) => {
       observedUserIds.push(userId);
       return userId === "viewer-user-id"
         ? ["common-attraction", "viewer-attraction"]
@@ -542,12 +732,12 @@ test("public exploration comparison groups common and unique reviewed attraction
 
   assert.deepEqual(observedUserIds, ["viewer-user-id", "target-user-id"]);
   assert.deepEqual(comparison.viewer, {
-    visitedCount: 2,
-    progressPercentage: 50,
+    exploredCount: 2,
+    coveragePercentage: 50,
   });
   assert.deepEqual(comparison.target, {
-    visitedCount: 2,
-    progressPercentage: 50,
+    exploredCount: 2,
+    coveragePercentage: 50,
   });
   assert.deepEqual(
     comparison.common.map((attraction) => attraction.id),
@@ -564,15 +754,15 @@ test("public exploration comparison groups common and unique reviewed attraction
   assert.equal(comparison.common[0].address, "Common Street");
 });
 
-test("public exploration comparison keeps one decimal place of progress precision", () => {
+test("public verified exploration comparison keeps one decimal place of coverage precision", () => {
   const comparison = buildExplorationComparison({
     viewerAttractions: [{ id: "visited-attraction", name: "Museum" }],
     targetAttractions: [],
     totalAttractions: 41,
   });
 
-  assert.equal(comparison.viewer.progressPercentage, 2.4);
-  assert.equal(comparison.target.progressPercentage, 0);
+  assert.equal(comparison.viewer.coveragePercentage, 2.4);
+  assert.equal(comparison.target.coveragePercentage, 0);
 });
 
 test("public exploration comparison stops before dependencies for a missing target", async () => {
@@ -583,7 +773,7 @@ test("public exploration comparison stops before dependencies for a missing targ
       dependencyCalls += 1;
       return [];
     },
-    findReviewedAttractionIdsByUserId: async () => {
+    findDistinctVerifiedAttractionIds: async () => {
       dependencyCalls += 1;
       return [];
     },
@@ -601,7 +791,7 @@ test("public exploration comparison rejects comparison with the signed-in user",
       dependencyCalls += 1;
       return [];
     },
-    findReviewedAttractionIdsByUserId: async () => {
+    findDistinctVerifiedAttractionIds: async () => {
       dependencyCalls += 1;
       return [];
     },

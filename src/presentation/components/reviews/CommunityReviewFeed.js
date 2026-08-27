@@ -2,13 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import ReviewCard from "./ReviewCard";
+import { useLanguage } from "@/presentation/contexts/LanguageContext";
 
 const COMMUNITY_PAGE_SIZE = 5;
-const COMMUNITY_SORT_OPTIONS = [
-  { value: "newest", label: "Newest" },
-  { value: "most-liked", label: "Most Liked" },
-  { value: "highest-rating", label: "Highest Rating" },
-];
 
 const INITIAL_PAGINATION = {
   page: 1,
@@ -20,6 +16,7 @@ const INITIAL_PAGINATION = {
 };
 
 export default function CommunityReviewFeed() {
+  const { t } = useLanguage();
   const [reviews, setReviews] = useState([]);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -30,6 +27,12 @@ export default function CommunityReviewFeed() {
   const [error, setError] = useState("");
   const [requestVersion, setRequestVersion] = useState(0);
   const isBackgroundOrderRefreshRef = useRef(false);
+
+  const sortOptions = [
+    { value: "newest", label: t("sortNewest") },
+    { value: "most-liked", label: t("sortMostReviewed") },
+    { value: "highest-rating", label: t("sortRating") },
+  ];
 
   useEffect(() => {
     const controller = new AbortController();
@@ -56,7 +59,7 @@ export default function CommunityReviewFeed() {
         const result = await response.json().catch(() => ({}));
 
         if (!response.ok) {
-          throw new Error(result.message || "Unable to load Community reviews.");
+          throw new Error(result.message || t("errorGeneric"));
         }
 
         const nextPagination = result.pagination;
@@ -89,9 +92,7 @@ export default function CommunityReviewFeed() {
         });
       } catch (loadError) {
         if (loadError.name !== "AbortError") {
-          setError(
-            loadError.message || "Unable to load Community reviews."
-          );
+          setError(loadError.message || t("errorGeneric"));
         }
       } finally {
         if (!controller.signal.aborted) {
@@ -104,7 +105,7 @@ export default function CommunityReviewFeed() {
     loadCommunityReviews();
 
     return () => controller.abort();
-  }, [page, requestVersion, search, sort]);
+  }, [page, requestVersion, search, sort, t]);
 
   const handleLikeUpdated = useCallback(() => {
     isBackgroundOrderRefreshRef.current = true;
@@ -141,7 +142,7 @@ export default function CommunityReviewFeed() {
               htmlFor="community-review-search"
               className="mb-1.5 block text-sm font-semibold text-attraction-ink"
             >
-              Search reviews
+              {t("search")}
             </label>
             <div className="flex flex-col gap-2 sm:flex-row">
               <input
@@ -150,22 +151,22 @@ export default function CommunityReviewFeed() {
                 value={searchInput}
                 onChange={(event) => setSearchInput(event.target.value)}
                 maxLength={80}
-                placeholder="Search review text or attraction"
+                placeholder={t("searchPlaceholder")}
                 className="min-h-[46px] min-w-0 flex-1 rounded-[10px] border border-attraction-border-strong bg-white px-4 text-sm text-attraction-ink placeholder:text-attraction-muted focus:border-attraction-primary focus:outline-none focus:ring-2 focus:ring-attraction-primary/30"
               />
               <button
                 type="submit"
-                className="inline-flex min-h-[46px] items-center justify-center rounded-[10px] bg-[#FFB000] px-5 text-sm font-semibold text-[#10213B] transition-colors duration-200 hover:bg-[#F3A600] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-attraction-primary"
+                className="inline-flex min-h-[46px] items-center justify-center rounded-[10px] bg-[#FFB000] px-5 text-sm font-semibold text-[#10213B] transition-colors duration-200 hover:bg-[#F3A600]"
               >
-                Search
+                {t("search")}
               </button>
               {search && (
                 <button
                   type="button"
                   onClick={handleClearSearch}
-                  className="inline-flex min-h-[46px] items-center justify-center rounded-[10px] border border-attraction-border-strong bg-white px-4 text-sm font-semibold text-attraction-body transition-colors duration-200 hover:bg-attraction-surface-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-attraction-primary"
+                  className="inline-flex min-h-[46px] items-center justify-center rounded-[10px] border border-attraction-border-strong bg-white px-4 text-sm font-semibold text-attraction-body transition-colors duration-200 hover:bg-attraction-surface-soft"
                 >
-                  Clear
+                  {t("clearSearchAndFilters")}
                 </button>
               )}
             </div>
@@ -176,15 +177,15 @@ export default function CommunityReviewFeed() {
               htmlFor="community-review-sort"
               className="mb-1.5 block text-sm font-semibold text-attraction-ink"
             >
-              Sort reviews
+              {t("sortBy")}
             </label>
             <select
               id="community-review-sort"
               value={sort}
               onChange={handleSortChange}
-              className="min-h-[46px] w-full rounded-[10px] border border-attraction-border-strong bg-white px-3 text-sm font-medium text-attraction-body transition-colors duration-200 focus:border-attraction-primary focus:outline-none focus:ring-2 focus:ring-attraction-primary/30 lg:min-w-52"
+              className="min-h-[46px] w-full rounded-[10px] border border-attraction-border-strong bg-white px-3 text-sm font-medium text-attraction-body focus:border-attraction-primary focus:outline-none focus:ring-2 focus:ring-attraction-primary/30 lg:min-w-52"
             >
-              {COMMUNITY_SORT_OPTIONS.map((option) => (
+              {sortOptions.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
@@ -196,7 +197,7 @@ export default function CommunityReviewFeed() {
 
       <div className="mt-5">
         {isLoading ? (
-          <CommunityFeedSkeleton />
+          <CommunityFeedSkeleton t={t} />
         ) : error ? (
           <div
             role="alert"
@@ -206,22 +207,21 @@ export default function CommunityReviewFeed() {
             <button
               type="button"
               onClick={() => setRequestVersion((version) => version + 1)}
-              className="mt-3 inline-flex min-h-11 items-center justify-center rounded-[10px] border border-attraction-error px-4 font-semibold transition-colors duration-200 hover:bg-white/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-attraction-primary"
+              className="mt-3 inline-flex min-h-11 items-center justify-center rounded-[10px] border border-attraction-error px-4 font-semibold transition-colors duration-200 hover:bg-white/60"
             >
-              Try again
+              {t("reset")}
             </button>
           </div>
         ) : reviews.length === 0 ? (
-          <CommunityEmptyState hasSearch={Boolean(search)} />
+          <CommunityEmptyState hasSearch={Boolean(search)} t={t} />
         ) : (
           <>
             <p
               className="mb-4 text-sm text-attraction-muted"
               aria-live="polite"
             >
-              {pagination.totalReviews}{" "}
-              {pagination.totalReviews === 1 ? "review" : "reviews"}
-              {search ? ` matching “${search}”` : " from the Community"}
+              {pagination.totalReviews} {t("reviews")}
+              {search ? ` — “${search}”` : ""}
             </p>
 
             <div className="space-y-4">
@@ -239,31 +239,34 @@ export default function CommunityReviewFeed() {
             {pagination.totalPages > 1 && (
               <nav
                 className="mt-6 flex items-center justify-between gap-3"
-                aria-label="Community review pages"
+                aria-label={t("communityTitle")}
               >
                 <button
                   type="button"
                   onClick={() => setPage((currentPage) => currentPage - 1)}
                   disabled={!pagination.hasPreviousPage}
-                  className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-[10px] border border-attraction-border-strong bg-white px-4 text-sm font-semibold text-attraction-body transition-colors duration-200 hover:bg-attraction-surface-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-attraction-primary disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-[10px] border border-attraction-border-strong bg-white px-4 text-sm font-semibold text-attraction-body transition-colors duration-200 hover:bg-attraction-surface-soft disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Previous
+                  {t("previous")}
                 </button>
 
                 <p
                   className="text-center text-sm font-medium text-attraction-muted"
                   aria-live="polite"
                 >
-                  Page {pagination.page} of {pagination.totalPages}
+                  {t("pageOf", {
+                    page: pagination.page,
+                    total: pagination.totalPages,
+                  })}
                 </p>
 
                 <button
                   type="button"
                   onClick={() => setPage((currentPage) => currentPage + 1)}
                   disabled={!pagination.hasNextPage}
-                  className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-[10px] border border-attraction-border-strong bg-white px-4 text-sm font-semibold text-attraction-body transition-colors duration-200 hover:bg-attraction-surface-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-attraction-primary disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-[10px] border border-attraction-border-strong bg-white px-4 text-sm font-semibold text-attraction-body transition-colors duration-200 hover:bg-attraction-surface-soft disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Next
+                  {t("next")}
                 </button>
               </nav>
             )}
@@ -274,43 +277,22 @@ export default function CommunityReviewFeed() {
   );
 }
 
-function CommunityEmptyState({ hasSearch }) {
+function CommunityEmptyState({ hasSearch, t }) {
   return (
     <div className="rounded-[18px] bg-attraction-surface-soft px-6 py-11 text-center text-attraction-body">
-      <svg
-        className="mx-auto h-10 w-10 text-attraction-primary"
-        viewBox="0 0 40 40"
-        fill="none"
-        aria-hidden="true"
-      >
-        <path
-          d="M8 8h24v18H18l-7 6v-6H8V8Z"
-          stroke="currentColor"
-          strokeWidth="2.5"
-          strokeLinejoin="round"
-        />
-        <path
-          d="M14 15h12M14 20h8"
-          stroke="currentColor"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-        />
-      </svg>
       <h2 className="mt-4 text-base font-semibold text-attraction-ink">
-        {hasSearch ? "No matching reviews" : "No reviews yet"}
+        {hasSearch ? t("noAttractionsFound") : t("noCommunityReviews")}
       </h2>
       <p className="mt-2 text-sm leading-relaxed">
-        {hasSearch
-          ? "Try another review or attraction keyword."
-          : "Reviews from travellers will appear here."}
+        {hasSearch ? t("tryChangingFilters") : t("noCommunityReviews")}
       </p>
     </div>
   );
 }
 
-function CommunityFeedSkeleton() {
+function CommunityFeedSkeleton({ t }) {
   return (
-    <div className="space-y-4" role="status" aria-label="Loading Community reviews">
+    <div className="space-y-4" role="status" aria-label={t("loading")}>
       {[1, 2].map((item) => (
         <div
           key={item}
@@ -319,20 +301,15 @@ function CommunityFeedSkeleton() {
           <div className="flex items-start gap-4">
             <div className="h-12 w-12 shrink-0 rounded-full bg-[#E7ECEF] sm:h-14 sm:w-14" />
             <div className="flex-1">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="h-4 w-32 rounded bg-[#E7ECEF]" />
-                  <div className="mt-2.5 h-3 w-28 rounded bg-[#F4F6F7]" />
-                </div>
-                <div className="h-3 w-20 rounded bg-[#F4F6F7]" />
-              </div>
+              <div className="h-4 w-32 rounded bg-[#E7ECEF]" />
+              <div className="mt-2.5 h-3 w-28 rounded bg-[#F4F6F7]" />
             </div>
           </div>
           <div className="mt-5 h-4 rounded bg-[#E7ECEF] sm:ml-[72px]" />
           <div className="mt-2.5 h-4 w-3/4 rounded bg-[#F4F6F7] sm:ml-[72px]" />
         </div>
       ))}
-      <span className="sr-only">Loading Community reviews...</span>
+      <span className="sr-only">{t("loading")}</span>
     </div>
   );
 }

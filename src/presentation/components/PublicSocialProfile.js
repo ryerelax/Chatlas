@@ -13,7 +13,7 @@ import StarRating from "@/presentation/components/StarRating";
 const TABS = [
   { id: "overview", label: "Overview" },
   { id: "reviews", label: "Reviews" },
-  { id: "exploration", label: "Exploration map" },
+  { id: "exploration", label: "Explore progress" },
   { id: "compare", label: "Compare" },
 ];
 
@@ -201,7 +201,7 @@ export default function PublicSocialProfile() {
           {activeTab === "overview" && <OverviewSection profile={profile} />}
           {activeTab === "reviews" && <ReviewsSection state={sectionState} />}
           {activeTab === "exploration" && (
-            <ExplorationSection authStatus={status} state={sectionState} />
+            <ExplorationProgressSection authStatus={status} state={sectionState} />
           )}
           {activeTab === "compare" && (
             <ComparisonSection
@@ -234,7 +234,7 @@ function OverviewSection({ profile }) {
         <SummaryCard label="Exploration progress" value={profile.activitySummary.explorationProgress} suffix="%" />
       </div>
       <p className="mt-5 rounded-[10px] bg-[#EAF3FA] px-4 py-3 text-sm leading-relaxed text-attraction-body">
-        Open the Reviews and Exploration map tabs to view this traveller&apos;s published activity. A combined overview summary is still being prepared.
+        Visits and progress are based on verified visits.
       </p>
     </div>
   );
@@ -320,26 +320,26 @@ function ReviewsSection({ state }) {
   );
 }
 
-function ExplorationSection({ authStatus, state }) {
+function ExplorationProgressSection({ authStatus, state }) {
   if (authStatus === "loading") return <SectionSkeleton label="Checking access" />;
   if (authStatus !== "authenticated") {
     return (
       <SocialProfileStatus
         icon="⌖"
-        title="Log in to view exploration maps"
-        message="Public exploration maps are available to registered Chatlas users, as required by the Social Profile specification."
+        title="Log in to view explore progress"
+        message="Verified exploration maps are available to registered Chatlas users."
         actionHref="/login"
         actionLabel="Log in with Google"
         tone="info"
       />
     );
   }
-  if (state.status === "loading") return <SectionSkeleton label="Loading exploration map" />;
+  if (state.status === "loading") return <SectionSkeleton label="Loading explore progress" />;
   if (state.status === "error") {
     return (
       <SocialProfileStatus
         icon="⌖"
-        title={state.code === "EXPLORATION_UNAVAILABLE" ? "Exploration map is not available yet" : "Exploration map is currently unavailable"}
+        title={state.code === "EXPLORATION_UNAVAILABLE" ? "Explore progress is not available yet" : "Explore progress is currently unavailable"}
         message={state.message}
         tone={state.code === "EXPLORATION_UNAVAILABLE" ? "info" : "error"}
       />
@@ -359,8 +359,8 @@ function ExplorationSection({ authStatus, state }) {
         </div>
         <SocialProfileStatus
           icon="⌖"
-          title="No visited attractions available"
-          message="This traveller has not reviewed any supported attractions yet."
+          title="No verified visits available"
+          message="This traveller has not verified a visit to any supported attraction yet."
         />
       </div>
     );
@@ -370,15 +370,18 @@ function ExplorationSection({ authStatus, state }) {
     <div>
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-attraction-ink">Exploration map</h2>
+          <h2 className="text-xl font-bold text-attraction-ink">Verified exploration map</h2>
           <p className="mt-1 text-sm text-attraction-muted">
-            {attractions.length} visited attraction{attractions.length === 1 ? "" : "s"}
+            {attractions.length} verified attraction{attractions.length === 1 ? "" : "s"}
           </p>
         </div>
         <SummaryCard label="Exploration progress" value={state.data.progressPercentage} suffix="%" />
       </div>
       <SocialExplorationMap attractions={attractions} />
-      <VisitedAttractionList title="Visited locations" attractions={attractions} />
+      <p className="mt-4 rounded-[10px] bg-[#EAF3FA] px-4 py-3 text-sm leading-relaxed text-attraction-body">
+        Only verified visits are shown. Precise verification coordinates and photo evidence remain private.
+      </p>
+      <ExploredAttractionList title="Verified locations" attractions={attractions} />
     </div>
   );
 }
@@ -389,20 +392,20 @@ function ComparisonSection({ authStatus, profile, state }) {
     return (
       <SocialProfileStatus
         icon="⇄"
-        title="Log in to compare exploration"
-        message={`Log in with Google to compare your exploration progress and visited attractions with ${profile.displayName}.`}
+        title="Log in to compare explored places"
+        message={`Log in with Google to compare your verified exploration with ${profile.displayName}.`}
         actionHref="/login"
         actionLabel="Log in with Google"
         tone="info"
       />
     );
   }
-  if (state.status === "loading") return <SectionSkeleton label="Comparing exploration" />;
+  if (state.status === "loading") return <SectionSkeleton label="Comparing explored places" />;
   if (state.status === "error") {
     return (
       <SocialProfileStatus
         icon="⇄"
-        title={state.code === "COMPARISON_UNAVAILABLE" ? "Comparison is not available yet" : "Unable to compare exploration"}
+        title={state.code === "COMPARISON_UNAVAILABLE" ? "Comparison is not available yet" : "Unable to compare explored places"}
         message={state.message}
         tone={state.code === "COMPARISON_UNAVAILABLE" ? "info" : "error"}
       />
@@ -422,52 +425,52 @@ function ComparisonSection({ authStatus, profile, state }) {
 
   return (
     <div>
-      <h2 className="text-xl font-bold text-attraction-ink">Exploration progress comparison</h2>
+      <h2 className="text-xl font-bold text-attraction-ink">Attraction coverage comparison</h2>
       <div className="mt-5 grid gap-4 md:grid-cols-2">
-        <ProgressComparisonCard user={comparison.viewer} label="You" />
-        <ProgressComparisonCard user={comparison.target} label={profile.displayName} />
+        <CoverageComparisonCard user={comparison.viewer} label="You" />
+        <CoverageComparisonCard user={comparison.target} label={profile.displayName} />
       </div>
       <section className="mt-8">
         <h3 className="text-base font-bold text-attraction-ink">
-          Visited-location maps
+          Explored maps
         </h3>
         <p className="mt-1 text-sm text-attraction-muted">
-          Compare where each traveller has explored across Melaka.
+          Compare the attractions each traveller has reached through a verified visit. Verification evidence remains private.
         </p>
         <div className="mt-4 grid gap-5 lg:grid-cols-2">
           <ComparisonMap
-            label="Your visited locations"
+            label="Your explored places"
             attractions={viewerAttractions}
           />
           <ComparisonMap
-            label={`${profile.displayName}'s visited locations`}
+            label={`${profile.displayName}'s explored places`}
             attractions={targetAttractions}
           />
         </div>
       </section>
       <div className="mt-8 space-y-7">
-        <VisitedAttractionList title="Visited by both travellers" attractions={comparison.common || []} />
-        <VisitedAttractionList title="Only visited by you" attractions={comparison.viewerOnly || []} />
-        <VisitedAttractionList title={`Only visited by ${profile.displayName}`} attractions={comparison.targetOnly || []} />
+        <ExploredAttractionList title="Explored by both travellers" attractions={comparison.common || []} />
+        <ExploredAttractionList title="Only explored by you" attractions={comparison.viewerOnly || []} />
+        <ExploredAttractionList title={`Only explored by ${profile.displayName}`} attractions={comparison.targetOnly || []} />
       </div>
     </div>
   );
 }
 
-function ProgressComparisonCard({ user, label }) {
-  const progress = Math.min(100, Math.max(0, Number(user?.progressPercentage) || 0));
-  const progressLabel = progress.toFixed(1);
+function CoverageComparisonCard({ user, label }) {
+  const coverage = Math.min(100, Math.max(0, Number(user?.coveragePercentage) || 0));
+  const coverageLabel = coverage.toFixed(1);
   return (
     <article className="rounded-[14px] bg-attraction-primary-soft p-5">
       <div className="flex items-center justify-between gap-3">
         <h3 className="font-bold text-attraction-ink">{label}</h3>
-        <span className="text-sm font-semibold text-attraction-primary-dark">{progressLabel}%</span>
+        <span className="text-sm font-semibold text-attraction-primary-dark">{coverageLabel}%</span>
       </div>
-      <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-white" aria-label={`${label} exploration progress: ${progressLabel}%`}>
-        <div className="h-full rounded-full bg-attraction-primary" style={{ width: `${progress}%` }} />
+      <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-white" aria-label={`${label} attraction coverage: ${coverageLabel}%`}>
+        <div className="h-full rounded-full bg-attraction-primary" style={{ width: `${coverage}%` }} />
       </div>
       <p className="mt-3 text-sm text-attraction-body">
-        {user?.visitedCount || 0} attraction{user?.visitedCount === 1 ? "" : "s"} visited
+        {user?.exploredCount || 0} attraction{user?.exploredCount === 1 ? "" : "s"} explored
       </p>
     </article>
   );
@@ -479,7 +482,7 @@ function ComparisonMap({ label, attractions }) {
       <div className="mb-3 flex items-center justify-between gap-3">
         <h4 className="font-bold text-attraction-ink">{label}</h4>
         <span className="text-xs font-semibold text-attraction-muted">
-          {attractions.length} visited
+          {attractions.length} explored
         </span>
       </div>
       {attractions.length > 0 ? (
@@ -487,7 +490,7 @@ function ComparisonMap({ label, attractions }) {
       ) : (
         <div className="flex min-h-80 items-center justify-center rounded-[18px] border border-attraction-border bg-white px-6 text-center">
           <p className="text-sm text-attraction-muted">
-            No reviewed attractions to display on this map.
+            No verified attractions to display on this map.
           </p>
         </div>
       )}
@@ -495,7 +498,7 @@ function ComparisonMap({ label, attractions }) {
   );
 }
 
-function VisitedAttractionList({ title, attractions }) {
+function ExploredAttractionList({ title, attractions }) {
   return (
     <section className="mt-6">
       <h3 className="text-base font-bold text-attraction-ink">{title}</h3>

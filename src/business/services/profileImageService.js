@@ -28,6 +28,15 @@ export async function uploadProfileImage(file, userId) {
   }
 
   const bytes = await file.arrayBuffer();
-  const imageData = `data:${file.type};base64,${Buffer.from(bytes).toString("base64")}`;
-  return uploadProfileImageData(imageData, userId);
+  const imageData = `data:${file.type};base64,${Buffer.from(bytes).toString(
+    "base64"
+  )}`;
+
+  const result = await uploadProfileImageData(imageData, userId);
+
+  // Always return a consistent shape for API routes
+  return {
+    url: result.url,
+    publicId: result.publicId,
+  };
 }

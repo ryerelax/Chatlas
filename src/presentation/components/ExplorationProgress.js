@@ -1,6 +1,27 @@
+"use client";
+
 import Link from "next/link";
+import {
+  createExplorationRank,
+  EXPLORER_RANK,
+} from "@/business/services/explorationRankService";
 import { VISITED_DATA_STATUS } from "@/business/services/explorationMapService";
+import { useLanguage } from "@/presentation/contexts/LanguageContext";
 import { getVisitedAuthenticationPresentation } from "@/presentation/lib/explorationMapPresentation";
+import { createExplorationRankPresentation } from "@/presentation/lib/explorationRankPresentation";
+
+const RANK_BADGE_CLASSES = Object.freeze({
+  [EXPLORER_RANK.NEW]:
+    "border-[#BBC8D0] bg-[#F1F4F6] text-[#405066]",
+  [EXPLORER_RANK.BRONZE]:
+    "border-[#D9B38C] bg-[#FFF3E6] text-[#714000]",
+  [EXPLORER_RANK.SILVER]:
+    "border-[#BCC8D3] bg-[#F4F7FA] text-[#354A5F]",
+  [EXPLORER_RANK.GOLD]:
+    "border-[#E3BF5B] bg-[#FFF8D9] text-[#6B4A00]",
+  [EXPLORER_RANK.MASTER]:
+    "border-[#87CFB4] bg-[#E6F7F0] text-[#004638]",
+});
 
 function ProgressState({ status }) {
   const isError = status === VISITED_DATA_STATUS.ERROR;
@@ -53,6 +74,7 @@ function ProgressState({ status }) {
 }
 
 export default function ExplorationProgress({ progress }) {
+  const { lang } = useLanguage();
   const status = progress?.status;
   const isSuccess = status === VISITED_DATA_STATUS.SUCCESS;
   const totalCount = Number.isInteger(progress?.totalCount)
@@ -66,6 +88,8 @@ export default function ExplorationProgress({ progress }) {
     : 0;
   const percentage = Math.round(rawPercentage * 10) / 10;
   const percentageLabel = `${percentage}%`;
+  const rank = createExplorationRank(progress);
+  const rankPresentation = createExplorationRankPresentation(rank, lang);
 
   return (
     <section
@@ -77,12 +101,25 @@ export default function ExplorationProgress({ progress }) {
         <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#006C56]">
           Personal exploration
         </p>
-        <h3
-          id="exploration-progress-heading"
-          className="mt-1 text-lg font-bold text-[#10213B]"
-        >
-          Exploration progress
-        </h3>
+        <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+          <h3
+            id="exploration-progress-heading"
+            className="text-lg font-bold text-[#10213B]"
+          >
+            Exploration progress
+          </h3>
+          {rankPresentation && (
+            <span
+              className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${RANK_BADGE_CLASSES[rank.id]}`}
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+              aria-label={rankPresentation.rankAriaLabel}
+            >
+              {rankPresentation.rankLabel}
+            </span>
+          )}
+        </div>
         <p className="mt-1 text-sm leading-6 text-[#65748A]">
           Your verified visits across supported Melaka attractions.
         </p>
@@ -119,13 +156,29 @@ export default function ExplorationProgress({ progress }) {
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={percentage}
-            aria-valuetext={`${visitedCount} of ${totalCount} attractions visited, ${percentageLabel}`}
+            aria-valuetext={`${visitedCount} of ${totalCount} attractions visited, ${percentageLabel}${
+              rankPresentation ? `, ${rankPresentation.rankAriaLabel}` : ""
+            }`}
+            aria-describedby={
+              rankPresentation ? "exploration-rank-message" : undefined
+            }
           >
             <div
               className="h-full rounded-full bg-[#006C56] transition-[width] duration-300 motion-reduce:transition-none"
               style={{ width: `${percentage}%` }}
             />
           </div>
+
+          {rankPresentation && (
+            <p
+              id="exploration-rank-message"
+              className={`mt-4 text-sm font-semibold leading-6 ${
+                rank.isComplete ? "text-[#004638]" : "text-[#405066]"
+              }`}
+            >
+              {rankPresentation.message}
+            </p>
+          )}
         </div>
       )}
     </section>

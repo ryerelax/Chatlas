@@ -15,7 +15,7 @@ export async function GET(request, { params }) {
         {
           success: false,
           code: "AUTHENTICATION_REQUIRED",
-          message: "Please log in with Google to compare exploration progress.",
+          message: "Please log in with Google to compare explored places.",
         },
         { status: 401 }
       );
@@ -53,7 +53,7 @@ export async function GET(request, { params }) {
       );
     }
 
-    console.error("Failed to compare exploration data:", error);
+    console.error("Failed to compare verified exploration data:", error);
     return NextResponse.json(
       { success: false, message: "Exploration comparison is currently unavailable." },
       { status: 500 }

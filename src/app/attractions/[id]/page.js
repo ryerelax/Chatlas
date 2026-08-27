@@ -1,14 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import ReviewForm from "@/presentation/components/reviews/ReviewForm";
 import ReviewList from "@/presentation/components/reviews/ReviewList";
 import StarRating from "@/presentation/components/StarRating";
-import { BackArrowIcon, LocationPinIcon } from "@/presentation/components/AttractionIcons";
+import {
+  BackArrowIcon,
+  LocationPinIcon,
+} from "@/presentation/components/AttractionIcons";
 import AttractionPhotoGallery from "@/presentation/components/AttractionPhotoGallery";
 import CommunityPhotoUpload from "@/presentation/components/CommunityPhotoUpload";
 import CommunityDescriptionEdit from "@/presentation/components/CommunityDescriptionEdit";
@@ -18,12 +20,14 @@ import {
   checkFavouritesStatus,
 } from "@/business/services/favouritesService";
 import VerifiedVisitorPhotos from "@/presentation/components/VerifiedVisitorPhotos";
+import { useLanguage } from "@/presentation/contexts/LanguageContext";
 
 export default function AttractionDetailsPage() {
   const params = useParams();
   const attractionId = params.id;
   const { data: session } = useSession();
   const router = useRouter();
+  const { t, translateCategory } = useLanguage();
 
   const [attraction, setAttraction] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -49,18 +53,18 @@ export default function AttractionDetailsPage() {
         );
 
         if (response.status === 404) {
-          throw new Error("Attraction not found.");
+          throw new Error(t("notFound"));
         }
 
         if (!response.ok) {
-          throw new Error("Unable to load attraction details.");
+          throw new Error(t("errorGeneric"));
         }
 
         const result = await response.json();
         setAttraction(result.data);
-      } catch (error) {
-        console.error("Failed to load attraction details:", error);
-        setError(error.message);
+      } catch (err) {
+        console.error("Failed to load attraction details:", err);
+        setError(err.message);
       } finally {
         setIsLoading(false);
       }
@@ -69,9 +73,8 @@ export default function AttractionDetailsPage() {
     if (attractionId) {
       loadAttractionDetails();
     }
-  }, [attractionId]);
+  }, [attractionId, t]);
 
-  // Check favourites status on mount
   useEffect(() => {
     if (session && attractionId) {
       checkFavouritesStatus(attractionId)
@@ -80,7 +83,6 @@ export default function AttractionDetailsPage() {
     }
   }, [session, attractionId]);
 
-  // Handle favourites toggle
   const handleFavouritesToggle = async () => {
     if (!session) {
       router.push("/login");
@@ -92,15 +94,16 @@ export default function AttractionDetailsPage() {
       if (isInFavourites) {
         await removeFromFavourites(attractionId);
         setIsInFavourites(false);
-        showToast("Removed from favourites", "info");
+        showToast(t("removeFromFavourites"), "info");
       } else {
         await addToFavourites(attractionId);
         setIsInFavourites(true);
-        showToast("Added to favourites! ⭐", "success");
+        showToast(t("addToFavourites"), "success");
       }
-    } catch (error) {
-      console.error("Error toggling favourites:", error);
-      const errorMsg = error.response?.data?.message || "Unable to update favourites.";
+    } catch (err) {
+      console.error("Error toggling favourites:", err);
+      const errorMsg =
+        err.response?.data?.message || t("errorGeneric");
       showToast(errorMsg, "error");
     } finally {
       setIsFavouriteLoading(false);
@@ -110,9 +113,7 @@ export default function AttractionDetailsPage() {
   if (isLoading) {
     return (
       <main className="min-h-screen bg-attraction-page-bg px-6 py-16">
-        <p className="text-center text-attraction-muted">
-          Loading attraction details...
-        </p>
+        <p className="text-center text-attraction-muted">{t("loading")}</p>
       </main>
     );
   }
@@ -122,18 +123,16 @@ export default function AttractionDetailsPage() {
       <main className="min-h-screen bg-attraction-page-bg px-6 py-16">
         <div className="mx-auto max-w-md rounded-2xl border border-attraction-border bg-white p-8 text-center shadow-sm">
           <h1 className="text-xl font-bold text-attraction-ink">
-            Unable to display attraction
+            {t("errorGeneric")}
           </h1>
-
           <p className="mt-3 text-attraction-error">
-            {error || "Attraction not found."}
+            {error || t("notFound")}
           </p>
-
           <Link
             href="/"
             className="mt-6 inline-block rounded-[10px] bg-attraction-primary px-5 py-3 font-semibold text-white transition hover:bg-attraction-primary-hover"
           >
-            Back to Attractions
+            {t("browseAttractions")}
           </Link>
         </div>
       </main>
@@ -148,20 +147,23 @@ export default function AttractionDetailsPage() {
           className="mb-7 inline-flex h-10 items-center gap-2 rounded-full border border-attraction-border bg-white py-0 pl-3 pr-4 text-sm font-semibold text-attraction-body transition hover:border-attraction-border-strong hover:bg-attraction-surface-soft"
         >
           <BackArrowIcon />
-          Back to attractions
+          {t("back")}
         </Link>
 
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_340px]">
-          {/* Left column */}
           <div>
             <div className="mb-5">
               <span className="mb-3 inline-block rounded-full bg-attraction-primary-soft px-3 py-1 text-[13px] font-semibold text-attraction-primary">
-                {attraction.category || "Uncategorized"}
+                {attraction.category
+                  ? translateCategory
+                    ? translateCategory(attraction.category)
+                    : attraction.category
+                  : "—"}
               </span>
 
               {attraction.submittedBy && (
                 <span className="mb-3 ml-2 inline-block rounded-full bg-sky-100 px-3 py-1 text-[13px] font-semibold text-sky-700">
-                  Added by a Chatlas user
+                  {t("communitySubmitted")}
                 </span>
               )}
 
@@ -171,11 +173,20 @@ export default function AttractionDetailsPage() {
 
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
                 <StarRating
-                  rating={attraction.combinedRating ?? attraction.rating ?? 0}
+                  rating={
+                    attraction.combinedRating ?? attraction.rating ?? 0
+                  }
                   size={16}
                 />
                 <p className="text-[13px] text-attraction-muted">
-                  {(attraction.chatlasReviewCount ?? 0).toLocaleString()} on Chatlas, {(attraction.googleReviewCount ?? attraction.totalReviews ?? 0).toLocaleString()} on Google Maps
+                  {(attraction.chatlasReviewCount ?? 0).toLocaleString()}{" "}
+                  Chatlas,{" "}
+                  {(
+                    attraction.googleReviewCount ??
+                    attraction.totalReviews ??
+                    0
+                  ).toLocaleString()}{" "}
+                  Google Maps
                 </p>
               </div>
             </div>
@@ -185,7 +196,10 @@ export default function AttractionDetailsPage() {
             <CommunityPhotoUpload
               attractionId={attractionId}
               onPhotoAdded={(updatedAttraction) =>
-                setAttraction((current) => ({ ...current, photos: updatedAttraction.photos }))
+                setAttraction((current) => ({
+                  ...current,
+                  photos: updatedAttraction.photos,
+                }))
               }
             />
 
@@ -199,16 +213,14 @@ export default function AttractionDetailsPage() {
               }
             />
 
-            {/* Review & Community Section */}
             <section className="mt-8">
               <div className="mb-5 flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-bold text-attraction-ink">
-                    Community Reviews
+                    {t("communityTitle")}
                   </h2>
-
                   <p className="mt-1 text-sm text-attraction-muted">
-                    See what other travellers say about this attraction.
+                    {t("latestReviews")}
                   </p>
                 </div>
               </div>
@@ -225,26 +237,31 @@ export default function AttractionDetailsPage() {
               />
             </section>
 
-            <VerifiedVisitorPhotos key={attractionId} attractionId={attractionId} />
+            <VerifiedVisitorPhotos
+              key={attractionId}
+              attractionId={attractionId}
+            />
           </div>
 
-          {/* Right column */}
           <div className="flex flex-col gap-4">
             <div className="rounded-[18px] border border-attraction-border bg-white p-6 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
+              <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-base font-bold text-attraction-ink">
-                  Attraction details
+                  {t("details")}
                 </h2>
 
-                {/* Favourites Button */}
                 <button
                   onClick={handleFavouritesToggle}
                   disabled={isFavouriteLoading}
-                  className="w-10 h-10 rounded-full bg-white border border-attraction-border shadow-sm hover:shadow-md flex items-center justify-center transition-all duration-200 hover:scale-110 disabled:opacity-50"
-                  title={isInFavourites ? "Remove from favourites" : "Add to favourites"}
+                  className="flex h-10 w-10 items-center justify-center rounded-full border border-attraction-border bg-white shadow-sm transition-all duration-200 hover:scale-110 hover:shadow-md disabled:opacity-50"
+                  title={
+                    isInFavourites
+                      ? t("removeFromFavourites")
+                      : t("addToFavourites")
+                  }
                 >
                   <svg
-                    className="w-5 h-5"
+                    className="h-5 w-5"
                     fill={isInFavourites ? "#FFAB00" : "none"}
                     stroke={isInFavourites ? "#FFAB00" : "#65748A"}
                     viewBox="0 0 24 24"
@@ -261,21 +278,37 @@ export default function AttractionDetailsPage() {
 
               <InfoRow
                 icon={<CategoryIcon />}
-                label="Category"
-                value={attraction.category || "Uncategorized"}
+                label={t("category")}
+                value={
+                  attraction.category
+                    ? translateCategory
+                      ? translateCategory(attraction.category)
+                      : attraction.category
+                    : "—"
+                }
               />
               <Divider />
               <InfoRow
                 icon={<LocationPinIcon />}
-                label="Address"
+                label={t("address")}
                 value={attraction.address}
               />
               <Divider />
               <InfoRow
                 icon={<StarIcon />}
-                label="Rating"
-                value={`${(attraction.combinedRating ?? attraction.rating ?? 0).toFixed(1)} out of 5`}
-                subValue={`${(attraction.chatlasReviewCount ?? 0).toLocaleString()} on Chatlas, ${(attraction.googleReviewCount ?? attraction.totalReviews ?? 0).toLocaleString()} on Google Maps`}
+                label={t("rating")}
+                value={`${(
+                  attraction.combinedRating ??
+                  attraction.rating ??
+                  0
+                ).toFixed(1)} / 5`}
+                subValue={`${(
+                  attraction.chatlasReviewCount ?? 0
+                ).toLocaleString()} Chatlas, ${(
+                  attraction.googleReviewCount ??
+                  attraction.totalReviews ??
+                  0
+                ).toLocaleString()} Google Maps`}
               />
             </div>
 
@@ -284,19 +317,22 @@ export default function AttractionDetailsPage() {
               className="flex h-[46px] w-full items-center justify-center gap-2 rounded-[10px] bg-attraction-primary text-[15px] font-semibold text-white transition hover:bg-attraction-primary-hover"
             >
               <LocationPinIcon />
-              View location on map
+              {t("openInMaps")}
             </Link>
           </div>
         </div>
       </div>
 
-      {/* Toast Notification */}
       {toast && (
-        <div className={`fixed bottom-6 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg z-50 transition-all duration-300 ${
-          toast.type === "success" ? "bg-[#16845B] text-white" :
-          toast.type === "error" ? "bg-[#C2413B] text-white" :
-          "bg-[#2F6DA1] text-white"
-        }`}>
+        <div
+          className={`fixed bottom-6 left-1/2 z-50 -translate-x-1/2 transform rounded-lg px-6 py-3 shadow-lg transition-all duration-300 ${
+            toast.type === "success"
+              ? "bg-[#16845B] text-white"
+              : toast.type === "error"
+                ? "bg-[#C2413B] text-white"
+                : "bg-[#2F6DA1] text-white"
+          }`}
+        >
           {toast.message}
         </div>
       )}
@@ -320,7 +356,9 @@ function InfoRow({ icon, label, value, subValue }) {
         </p>
         <p className="text-sm leading-relaxed text-attraction-body">{value}</p>
         {subValue && (
-          <p className="text-xs leading-relaxed text-attraction-muted">{subValue}</p>
+          <p className="text-xs leading-relaxed text-attraction-muted">
+            {subValue}
+          </p>
         )}
       </div>
     </div>

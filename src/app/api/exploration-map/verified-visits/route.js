@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import {
   getVerifiedAttractionIdsForUser,
+  getVerifiedAttractionsForUser,
   VerifiedVisitServiceError,
   verifyVisitPhoto,
 } from "@/business/services/verifiedVisitService";
@@ -13,6 +14,7 @@ const handlers = createVerifiedVisitsHandlers({
   auth,
   connectToDatabase,
   getVerifiedAttractionIdsForUser,
+  getVerifiedAttractionsForUser,
   verifyVisitPhoto,
   ServiceError: VerifiedVisitServiceError,
 });

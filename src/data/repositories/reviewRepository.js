@@ -36,6 +36,10 @@ export function createPublicReviewRepository({ ReviewModel }) {
     async findReviewedAttractionIdsByUserId(userId) {
       return ReviewModel.distinct("attractionId", { userId });
     },
+
+    async countPublicReviewsByUserId(userId) {
+      return ReviewModel.countDocuments({ userId });
+    },
   };
 }
 
@@ -49,6 +53,10 @@ export async function findPublicReviewsByUserId(userId) {
 
 export async function findReviewedAttractionIdsByUserId(userId) {
   return publicReviewRepository.findReviewedAttractionIdsByUserId(userId);
+}
+
+export async function countPublicReviewsByUserId(userId) {
+  return publicReviewRepository.countPublicReviewsByUserId(userId);
 }
 
 /**

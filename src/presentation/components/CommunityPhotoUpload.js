@@ -3,6 +3,7 @@
 import { useSession } from "next-auth/react";
 import { useState } from "react";
 import { isMelakaBasedUser } from "@/business/services/locationGate";
+import { useLanguage } from "@/presentation/contexts/LanguageContext";
 
 const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024;
@@ -12,6 +13,7 @@ const MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024;
 // logged-in user can add a photo to any existing attraction.
 export default function CommunityPhotoUpload({ attractionId, onPhotoAdded }) {
   const { data: session } = useSession();
+  const { t } = useLanguage();
   const isEligible = isMelakaBasedUser(session);
 
   const [isExpanded, setIsExpanded] = useState(false);
@@ -36,7 +38,7 @@ export default function CommunityPhotoUpload({ attractionId, onPhotoAdded }) {
     }
 
     if (!ALLOWED_PHOTO_TYPES.includes(file.type)) {
-      setError("Photo must be a JPG, PNG, or WEBP image.");
+      setError(t("unsupportedFormat"));
       setPhotoFile(null);
       setPreviewUrl("");
       event.target.value = "";
@@ -44,7 +46,7 @@ export default function CommunityPhotoUpload({ attractionId, onPhotoAdded }) {
     }
 
     if (file.size > MAX_PHOTO_SIZE_BYTES) {
-      setError("Photo is too large. Maximum size is 5MB.");
+      setError(t("fileTooLarge"));
       setPhotoFile(null);
       setPreviewUrl("");
       event.target.value = "";
@@ -67,7 +69,7 @@ export default function CommunityPhotoUpload({ attractionId, onPhotoAdded }) {
 
   async function handleUpload() {
     if (!photoFile) {
-      setError("Please choose a photo to upload.");
+      setError(t("uploadHint"));
       return;
     }
 
@@ -86,7 +88,7 @@ export default function CommunityPhotoUpload({ attractionId, onPhotoAdded }) {
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-        throw new Error(result.message || "Unable to add this photo.");
+        throw new Error(result.message || t("errorGeneric"));
       }
 
       onPhotoAdded?.(result.data);
@@ -98,9 +100,9 @@ export default function CommunityPhotoUpload({ attractionId, onPhotoAdded }) {
       setIsExpanded(false);
       setJustAdded(true);
       setTimeout(() => setJustAdded(false), 4000);
-    } catch (error) {
-      console.error("Failed to add community photo:", error);
-      setError(error.message);
+    } catch (err) {
+      console.error("Failed to add community photo:", err);
+      setError(err.message);
     } finally {
       setIsUploading(false);
     }
@@ -112,12 +114,12 @@ export default function CommunityPhotoUpload({ attractionId, onPhotoAdded }) {
         <button
           type="button"
           disabled
-          title="Available to Melaka-based users"
+          title={t("melakaOnlyFeature")}
           className="cursor-not-allowed rounded-[10px] border border-attraction-border bg-white px-4 py-2 font-semibold text-attraction-muted opacity-60"
         >
-          + Add a photo
+          + {t("addPhoto")}
         </button>
-        <span>Available to Melaka-based users</span>
+        <span>{t("melakaOnlyFeature")}</span>
       </div>
     );
   }
@@ -126,7 +128,7 @@ export default function CommunityPhotoUpload({ attractionId, onPhotoAdded }) {
     <div className="mt-4">
       {justAdded && (
         <p className="mb-2 text-sm font-semibold text-attraction-primary">
-          Photo added — thanks for contributing!
+          {t("photoAddedThanks")}
         </p>
       )}
 
@@ -136,7 +138,7 @@ export default function CommunityPhotoUpload({ attractionId, onPhotoAdded }) {
           onClick={() => setIsExpanded(true)}
           className="rounded-[10px] border border-attraction-border-strong bg-white px-4 py-2 text-sm font-semibold text-attraction-primary-dark transition hover:bg-attraction-primary-soft"
         >
-          + Add a photo
+          + {t("addPhoto")}
         </button>
       ) : (
         <div className="rounded-[14px] border border-attraction-border bg-white p-4">
@@ -156,7 +158,7 @@ export default function CommunityPhotoUpload({ attractionId, onPhotoAdded }) {
                 }}
                 className="text-sm font-semibold text-attraction-error"
               >
-                Remove
+                {t("remove")}
               </button>
             </div>
           ) : (
@@ -168,7 +170,9 @@ export default function CommunityPhotoUpload({ attractionId, onPhotoAdded }) {
             />
           )}
 
-          {error && <p className="mb-3 text-sm text-attraction-error">{error}</p>}
+          {error && (
+            <p className="mb-3 text-sm text-attraction-error">{error}</p>
+          )}
 
           <div className="flex gap-2">
             <button
@@ -177,7 +181,7 @@ export default function CommunityPhotoUpload({ attractionId, onPhotoAdded }) {
               disabled={isUploading || !photoFile}
               className="rounded-[10px] bg-attraction-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-attraction-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isUploading ? "Adding…" : "Add photo"}
+              {isUploading ? t("saving") : t("addPhoto")}
             </button>
             <button
               type="button"
@@ -185,7 +189,7 @@ export default function CommunityPhotoUpload({ attractionId, onPhotoAdded }) {
               disabled={isUploading}
               className="rounded-[10px] border border-attraction-border-strong bg-white px-4 py-2 text-sm font-semibold text-attraction-body transition hover:bg-attraction-surface-soft"
             >
-              Cancel
+              {t("cancel")}
             </button>
           </div>
         </div>

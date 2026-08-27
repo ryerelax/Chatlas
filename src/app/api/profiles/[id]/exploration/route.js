@@ -14,7 +14,7 @@ export async function GET(request, { params }) {
         {
           success: false,
           code: "AUTHENTICATION_REQUIRED",
-          message: "Please log in with Google to view exploration maps.",
+          message: "Please log in with Google to view explore progress.",
         },
         { status: 401 }
       );
@@ -40,9 +40,9 @@ export async function GET(request, { params }) {
       );
     }
 
-    console.error("Failed to retrieve public exploration data:", error);
+    console.error("Failed to retrieve verified exploration data:", error);
     return NextResponse.json(
-      { success: false, message: "Exploration map is currently unavailable." },
+      { success: false, message: "Explore progress is currently unavailable." },
       { status: 500 }
     );
   }

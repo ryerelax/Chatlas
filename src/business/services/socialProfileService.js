@@ -6,9 +6,11 @@ import {
   VISITED_DATA_STATUS,
 } from "@/business/services/explorationMapService";
 import {
+  countPublicReviewsByUserId,
   findPublicReviewsByUserId,
-  findReviewedAttractionIdsByUserId,
 } from "@/data/repositories/reviewRepository";
+import { findDistinctVerifiedAttractionIds } from "@/data/repositories/verifiedVisitRepository";
+import { getPublicExplorationSummaries } from "@/business/services/publicExplorationSummaryService";
 
 export class SocialProfileDependencyError extends Error {
   constructor(code, message) {
@@ -18,7 +20,49 @@ export class SocialProfileDependencyError extends Error {
   }
 }
 
-function normalizeVisitedAttractions(attractions = []) {
+export function createPublicProfileOverviewService({
+  getPublicProfileById: getProfileById,
+  countPublicReviewsByUserId: countReviews,
+  getPublicExplorationSummaries: getExplorationSummaries,
+}) {
+  return async function getOverview(userId) {
+    const profile = await getProfileById(userId);
+    if (!profile) return null;
+
+    const [reviewsWritten, summaries] = await Promise.all([
+      countReviews(profile.id),
+      getExplorationSummaries([profile.id]),
+    ]);
+    const explorationSummary = summaries.get(String(profile.id)) || null;
+    const hasExplorationSummary = explorationSummary?.status === "success";
+
+    return {
+      ...profile,
+      activitySummary: {
+        reviewsWritten: Math.max(0, Math.trunc(Number(reviewsWritten) || 0)),
+        visitedAttractions: hasExplorationSummary
+          ? explorationSummary.visitedCount
+          : null,
+        explorationProgress: hasExplorationSummary
+          ? explorationSummary.progressPercentage
+          : null,
+        status: hasExplorationSummary ? "success" : "partial",
+      },
+    };
+  };
+}
+
+const getPublicProfileOverviewService = createPublicProfileOverviewService({
+  getPublicProfileById,
+  countPublicReviewsByUserId,
+  getPublicExplorationSummaries,
+});
+
+export async function getPublicProfileOverview(userId) {
+  return getPublicProfileOverviewService(userId);
+}
+
+function normalizeExploredAttractions(attractions = []) {
   const uniqueAttractions = new Map();
 
   for (const attraction of attractions) {
@@ -39,13 +83,13 @@ function normalizeVisitedAttractions(attractions = []) {
   return [...uniqueAttractions.values()];
 }
 
-function calculateProgress(visitedCount, totalAttractions) {
+function calculateCoverage(exploredCount, totalAttractions) {
   const normalizedTotal = Math.max(0, Number(totalAttractions) || 0);
   if (normalizedTotal === 0) return 0;
 
   return Math.min(
     100,
-    Math.round((visitedCount / normalizedTotal) * 1000) / 10
+    Math.round((exploredCount / normalizedTotal) * 1000) / 10
   );
 }
 
@@ -54,19 +98,19 @@ export function buildExplorationComparison({
   targetAttractions = [],
   totalAttractions = 0,
 } = {}) {
-  const viewer = normalizeVisitedAttractions(viewerAttractions);
-  const target = normalizeVisitedAttractions(targetAttractions);
+  const viewer = normalizeExploredAttractions(viewerAttractions);
+  const target = normalizeExploredAttractions(targetAttractions);
   const viewerIds = new Set(viewer.map((attraction) => attraction.id));
   const targetIds = new Set(target.map((attraction) => attraction.id));
 
   return {
     viewer: {
-      visitedCount: viewer.length,
-      progressPercentage: calculateProgress(viewer.length, totalAttractions),
+      exploredCount: viewer.length,
+      coveragePercentage: calculateCoverage(viewer.length, totalAttractions),
     },
     target: {
-      visitedCount: target.length,
-      progressPercentage: calculateProgress(target.length, totalAttractions),
+      exploredCount: target.length,
+      coveragePercentage: calculateCoverage(target.length, totalAttractions),
     },
     common: viewer.filter((attraction) => targetIds.has(attraction.id)),
     viewerOnly: viewer.filter((attraction) => !targetIds.has(attraction.id)),
@@ -123,7 +167,7 @@ export async function getPublicReviewsForProfile(userId) {
   return getReviewsForProfile(userId);
 }
 
-function serializeVisitedAttraction(attraction) {
+function serializeVerifiedAttraction(attraction) {
   return {
     id: attraction.id,
     name: attraction.name,
@@ -137,26 +181,27 @@ function serializeVisitedAttraction(attraction) {
 export function createPublicProfileExplorationService({
   getPublicProfileById: getProfileById,
   getExplorationMapAttractions: getMapAttractions,
-  findReviewedAttractionIdsByUserId: findReviewedAttractionIds,
+  findDistinctVerifiedAttractionIds: findVerifiedAttractionIds,
 }) {
   return async function getExplorationForProfile(userId) {
     const profile = await getProfileById(userId);
     if (!profile) return null;
 
-    const [mapAttractionRecords, reviewedAttractionIds] = await Promise.all([
+    const [mapAttractionRecords, verifiedAttractionIds] = await Promise.all([
       getMapAttractions(),
-      findReviewedAttractionIds(profile.id),
+      findVerifiedAttractionIds(profile.id),
     ]);
     const supportedAttractions = normaliseMapAttractions(mapAttractionRecords);
     const viewModel = createExplorationMapViewModel(
       supportedAttractions,
-      reviewedAttractionIds,
+      verifiedAttractionIds,
       VISITED_DATA_STATUS.SUCCESS
     );
 
     return {
+      source: "verified_visits",
       visitedAttractions: viewModel.visitedAttractions.map(
-        serializeVisitedAttraction
+        serializeVerifiedAttraction
       ),
       visitedCount: viewModel.progress.visitedCount,
       totalAttractions: viewModel.progress.totalCount,
@@ -168,7 +213,7 @@ export function createPublicProfileExplorationService({
 const getExplorationForProfile = createPublicProfileExplorationService({
   getPublicProfileById,
   getExplorationMapAttractions,
-  findReviewedAttractionIdsByUserId,
+  findDistinctVerifiedAttractionIds,
 });
 
 export async function getPublicExplorationForProfile(userId) {
@@ -178,7 +223,7 @@ export async function getPublicExplorationForProfile(userId) {
 export function createPublicExplorationComparisonService({
   getPublicProfileById: getProfileById,
   getExplorationMapAttractions: getMapAttractions,
-  findReviewedAttractionIdsByUserId: findReviewedAttractionIds,
+  findDistinctVerifiedAttractionIds: findVerifiedAttractionIds,
 }) {
   return async function compareExploration(viewerId, targetUserId) {
     const targetProfile = await getProfileById(targetUserId);
@@ -188,25 +233,25 @@ export function createPublicExplorationComparisonService({
     if (normalizedViewerId === String(targetProfile.id)) {
       throw new SocialProfileDependencyError(
         "SELF_COMPARISON_NOT_ALLOWED",
-        "Choose another traveller to compare exploration progress."
+        "Choose another traveller to compare explored places."
       );
     }
 
-    const [mapAttractionRecords, viewerReviewedIds, targetReviewedIds] =
+    const [mapAttractionRecords, viewerVerifiedIds, targetVerifiedIds] =
       await Promise.all([
         getMapAttractions(),
-        findReviewedAttractionIds(normalizedViewerId),
-        findReviewedAttractionIds(targetProfile.id),
+        findVerifiedAttractionIds(normalizedViewerId),
+        findVerifiedAttractionIds(targetProfile.id),
       ]);
     const supportedAttractions = normaliseMapAttractions(mapAttractionRecords);
     const viewerViewModel = createExplorationMapViewModel(
       supportedAttractions,
-      viewerReviewedIds,
+      viewerVerifiedIds,
       VISITED_DATA_STATUS.SUCCESS
     );
     const targetViewModel = createExplorationMapViewModel(
       supportedAttractions,
-      targetReviewedIds,
+      targetVerifiedIds,
       VISITED_DATA_STATUS.SUCCESS
     );
 
@@ -221,7 +266,7 @@ export function createPublicExplorationComparisonService({
 const compareExploration = createPublicExplorationComparisonService({
   getPublicProfileById,
   getExplorationMapAttractions,
-  findReviewedAttractionIdsByUserId,
+  findDistinctVerifiedAttractionIds,
 });
 
 export async function comparePublicExploration(viewerId, targetUserId) {

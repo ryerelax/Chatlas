@@ -135,6 +135,41 @@ function validVerifyInput(overrides = {}) {
   };
 }
 
+test("private verified-attraction DTO exposes only compatible date fields and canonical latestVerifiedAt ISO metadata", async () => {
+  const { service } = createHarness({
+    findVerifiedAttractionsWithLatestVisitDate: async () => [
+      {
+        attractionId: ATTRACTION_ID,
+        latestVisitedDate: "2026-08-23",
+        latestVerifiedAt: new Date("2026-08-23T09:08:00.000Z"),
+        userId: USER_ID,
+        latitude: 2.193,
+        accuracyMeters: 12,
+        distanceMeters: 34,
+        cloudinaryPublicId: CLOUDINARY_PUBLIC_ID,
+        submissionKey: SUBMISSION_KEY,
+        photoUrl: PHOTO_URL,
+      },
+      {
+        attractionId: "64b000000000000000000009",
+        latestVisitedDate: "2026-08-20",
+      },
+    ],
+  });
+
+  assert.deepEqual(await service.getVerifiedAttractionsForUser(GOOGLE_ID), [
+    {
+      attractionId: ATTRACTION_ID,
+      latestVisitedDate: "2026-08-23",
+      latestVerifiedAt: "2026-08-23T09:08:00.000Z",
+    },
+    {
+      attractionId: "64b000000000000000000009",
+      latestVisitedDate: "2026-08-20",
+    },
+  ]);
+});
+
 function validBatchInput(photoCount, overrides = {}) {
   const { photoDataUri, photoDataUris, ...batchOverrides } = overrides;
   return {

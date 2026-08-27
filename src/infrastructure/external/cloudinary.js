@@ -26,8 +26,6 @@ function getConfiguredClient() {
   return cloudinary;
 }
 
-// Uploads an image directly from a source URL (Cloudinary fetches it server-side)
-// and returns the resulting stable, permanent secure URL.
 export function createCloudinaryAdapter(getClient = getConfiguredClient) {
   return {
     async uploadImageFromUrl(imageUrl, { folder, publicId } = {}) {
@@ -61,9 +59,9 @@ export function createCloudinaryAdapter(getClient = getConfiguredClient) {
         });
 
         if (
-          typeof result?.secure_url !== "string"
-          || result.secure_url.length === 0
-          || result.public_id !== targetPublicId
+          typeof result?.secure_url !== "string" ||
+          result.secure_url.length === 0 ||
+          result.public_id !== targetPublicId
         ) {
           throw new Error("Cloudinary did not return a valid upload result.");
         }
@@ -78,7 +76,7 @@ export function createCloudinaryAdapter(getClient = getConfiguredClient) {
             resource_type: "image",
           });
         } catch {
-          // Cleanup is best effort; preserve the original upload failure.
+          // Cleanup is best effort
         }
         throw error;
       }
@@ -109,11 +107,11 @@ export async function deleteCloudinaryImage(cloudinaryPublicId) {
   return cloudinaryAdapter.deleteCloudinaryImage(cloudinaryPublicId);
 }
 
-// Uploads a browser-submitted file (already read into a Buffer server-side) and
-// returns the resulting stable, permanent secure URL. Used for direct user
-// uploads (e.g. Decision 4's optional Add Attraction photo), as opposed to
-// uploadImageFromUrl's fetch-a-Places-photo-then-upload flow.
-export async function uploadImageFromBuffer(buffer, mimeType, { folder, publicId } = {}) {
+export async function uploadImageFromBuffer(
+  buffer,
+  mimeType,
+  { folder, publicId } = {}
+) {
   const client = getConfiguredClient();
 
   const dataUri = `data:${mimeType};base64,${buffer.toString("base64")}`;
@@ -128,9 +126,6 @@ export async function uploadImageFromBuffer(buffer, mimeType, { folder, publicId
   return result.secure_url;
 }
 
-// Uploads a browser-submitted image and returns the metadata needed to attach
-// it to another document and safely roll it back if that write later fails.
-// Existing URL-only upload helpers intentionally keep their current behaviour.
 export async function uploadImageWithMetadataFromBuffer(
   buffer,
   mimeType,
@@ -163,4 +158,36 @@ export async function deleteImageByPublicId(publicId) {
     resource_type: "image",
     invalidate: true,
   });
+}
+
+/**
+ * Profile avatar upload used by profileImageService.
+ * @param {string} dataUri - data:image/...;base64,...
+ * @param {string} userId - Mongo user id or stable id for public_id
+ * @returns {{ url: string, publicId: string }}
+ */
+export async function uploadProfileImageData(dataUri, userId) {
+  const client = getConfiguredClient();
+  const folder = "chatlas/profiles";
+  const publicId = userId ? `user_${userId}` : undefined;
+
+  const result = await client.uploader.upload(dataUri, {
+    folder,
+    public_id: publicId,
+    overwrite: true,
+    resource_type: "image",
+    transformation: [
+      { width: 400, height: 400, crop: "fill", gravity: "face" },
+      { quality: "auto", fetch_format: "auto" },
+    ],
+  });
+
+  if (!result?.secure_url) {
+    throw new Error("Cloudinary did not return a valid profile image URL.");
+  }
+
+  return {
+    url: result.secure_url,
+    publicId: result.public_id,
+  };
 }

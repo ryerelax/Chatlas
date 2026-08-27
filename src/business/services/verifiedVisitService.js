@@ -15,6 +15,7 @@ import {
   findDatedVisitBySubmissionKey,
   findDatedVisitPhotoCount,
   findDistinctVerifiedAttractionIds,
+  findVerifiedAttractionsWithLatestVisitDate,
   findOwnedPhotoForDeletion,
   findPublicVerifiedPhotos as findPublicVerifiedPhotosRepository,
   removeOwnedPhoto,
@@ -137,6 +138,12 @@ function toIsoString(value) {
   return new Date(value).toISOString();
 }
 
+function toOptionalIsoString(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+}
+
 function toSafeCreatedBatch(visit, attractionId, capturedAt, incomingPhotoCount) {
   const createdPhotos = visit?.photos?.slice(-incomingPhotoCount).map((photo) => {
     if (!photo?._id || !photo?.photoUrl) {
@@ -248,6 +255,7 @@ export function createVerifiedVisitService(dependencies) {
     findDatedVisitBySubmissionKey: findBySubmissionKey,
     findDatedVisitPhotoCount: findPhotoCount,
     findDistinctVerifiedAttractionIds: findDistinctIds,
+    findVerifiedAttractionsWithLatestVisitDate: findLatestVisits,
     findPublicVerifiedPhotos: findPublicPhotos,
     findOwnedPhotoForDeletion: findOwnedPhoto,
     removeOwnedPhoto,
@@ -551,6 +559,28 @@ export function createVerifiedVisitService(dependencies) {
     }
   }
 
+  async function getVerifiedAttractionsForUser(providerSubject) {
+    const googleId = requireProviderSubject(providerSubject);
+    const user = await findPersistedUser(googleId, "Unable to load verified visits.");
+    if (!user?._id) throw new VerifiedVisitServiceError(AUTH_REQUIRED_MESSAGE, 401);
+    try {
+      const visits = await findLatestVisits(user._id);
+      return visits.flatMap((visit) => {
+        const attractionId = safeString(visit?.attractionId);
+        const latestVerifiedAt = toOptionalIsoString(visit?.latestVerifiedAt);
+        return attractionId && typeof visit?.latestVisitedDate === "string"
+          ? [{
+              attractionId,
+              latestVisitedDate: visit.latestVisitedDate,
+              ...(latestVerifiedAt ? { latestVerifiedAt } : {}),
+            }]
+          : [];
+      });
+    } catch {
+      throw asSafeInternalError("Unable to load verified visits.");
+    }
+  }
+
   async function getPublicVerifiedPhotos(attractionIdInput, optionalGoogleId) {
     const attractionId = requireObjectId(attractionIdInput, "attraction", isValidObjectId);
     let viewerId;
@@ -634,6 +664,7 @@ export function createVerifiedVisitService(dependencies) {
     verifyVisitPhoto,
     getVerifiedVisitPhotoCapacity,
     getVerifiedAttractionIdsForUser,
+    getVerifiedAttractionsForUser,
     getPublicVerifiedPhotos,
     deleteOwnedVerifiedPhoto,
   };
@@ -651,6 +682,7 @@ const verifiedVisitService = createVerifiedVisitService({
   findDatedVisitBySubmissionKey,
   findDatedVisitPhotoCount,
   findDistinctVerifiedAttractionIds,
+  findVerifiedAttractionsWithLatestVisitDate,
   findPublicVerifiedPhotos: findPublicVerifiedPhotosRepository,
   findOwnedPhotoForDeletion,
   removeOwnedPhoto,
@@ -671,6 +703,10 @@ export async function getVerifiedVisitPhotoCapacity(input) {
 
 export async function getVerifiedAttractionIdsForUser(googleId) {
   return verifiedVisitService.getVerifiedAttractionIdsForUser(googleId);
+}
+
+export async function getVerifiedAttractionsForUser(googleId) {
+  return verifiedVisitService.getVerifiedAttractionsForUser(googleId);
 }
 
 export async function getPublicVerifiedPhotos(attractionId, optionalGoogleId) {

@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { useReviews } from "@/presentation/contexts/ReviewsContext";
+import { useLanguage } from "@/presentation/contexts/LanguageContext";
 
 const STAR_OPTIONS = [1, 2, 3, 4, 5];
 const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -11,6 +12,7 @@ const MAX_REVIEW_PHOTOS = 3;
 
 export default function ReviewForm({ attractionId, onReviewSubmitted }) {
   const { addReview } = useReviews();
+  const { t } = useLanguage();
   const [rating, setRating] = useState(0);
   const [reviewText, setReviewText] = useState("");
   const [errors, setErrors] = useState({});
@@ -61,7 +63,7 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
     if (selectedPhotos.length + files.length > MAX_REVIEW_PHOTOS) {
       setErrors((current) => ({
         ...current,
-        photos: `Choose no more than ${MAX_REVIEW_PHOTOS} photos.`,
+        photos: t("uploadHint"),
       }));
       return;
     }
@@ -73,7 +75,7 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
     if (invalidType) {
       setErrors((current) => ({
         ...current,
-        photos: "Photos must be JPG, PNG, or WebP images.",
+        photos: t("unsupportedFormat"),
       }));
       return;
     }
@@ -85,7 +87,7 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
     if (oversizedPhoto) {
       setErrors((current) => ({
         ...current,
-        photos: "Each photo must be 5 MB or smaller.",
+        photos: t("fileTooLarge"),
       }));
       return;
     }
@@ -93,7 +95,7 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
     if (files.some((file) => file.size <= 0)) {
       setErrors((current) => ({
         ...current,
-        photos: "Each photo must contain an image.",
+        photos: t("errorGeneric"),
       }));
       return;
     }
@@ -129,29 +131,29 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
     const nextErrors = {};
 
     if (rating < 1 || rating > 5) {
-      nextErrors.rating = "Choose a rating from 1 to 5 stars.";
+      nextErrors.rating = t("yourRating");
     }
 
     if (!reviewText.trim()) {
-      nextErrors.reviewText = "Enter your review before continuing.";
+      nextErrors.reviewText = t("reviewPlaceholder");
     } else if (reviewText.trim().length > 1000) {
-      nextErrors.reviewText = "Keep your review to 1,000 characters or fewer.";
+      nextErrors.reviewText = t("errorGeneric");
     }
 
     if (selectedPhotos.length > MAX_REVIEW_PHOTOS) {
-      nextErrors.photos = `Choose no more than ${MAX_REVIEW_PHOTOS} photos.`;
+      nextErrors.photos = t("uploadHint");
     } else if (
       selectedPhotos.some(
         ({ file }) => !ALLOWED_PHOTO_TYPES.includes(file.type)
       )
     ) {
-      nextErrors.photos = "Photos must be JPG, PNG, or WebP images.";
+      nextErrors.photos = t("unsupportedFormat");
     } else if (
       selectedPhotos.some(({ file }) => file.size > MAX_PHOTO_SIZE_BYTES)
     ) {
-      nextErrors.photos = "Each photo must be 5 MB or smaller.";
+      nextErrors.photos = t("fileTooLarge");
     } else if (selectedPhotos.some(({ file }) => file.size <= 0)) {
-      nextErrors.photos = "Each photo must contain an image.";
+      nextErrors.photos = t("errorGeneric");
     }
 
     setErrors(nextErrors);
@@ -197,7 +199,7 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.message || "Unable to submit your review.");
+        throw new Error(result.message || t("errorGeneric"));
       }
 
       setRating(0);
@@ -211,12 +213,12 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
         photoInputRef.current.value = "";
       }
       setStatusType("success");
-      setStatusMessage("Your review has been submitted.");
+      setStatusMessage(t("profileUpdated"));
       addReview(result.data);
       onReviewSubmitted?.(result.data);
     } catch (error) {
       setStatusType("error");
-      setStatusMessage(error.message || "Unable to submit your review.");
+      setStatusMessage(error.message || t("errorGeneric"));
     } finally {
       setIsSubmitting(false);
     }
@@ -230,10 +232,11 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
       className="mb-8 rounded-[18px] border border-attraction-border bg-white p-[18px] md:p-6"
     >
       <div>
-        <fieldset aria-describedby={errors.rating ? "rating-error" : undefined}>
+        <fieldset
+          aria-describedby={errors.rating ? "rating-error" : undefined}
+        >
           <legend className="text-base font-semibold text-attraction-ink">
-            Your rating <span aria-hidden="true">*</span>
-            <span className="sr-only"> (required)</span>
+            {t("yourRating")} <span aria-hidden="true">*</span>
           </legend>
 
           <div className="mt-3 flex flex-wrap gap-2">
@@ -257,7 +260,7 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
                     checked={isSelected}
                     onChange={() => handleRatingChange(value)}
                     className="sr-only"
-                    aria-label={`${value} ${value === 1 ? "star" : "stars"}`}
+                    aria-label={`${value} ${t("stars")}`}
                     required
                   />
                   <svg
@@ -273,18 +276,26 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
                       strokeWidth="1.5"
                     />
                   </svg>
-                  <span className="sr-only">{isSelected ? "Selected" : ""}</span>
                 </label>
               );
             })}
           </div>
 
-          <p className="mt-2 text-[13px] font-medium text-attraction-body" aria-live="polite">
-            {rating ? `${rating} out of 5 stars selected` : "No rating selected"}
+          <p
+            className="mt-2 text-[13px] font-medium text-attraction-body"
+            aria-live="polite"
+          >
+            {rating
+              ? `${rating} / 5 ${t("stars")}`
+              : t("yourRating")}
           </p>
 
           {errors.rating && (
-            <p id="rating-error" role="alert" className="mt-2 text-sm text-attraction-error">
+            <p
+              id="rating-error"
+              role="alert"
+              className="mt-2 text-sm text-attraction-error"
+            >
               {errors.rating}
             </p>
           )}
@@ -292,9 +303,11 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
       </div>
 
       <div className="mt-6">
-        <label htmlFor="review-text" className="text-base font-semibold text-attraction-ink">
-          Your review <span aria-hidden="true">*</span>
-          <span className="sr-only"> (required)</span>
+        <label
+          htmlFor="review-text"
+          className="text-base font-semibold text-attraction-ink"
+        >
+          {t("myReviews")} <span aria-hidden="true">*</span>
         </label>
         <textarea
           id="review-text"
@@ -309,19 +322,21 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
               ? "review-text-help review-text-count review-text-error"
               : "review-text-help review-text-count"
           }
-          placeholder="Share what you enjoyed and what other travellers should know."
+          placeholder={t("reviewPlaceholder")}
           className="mt-3 min-h-[120px] w-full resize-y rounded-[10px] border border-attraction-border-strong bg-white p-3.5 text-base leading-relaxed text-attraction-ink outline-none transition-colors duration-200 placeholder:text-attraction-muted focus:border-attraction-primary focus:ring-2 focus:ring-attraction-primary"
         />
         <div className="mt-2 flex flex-wrap items-start justify-between gap-2 text-[13px] font-medium text-attraction-muted">
-          <p id="review-text-help">
-            Write a clear and useful review of this attraction.
-          </p>
+          <p id="review-text-help">{t("reviewPlaceholder")}</p>
           <p id="review-text-count" aria-live="polite" className="shrink-0">
             {reviewText.length} / 1000
           </p>
         </div>
         {errors.reviewText && (
-          <p id="review-text-error" role="alert" className="mt-2 text-sm text-attraction-error">
+          <p
+            id="review-text-error"
+            role="alert"
+            className="mt-2 text-sm text-attraction-error"
+          >
             {errors.reviewText}
           </p>
         )}
@@ -330,10 +345,13 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
       <div className="mt-6">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <p className="text-base font-semibold text-attraction-ink">
-            Add photos <span className="font-normal text-attraction-muted">(optional)</span>
+            {t("photos")}{" "}
+            <span className="font-normal text-attraction-muted">
+              ({t("attractionDescriptionOptional")})
+            </span>
           </p>
           <span className="text-[13px] font-medium text-attraction-muted">
-            {selectedPhotos.length} / {MAX_REVIEW_PHOTOS} selected
+            {selectedPhotos.length} / {MAX_REVIEW_PHOTOS}
           </span>
         </div>
 
@@ -341,14 +359,14 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
           {selectedPhotos.length > 0 && (
             <ul
               className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3"
-              aria-label="Selected review photos"
+              aria-label={t("photos")}
             >
               {selectedPhotos.map((photo, index) => (
                 <li key={photo.id} className="min-w-0">
                   <div className="relative aspect-[4/3] overflow-hidden rounded-[10px] bg-attraction-primary-soft-strong">
                     <Image
                       src={photo.previewUrl}
-                      alt={`Selected review photo ${index + 1}: ${photo.file.name}`}
+                      alt={photo.file.name}
                       fill
                       unoptimized
                       sizes="(max-width: 743px) 100vw, 180px"
@@ -358,8 +376,8 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
                       type="button"
                       onClick={() => handleRemovePhoto(photo.id)}
                       disabled={isSubmitting}
-                      aria-label={`Remove selected photo ${index + 1}`}
-                      className="absolute right-2 top-2 flex min-h-11 min-w-11 items-center justify-center rounded-full border border-attraction-border bg-white/95 text-xl font-semibold leading-none text-attraction-error shadow-sm transition-colors duration-200 hover:bg-[#FDECEC] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-attraction-primary disabled:cursor-not-allowed disabled:opacity-60"
+                      aria-label={t("remove")}
+                      className="absolute right-2 top-2 flex min-h-11 min-w-11 items-center justify-center rounded-full border border-attraction-border bg-white/95 text-xl font-semibold leading-none text-attraction-error shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <span aria-hidden="true">&times;</span>
                     </button>
@@ -382,7 +400,7 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
             disabled={
               isSubmitting || selectedPhotos.length >= MAX_REVIEW_PHOTOS
             }
-            aria-label="Review photos"
+            aria-label={t("photos")}
             aria-invalid={Boolean(errors.photos)}
             aria-describedby={
               errors.photos
@@ -398,15 +416,15 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
               isSubmitting || selectedPhotos.length >= MAX_REVIEW_PHOTOS
             }
             aria-describedby="review-photos-help"
-            className="inline-flex min-h-11 items-center justify-center rounded-[10px] border border-attraction-border-strong bg-white px-5 text-[15px] font-semibold text-attraction-primary-dark transition-colors duration-200 hover:bg-attraction-primary-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-attraction-primary disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex min-h-11 items-center justify-center rounded-[10px] border border-attraction-border-strong bg-white px-5 text-[15px] font-semibold text-attraction-primary-dark transition-colors duration-200 hover:bg-attraction-primary-soft disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {selectedPhotos.length > 0 ? "Add more photos" : "Choose photos"}
+            {selectedPhotos.length > 0 ? t("uploadPhoto") : t("uploadPhoto")}
           </button>
           <p
             id="review-photos-help"
             className="mt-3 text-[13px] font-medium leading-relaxed text-attraction-muted"
           >
-            Add up to 3 JPG, PNG, or WebP images. Maximum 5 MB each.
+            {t("uploadHint")} (max {MAX_REVIEW_PHOTOS})
           </p>
           {errors.photos && (
             <p
@@ -436,13 +454,9 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
       <button
         type="submit"
         disabled={isSubmitting}
-        className="mt-6 flex h-[46px] w-full items-center justify-center rounded-[10px] bg-attraction-primary px-5 text-[15px] font-semibold text-white transition-colors duration-200 hover:bg-attraction-primary-hover active:bg-[#004D3E] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-attraction-primary disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+        className="mt-6 flex h-[46px] w-full items-center justify-center rounded-[10px] bg-attraction-primary px-5 text-[15px] font-semibold text-white transition-colors duration-200 hover:bg-attraction-primary-hover disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
       >
-        {isSubmitting
-          ? selectedPhotos.length > 0
-            ? "Uploading photos..."
-            : "Submitting..."
-          : "Submit review"}
+        {isSubmitting ? t("saving") : t("submit")}
       </button>
     </form>
   );

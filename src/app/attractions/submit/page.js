@@ -3,8 +3,12 @@
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useEffect, useRef, useState } from "react";
-import { BackArrowIcon, SearchIcon } from "@/presentation/components/AttractionIcons";
+import {
+  BackArrowIcon,
+  SearchIcon,
+} from "@/presentation/components/AttractionIcons";
 import { ATTRACTION_CATEGORIES } from "@/business/services/attractionCategories";
+import { useLanguage } from "@/presentation/contexts/LanguageContext";
 
 const SEARCH_DEBOUNCE_MS = 400;
 const MIN_QUERY_LENGTH = 2;
@@ -15,10 +19,10 @@ const MAX_DESCRIPTION_LENGTH = 2000;
 
 export default function AddAttractionPage() {
   const { data: session, status } = useSession();
+  const { t, translateCategory } = useLanguage();
 
   const [sessionToken, setSessionToken] = useState(() => crypto.randomUUID());
   const [query, setQuery] = useState("");
-  // null = no completed search to show yet (too-short query, or just cleared).
   const [results, setResults] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
@@ -30,7 +34,6 @@ export default function AddAttractionPage() {
   const [description, setDescription] = useState("");
   const [descriptionError, setDescriptionError] = useState("");
 
-  // Each item: { id, file, previewUrl }
   const [photoItems, setPhotoItems] = useState([]);
   const [photoError, setPhotoError] = useState("");
 
@@ -40,7 +43,10 @@ export default function AddAttractionPage() {
 
   const abortControllerRef = useRef(null);
 
-  const isResultsOpen = !selectedPlace && query.trim().length >= MIN_QUERY_LENGTH && results !== null;
+  const isResultsOpen =
+    !selectedPlace &&
+    query.trim().length >= MIN_QUERY_LENGTH &&
+    results !== null;
 
   useEffect(() => {
     if (selectedPlace || query.trim().length < MIN_QUERY_LENGTH) {
@@ -64,7 +70,7 @@ export default function AddAttractionPage() {
         const result = await response.json();
 
         if (!response.ok || !result.success) {
-          throw new Error(result.message || "Unable to search places.");
+          throw new Error(result.message || t("errorGeneric"));
         }
 
         setResults(result.data);
@@ -80,7 +86,7 @@ export default function AddAttractionPage() {
     }, SEARCH_DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
-  }, [query, sessionToken, selectedPlace]);
+  }, [query, sessionToken, selectedPlace, t]);
 
   function handleSelectPlace(place) {
     setSelectedPlace(place);
@@ -112,15 +118,15 @@ export default function AddAttractionPage() {
 
       for (const file of newFiles) {
         if (current.length + accepted.length >= MAX_PHOTOS) {
-          rejectionReason = `You can upload up to ${MAX_PHOTOS} photos.`;
+          rejectionReason = t("uploadHint");
           break;
         }
         if (!ALLOWED_PHOTO_TYPES.includes(file.type)) {
-          rejectionReason = "Photos must be JPG, PNG, or WEBP images.";
+          rejectionReason = t("unsupportedFormat");
           continue;
         }
         if (file.size > MAX_PHOTO_SIZE_BYTES) {
-          rejectionReason = "Each photo must be 5MB or smaller.";
+          rejectionReason = t("fileTooLarge");
           continue;
         }
         accepted.push({
@@ -166,17 +172,17 @@ export default function AddAttractionPage() {
     setSubmitError("");
 
     if (!selectedPlace) {
-      setSubmitError("Please search for and select a place first.");
+      setSubmitError(t("searchPlaceholder"));
       return;
     }
 
     if (!category) {
-      setCategoryError("Please choose a category.");
+      setCategoryError(t("attractionCategory"));
       return;
     }
 
     if (description.length > MAX_DESCRIPTION_LENGTH) {
-      setDescriptionError(`Description must be ${MAX_DESCRIPTION_LENGTH} characters or fewer.`);
+      setDescriptionError(t("errorGeneric"));
       return;
     }
 
@@ -200,7 +206,7 @@ export default function AddAttractionPage() {
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-        throw new Error(result.message || "Unable to submit this attraction.");
+        throw new Error(result.message || t("submitFailed"));
       }
 
       setSubmittedAttraction(result.data);
@@ -225,7 +231,7 @@ export default function AddAttractionPage() {
   if (status === "loading") {
     return (
       <main className="min-h-screen bg-attraction-page-bg px-6 py-16">
-        <p className="text-center text-attraction-muted">Loading...</p>
+        <p className="text-center text-attraction-muted">{t("loading")}</p>
       </main>
     );
   }
@@ -234,15 +240,17 @@ export default function AddAttractionPage() {
     return (
       <main className="min-h-screen bg-attraction-page-bg px-6 py-16">
         <div className="mx-auto max-w-md rounded-2xl border border-attraction-border bg-white p-8 text-center shadow-sm">
-          <h1 className="text-xl font-bold text-attraction-ink">Sign in required</h1>
+          <h1 className="text-xl font-bold text-attraction-ink">
+            {t("unauthorized")}
+          </h1>
           <p className="mt-3 text-attraction-body">
-            You need to be signed in to add a new attraction.
+            {t("signInToAddAttraction")}
           </p>
           <Link
             href="/login"
             className="mt-6 inline-block rounded-[10px] bg-attraction-primary px-5 py-3 font-semibold text-white transition hover:bg-attraction-primary-hover"
           >
-            Sign in
+            {t("signIn")}
           </Link>
         </div>
       </main>
@@ -257,37 +265,35 @@ export default function AddAttractionPage() {
           className="mb-7 inline-flex h-10 items-center gap-2 rounded-full border border-attraction-border bg-white py-0 pl-3 pr-4 text-sm font-semibold text-attraction-body transition hover:border-attraction-border-strong hover:bg-attraction-surface-soft"
         >
           <BackArrowIcon />
-          Back to attractions
+          {t("back")}
         </Link>
 
         <h1 className="mb-2 text-2xl font-bold tracking-tight text-attraction-ink md:text-3xl">
-          Add an attraction
+          {t("addAttractionTitle")}
         </h1>
         <p className="mb-7 text-attraction-body">
-          Search for a real place on Google Places and add it to Chatlas. Submissions go live immediately.
+          {t("searchPlaceholder")}
         </p>
 
         {submittedAttraction ? (
           <div className="rounded-[18px] border border-attraction-border bg-white p-6 text-center shadow-sm">
             <p className="mb-1 text-lg font-bold text-attraction-ink">
-              &ldquo;{submittedAttraction.name}&rdquo; has been added!
+              &ldquo;{submittedAttraction.name}&rdquo; — {t("submitSuccess")}
             </p>
-            <p className="mb-6 text-attraction-body">
-              It&apos;s live on Chatlas now — anyone can find it.
-            </p>
+            <p className="mb-6 text-attraction-body">{t("submitSuccess")}</p>
             <div className="flex flex-wrap items-center justify-center gap-3">
               <Link
                 href={`/attractions/${submittedAttraction._id}`}
                 className="rounded-[10px] bg-attraction-primary px-5 py-3 font-semibold text-white transition hover:bg-attraction-primary-hover"
               >
-                View attraction
+                {t("view")}
               </Link>
               <button
                 type="button"
                 onClick={handleAddAnother}
                 className="rounded-[10px] border border-attraction-border-strong bg-white px-5 py-3 font-semibold text-attraction-primary-dark transition hover:bg-attraction-primary-soft"
               >
-                Add another
+                {t("addAttractionTitle")}
               </button>
             </div>
           </div>
@@ -296,8 +302,11 @@ export default function AddAttractionPage() {
             onSubmit={handleSubmit}
             className="rounded-[18px] border border-attraction-border bg-white p-6 shadow-sm"
           >
-            <label htmlFor="place-search" className="mb-2 block font-semibold text-attraction-ink">
-              Search for a place
+            <label
+              htmlFor="place-search"
+              className="mb-2 block font-semibold text-attraction-ink"
+            >
+              {t("search")}
             </label>
 
             <div className="relative">
@@ -310,12 +319,14 @@ export default function AddAttractionPage() {
                   type="text"
                   value={query}
                   onChange={(event) => handleChangeSearch(event.target.value)}
-                  placeholder="e.g. Jonker Street, Melaka"
+                  placeholder={t("searchPlaceholder")}
                   autoComplete="off"
                   className="w-full text-attraction-ink outline-none placeholder:text-attraction-muted"
                 />
                 {isSearching && (
-                  <span className="text-xs font-semibold text-attraction-muted">Searching…</span>
+                  <span className="text-xs font-semibold text-attraction-muted">
+                    {t("loading")}
+                  </span>
                 )}
               </div>
 
@@ -335,11 +346,14 @@ export default function AddAttractionPage() {
                 </ul>
               )}
 
-              {isResultsOpen && !isSearching && results.length === 0 && !searchError && (
-                <div className="absolute z-10 mt-2 w-full rounded-lg border border-attraction-border bg-white px-4 py-3 text-sm text-attraction-muted shadow-lg">
-                  No places found for &ldquo;{query}&rdquo;.
-                </div>
-              )}
+              {isResultsOpen &&
+                !isSearching &&
+                results.length === 0 &&
+                !searchError && (
+                  <div className="absolute z-10 mt-2 w-full rounded-lg border border-attraction-border bg-white px-4 py-3 text-sm text-attraction-muted shadow-lg">
+                    {t("noAttractionsFound")}
+                  </div>
+                )}
             </div>
 
             {searchError && (
@@ -348,13 +362,16 @@ export default function AddAttractionPage() {
 
             {selectedPlace && (
               <p className="mt-2 text-sm font-semibold text-attraction-primary">
-                Selected: {selectedPlace.text}
+                {selectedPlace.text}
               </p>
             )}
 
             <div className="mt-5">
-              <label htmlFor="category" className="mb-2 block font-semibold text-attraction-ink">
-                Category
+              <label
+                htmlFor="category"
+                className="mb-2 block font-semibold text-attraction-ink"
+              >
+                {t("attractionCategory")}
               </label>
               <select
                 id="category"
@@ -362,21 +379,26 @@ export default function AddAttractionPage() {
                 onChange={(event) => setCategory(event.target.value)}
                 className="w-full rounded-lg border border-attraction-border px-4 py-3 text-attraction-ink outline-none focus:border-attraction-primary"
               >
-                <option value="">Select a category</option>
+                <option value="">{t("selectStateTerritory")}</option>
                 {ATTRACTION_CATEGORIES.map((item) => (
                   <option key={item} value={item}>
-                    {item}
+                    {translateCategory ? translateCategory(item) : item}
                   </option>
                 ))}
               </select>
               {categoryError && (
-                <p className="mt-2 text-sm text-attraction-error">{categoryError}</p>
+                <p className="mt-2 text-sm text-attraction-error">
+                  {categoryError}
+                </p>
               )}
             </div>
 
             <div className="mt-5">
-              <label htmlFor="description" className="mb-2 block font-semibold text-attraction-ink">
-                Description <span className="font-normal text-attraction-muted">(optional)</span>
+              <label
+                htmlFor="description"
+                className="mb-2 block font-semibold text-attraction-ink"
+              >
+                {t("attractionDescriptionOptional")}
               </label>
               <textarea
                 id="description"
@@ -384,23 +406,28 @@ export default function AddAttractionPage() {
                 onChange={(event) => setDescription(event.target.value)}
                 rows={4}
                 maxLength={MAX_DESCRIPTION_LENGTH}
-                placeholder="Share what makes this attraction worth visiting…"
+                placeholder={t("bioPlaceholder")}
                 className="w-full rounded-lg border border-attraction-border px-4 py-3 text-attraction-ink outline-none focus:border-attraction-primary"
               />
               <p className="mt-1 text-right text-xs text-attraction-muted">
                 {description.length} / {MAX_DESCRIPTION_LENGTH}
               </p>
-              <p className="text-xs text-attraction-muted">
-                You can skip this — a placeholder will show until someone adds one.
-              </p>
               {descriptionError && (
-                <p className="mt-2 text-sm text-attraction-error">{descriptionError}</p>
+                <p className="mt-2 text-sm text-attraction-error">
+                  {descriptionError}
+                </p>
               )}
             </div>
 
             <div className="mt-5">
-              <label htmlFor="photos" className="mb-2 block font-semibold text-attraction-ink">
-                Photos <span className="font-normal text-attraction-muted">(optional)</span>
+              <label
+                htmlFor="photos"
+                className="mb-2 block font-semibold text-attraction-ink"
+              >
+                {t("photos")}{" "}
+                <span className="font-normal text-attraction-muted">
+                  ({t("attractionDescriptionOptional")})
+                </span>
               </label>
 
               {photoItems.length > 0 && (
@@ -415,7 +442,7 @@ export default function AddAttractionPage() {
                       <button
                         type="button"
                         onClick={() => handleRemovePhoto(item.id)}
-                        aria-label="Remove photo"
+                        aria-label={t("remove")}
                         className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full border border-attraction-border-strong bg-white text-xs font-bold text-attraction-error shadow-sm transition hover:bg-red-50"
                       >
                         ×
@@ -437,7 +464,7 @@ export default function AddAttractionPage() {
               )}
 
               <p className="mt-2 text-xs text-attraction-muted">
-                JPG, PNG, or WEBP, up to 5MB each, up to {MAX_PHOTOS} photos. You can skip this — submission works with zero photos too.
+                {t("uploadHint")} (max {MAX_PHOTOS})
               </p>
 
               {photoError && (
@@ -456,7 +483,7 @@ export default function AddAttractionPage() {
               disabled={isSubmitting}
               className="mt-6 w-full rounded-[10px] bg-attraction-primary px-5 py-3 font-semibold text-white transition hover:bg-attraction-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isSubmitting ? "Adding attraction…" : "Add attraction"}
+              {isSubmitting ? t("saving") : t("submitAttraction")}
             </button>
           </form>
         )}

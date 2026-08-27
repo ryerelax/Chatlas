@@ -168,6 +168,31 @@ test("private GET returns the distinct IDs from the service", async () => {
   assert.deepEqual(observed, ["connect", ["service", "google-subject-1"]]);
 });
 
+test("private GET preserves legacy consumers and adds only safe latest-verification metadata", async () => {
+  const { GET } = createPrivateHandlers({
+    getVerifiedAttractionIdsForUser: async () => ["attraction-1"],
+    getVerifiedAttractionsForUser: async () => [
+      {
+        attractionId: "attraction-1",
+        latestVisitedDate: "2026-08-21",
+        latestVerifiedAt: "2026-08-23T09:08:00.000Z",
+      },
+    ],
+  });
+
+  await assertJsonResponse(await GET(), 200, {
+    success: true,
+    data: ["attraction-1"],
+    visitedAttractions: [
+      {
+        attractionId: "attraction-1",
+        latestVisitedDate: "2026-08-21",
+        latestVerifiedAt: "2026-08-23T09:08:00.000Z",
+      },
+    ],
+  });
+});
+
 test("an authenticated provider subject crosses the real handler and service boundary to private visited IDs", async () => {
   const calls = [];
   const service = createVerifiedVisitService({

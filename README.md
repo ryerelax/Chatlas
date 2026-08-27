@@ -128,8 +128,8 @@ src/
 - Browse and search a public Traveller Directory as a guest or registered user
 - Display public profiles without exposing email addresses or Google IDs
 - Display public reviews with attraction links and available photos
-- Let registered users view another traveller's exploration map
-- Compare two travellers using one-decimal progress, separate maps, common visits, and unique visits
+- Let registered users view another traveller's verified exploration progress and visited-attraction map without exposing verification evidence
+- Compare two travellers' Verified Visit attractions with coverage, separate maps, common places, and unique places
 - Provide wishlist, favourites, photos, and travel-history pages
 - Cache supported attraction pages, images, searches, and an offline fallback through the PWA service worker
 - Provide shared responsive navigation with English, Chinese, and Malay labels
@@ -291,7 +291,7 @@ Displays the searchable public Traveller Directory. The signed-in user is exclud
 
 ### `/profiles/[id]`
 
-Displays a traveller's public profile and reviews. Registered users can also view the traveller's exploration map and compare both users' exploration progress. Each distinct reviewed attraction counts as one visited attraction.
+Displays a traveller's public profile and reviews. Registered users can also view the traveller's verified exploration progress and compare the attractions both users have genuinely visited. Each distinct attraction with a valid Verified Visit counts as one explored attraction; private verification evidence is never exposed.
 
 ### Collection routes
 
@@ -302,8 +302,8 @@ Displays a traveller's public profile and reviews. Registered users can also vie
 - `/api/profiles` — paginated public Traveller Directory
 - `/api/profiles/[id]` — one display-safe public profile
 - `/api/profiles/[id]/reviews` — public reviews
-- `/api/profiles/[id]/exploration` — registered-user public exploration data
-- `/api/profiles/[id]/comparison` — registered-user exploration comparison
+- `/api/profiles/[id]/exploration` — registered-user verified exploration progress and visited-attraction map
+- `/api/profiles/[id]/comparison` — registered-user Verified Visit exploration comparison
 
 ## Development Guidelines
 

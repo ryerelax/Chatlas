@@ -4,10 +4,12 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useSession } from "next-auth/react";
+import { useLanguage } from "@/presentation/contexts/LanguageContext";
 
 export default function WishlistPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const { t, translateCategory } = useLanguage();
   const [wishlist, setWishlist] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -42,10 +44,10 @@ export default function WishlistPage() {
       if (data.success) {
         setWishlist(data.data || []);
       } else {
-        setError(data.message || "Failed to load wishlist");
+        setError(data.message || t("errorGeneric"));
       }
     } catch (err) {
-      setError("Unable to load wishlist. Please try again.");
+      setError(t("errorGeneric"));
       console.error("Error loading wishlist:", err);
     } finally {
       setIsLoading(false);
@@ -57,22 +59,28 @@ export default function WishlistPage() {
     setRemoveTarget(null);
 
     try {
-      const response = await fetch(`/api/collection/wishlist?attractionId=${attractionId}`, {
-        method: "DELETE",
-      });
+      const response = await fetch(
+        `/api/collection/wishlist?attractionId=${attractionId}`,
+        { method: "DELETE" }
+      );
 
       const data = await response.json();
 
       if (data.success) {
-        setWishlist(wishlist.filter((item) => item.attractionId._id !== attractionId));
-        window.dispatchEvent(new CustomEvent('wishlistUpdated'));
-        showToast(`Removed "${attractionName || 'attraction'}" from wishlist!`, "success");
+        setWishlist(
+          wishlist.filter((item) => item.attractionId._id !== attractionId)
+        );
+        window.dispatchEvent(new CustomEvent("wishlistUpdated"));
+        showToast(
+          `${t("remove")}: ${attractionName || ""}`,
+          "success"
+        );
       } else {
-        showToast(data.message || "Failed to remove from wishlist", "error");
+        showToast(data.message || t("errorGeneric"), "error");
       }
     } catch (err) {
       console.error("Error removing from wishlist:", err);
-      showToast("Unable to remove from wishlist. Please try again.", "error");
+      showToast(t("errorGeneric"), "error");
     } finally {
       setIsRemoving(false);
     }
@@ -80,8 +88,8 @@ export default function WishlistPage() {
 
   if (status === "loading" || isLoading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <p className="text-gray-500">Loading your wishlist...</p>
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-gray-500">{t("loading")}</p>
       </div>
     );
   }
@@ -92,13 +100,13 @@ export default function WishlistPage() {
 
   if (error) {
     return (
-      <div className="flex flex-col justify-center items-center min-h-screen p-4">
-        <p className="text-red-500 mb-4">{error}</p>
+      <div className="flex min-h-screen flex-col items-center justify-center p-4">
+        <p className="mb-4 text-red-500">{error}</p>
         <button
           onClick={loadWishlist}
-          className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600"
+          className="rounded-lg bg-amber-500 px-4 py-2 text-white hover:bg-amber-600"
         >
-          Retry
+          {t("reset")}
         </button>
       </div>
     );
@@ -106,129 +114,103 @@ export default function WishlistPage() {
 
   return (
     <div className="min-h-screen bg-[#F7F9FB]">
-      {/* Toast Notification */}
       {toast && (
-        <div className="fixed top-6 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-md px-4">
-          <div className={`flex items-center gap-3 px-5 py-4 rounded-xl shadow-lg border transition-all duration-300 animate-in slide-in-from-top-5 ${
-            toast.type === "success" 
-              ? "bg-[#E8F7EF] border-[#16845B] text-[#004638]" 
-              : "bg-[#FDECEC] border-[#C2413B] text-[#7A1A1A]"
-          }`}>
-            {toast.type === "success" ? (
-              <div className="w-8 h-8 rounded-full bg-[#16845B]/20 flex items-center justify-center flex-shrink-0">
-                <svg className="w-5 h-5 text-[#16845B]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-            ) : (
-              <div className="w-8 h-8 rounded-full bg-[#C2413B]/20 flex items-center justify-center flex-shrink-0">
-                <svg className="w-5 h-5 text-[#C2413B]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </div>
-            )}
-            <span className="text-base font-medium flex-1">{toast.message}</span>
+        <div className="fixed left-1/2 top-6 z-50 w-full max-w-md -translate-x-1/2 transform px-4">
+          <div
+            className={`animate-in slide-in-from-top-5 flex items-center gap-3 rounded-xl border px-5 py-4 shadow-lg transition-all duration-300 ${
+              toast.type === "success"
+                ? "border-[#16845B] bg-[#E8F7EF] text-[#004638]"
+                : "border-[#C2413B] bg-[#FDECEC] text-[#7A1A1A]"
+            }`}
+          >
+            <span className="flex-1 text-base font-medium">{toast.message}</span>
             <button
               onClick={() => setToast(null)}
-              className="text-[#65748A] hover:text-[#10213B] transition-colors flex-shrink-0"
+              className="flex-shrink-0 text-[#65748A] hover:text-[#10213B]"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              ×
             </button>
           </div>
         </div>
       )}
 
-      {/* Custom Confirmation Modal */}
       {removeTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: "rgba(0,0,0,0.55)" }}>
-          <div className="bg-white w-full max-w-md rounded-[18px] p-6 shadow-2xl">
-            <div className="flex items-center justify-center w-16 h-16 mx-auto mb-4 rounded-full bg-red-50 border border-red-200">
-              <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-            </div>
-            <h3 className="text-xl font-bold text-[#10213B] text-center">
-              Remove from wishlist?
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          style={{ background: "rgba(0,0,0,0.55)" }}
+        >
+          <div className="w-full max-w-md rounded-[18px] bg-white p-6 shadow-2xl">
+            <h3 className="text-center text-xl font-bold text-[#10213B]">
+              {t("remove")}?
             </h3>
-            <p className="text-[#65748A] text-center mt-2">
-              Are you sure you want to remove <span className="font-semibold text-[#10213B]">"{removeTarget.name}"</span> from your wishlist?
+            <p className="mt-2 text-center text-[#65748A]">
+              <span className="font-semibold text-[#10213B]">
+                &quot;{removeTarget.name}&quot;
+              </span>
             </p>
-            <div className="flex gap-3 justify-end mt-6">
+            <div className="mt-6 flex justify-end gap-3">
               <button
                 onClick={() => setRemoveTarget(null)}
-                className="flex-1 px-5 py-2.5 border border-[#BBC8D0] text-[#004638] font-semibold rounded-lg hover:bg-[#F1F6F4] transition-colors"
+                className="flex-1 rounded-lg border border-[#BBC8D0] px-5 py-2.5 font-semibold text-[#004638] hover:bg-[#F1F6F4]"
               >
-                Cancel
+                {t("cancel")}
               </button>
               <button
-                onClick={() => handleRemove(removeTarget.id, removeTarget.name)}
+                onClick={() =>
+                  handleRemove(removeTarget.id, removeTarget.name)
+                }
                 disabled={isRemoving}
-                className="flex-1 px-5 py-2.5 bg-[#C2413B] text-white font-semibold rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                className="flex-1 rounded-lg bg-[#C2413B] px-5 py-2.5 font-semibold text-white hover:bg-red-700 disabled:opacity-50"
               >
-                {isRemoving ? "Removing..." : "Remove"}
+                {isRemoving ? t("loading") : t("remove")}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      <div className="bg-[#006C56] text-white py-12 px-4">
-        <div className="max-w-6xl mx-auto">
+      <div className="bg-[#006C56] px-4 py-12 text-white">
+        <div className="mx-auto max-w-6xl">
           <button
             onClick={() => router.push("/")}
-            className="text-white/80 hover:text-white mb-4 flex items-center gap-2"
+            className="mb-4 flex items-center gap-2 text-white/80 hover:text-white"
           >
-            ← Back to Explore
+            ← {t("backToExplore")}
           </button>
-          <h1 className="text-3xl md:text-4xl font-bold">My Wishlist</h1>
-          <p className="text-white/80 mt-2">
+          <h1 className="text-3xl font-bold md:text-4xl">
+            {t("wishlistTitle")}
+          </h1>
+          <p className="mt-2 text-white/80">
             {wishlist.length === 0
-              ? "Start exploring attractions to add to your wishlist!"
-              : `Showing ${wishlist.length} attraction(s)`}
+              ? t("emptyWishlist")
+              : t("attractionsAvailable", { count: wishlist.length })}
           </p>
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto p-4 py-8">
+      <div className="mx-auto max-w-6xl p-4 py-8">
         {wishlist.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-            <svg
-              className="w-24 h-24 text-gray-300 mb-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1}
-                d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-              />
-            </svg>
+          <div className="flex flex-col items-center justify-center px-4 py-12 text-center">
             <h3 className="text-xl font-semibold text-gray-800">
-              Your wishlist is empty
+              {t("emptyWishlist")}
             </h3>
-            <p className="text-gray-500 mt-2 max-w-md">
-              Start exploring attractions and save the ones you want to visit!
-            </p>
             <button
               onClick={() => router.push("/")}
-              className="mt-6 px-6 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600"
+              className="mt-6 rounded-lg bg-amber-500 px-6 py-2 text-white hover:bg-amber-600"
             >
-              Explore Attractions
+              {t("browseAttractions")}
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
             {wishlist.map((item) => (
               <div
                 key={item._id}
-                className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
+                className="overflow-hidden rounded-lg bg-white shadow-md transition-shadow hover:shadow-lg"
               >
                 <div className="relative h-48 w-full bg-green-100">
-                  {item.attractionId?.photos && item.attractionId.photos.length > 0 ? (
+                  {item.attractionId?.photos &&
+                  item.attractionId.photos.length > 0 ? (
                     <Image
                       src={item.attractionId.photos[0]}
                       alt={item.attractionId.name || "Attraction"}
@@ -236,23 +218,27 @@ export default function WishlistPage() {
                       className="object-cover"
                     />
                   ) : (
-                    <div className="flex items-center justify-center h-full text-green-600/50">
-                      <span>No photo</span>
+                    <div className="flex h-full items-center justify-center text-green-600/50">
+                      <span>{t("noPhotosYet")}</span>
                     </div>
                   )}
                 </div>
                 <div className="p-4">
-                  <h3 className="font-semibold text-lg text-gray-900 truncate">
-                    {item.attractionId?.name || "Unknown attraction"}
+                  <h3 className="truncate text-lg font-semibold text-gray-900">
+                    {item.attractionId?.name || "—"}
                   </h3>
-                  <p className="text-sm text-gray-500 truncate">
-                    {item.attractionId?.category || "Uncategorized"}
+                  <p className="truncate text-sm text-gray-500">
+                    {item.attractionId?.category
+                      ? translateCategory
+                        ? translateCategory(item.attractionId.category)
+                        : item.attractionId.category
+                      : "—"}
                   </p>
-                  <p className="text-sm text-gray-400 truncate mt-1">
-                    {item.attractionId?.address || "No address"}
+                  <p className="mt-1 truncate text-sm text-gray-400">
+                    {item.attractionId?.address || "—"}
                   </p>
                   {item.attractionId?.rating && (
-                    <div className="flex items-center gap-1 mt-2">
+                    <div className="mt-2 flex items-center gap-1">
                       <span className="text-amber-500">★</span>
                       <span className="text-sm font-medium">
                         {item.attractionId.rating.toFixed(1)}
@@ -263,12 +249,12 @@ export default function WishlistPage() {
                     onClick={() => {
                       setRemoveTarget({
                         id: item.attractionId._id,
-                        name: item.attractionId?.name || "this attraction"
+                        name: item.attractionId?.name || "",
                       });
                     }}
-                    className="mt-3 w-full py-2 text-sm text-red-500 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                    className="mt-3 w-full rounded-lg border border-red-200 py-2 text-sm text-red-500 transition-colors hover:bg-red-50"
                   >
-                    Remove from Wishlist
+                    {t("remove")}
                   </button>
                 </div>
               </div>
