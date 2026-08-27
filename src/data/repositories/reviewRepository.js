@@ -330,8 +330,9 @@ export async function removeReviewPhotoByPublicId(reviewId, publicId) {
   ).lean();
 }
 
-export async function deleteReviewById(reviewId) {
-  return Review.findByIdAndDelete(reviewId).lean();
+export async function deleteReviewById(reviewId, { session } = {}) {
+  const query = Review.findByIdAndDelete(reviewId);
+  return session ? query.session(session).lean() : query.lean();
 }
 
 export async function addReviewLike(reviewId, userId) {

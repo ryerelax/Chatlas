@@ -285,6 +285,7 @@ export default function CommunityReviewFeed() {
                 <ReviewCard
                   key={review._id}
                   review={review}
+                  enableComments
                   showAttractionCta
                   attractionCtaLabel={t("communityViewAttraction")}
                   onLikeUpdated={

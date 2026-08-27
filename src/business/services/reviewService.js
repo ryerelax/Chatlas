@@ -16,6 +16,10 @@ import {
 } from "@/data/repositories/reviewRepository";
 import { findUserByEmail } from "@/data/repositories/userRepository";
 import {
+  countCommentsByReviewIds,
+  deleteCommentsByReviewId,
+} from "@/data/repositories/reviewCommentRepository";
+import {
   deleteImageByPublicId,
   uploadImageWithMetadataFromBuffer,
 } from "@/infrastructure/external/cloudinary";
@@ -114,7 +118,7 @@ export async function submitReview({
       photos: uploadedPhotos,
     });
 
-    return serializeReviewForViewer(review, user._id);
+    return serializeReviewForViewer(review, user._id, 0);
   } catch (error) {
     await rollbackUploadedPhotos(uploadedPhotos);
     throw error;
@@ -157,12 +161,17 @@ export async function getReviewsByAttraction({
     findOptionalUserByEmail(email),
   ]);
 
+  const commentCounts = await getCommentCounts(items);
   const totalPages =
     totalReviews === 0 ? 0 : Math.ceil(totalReviews / normalizedLimit);
 
   return {
     reviews: items.map((review) =>
-      serializeReviewForViewer(review, viewer?._id)
+      serializeReviewForViewer(
+        review,
+        viewer?._id,
+        commentCounts.get(review._id.toString()) || 0
+      )
     ),
     page: normalizedPage,
     limit: normalizedLimit,
@@ -201,6 +210,7 @@ export async function getCommunityReviews({
     }),
     findOptionalUserByEmail(email),
   ]);
+  const commentCounts = await getCommentCounts(items);
   const totalPages =
     totalReviews === 0
       ? 0
@@ -208,7 +218,11 @@ export async function getCommunityReviews({
 
   return {
     reviews: items.map((review) =>
-      serializeCommunityReviewForViewer(review, viewer?._id)
+      serializeCommunityReviewForViewer(
+        review,
+        viewer?._id,
+        commentCounts.get(review._id.toString()) || 0
+      )
     ),
     page: normalizedPage,
     limit: COMMUNITY_REVIEW_LIMIT,
@@ -414,23 +428,35 @@ async function rollbackUploadedPhotos(uploadedPhotos) {
 
 export async function getReviewById(reviewId, email = "") {
   const normalizedReviewId = normalizeReviewId(reviewId);
-  const [review, viewer] = await Promise.all([
+  const [review, viewer, commentCounts] = await Promise.all([
     findReviewByIdWithAttraction(normalizedReviewId),
     findOptionalUserByEmail(email),
+    getCommentCounts([{ _id: normalizedReviewId }]),
   ]);
 
   if (!review) {
     throw new ReviewServiceError("Review not found.", 404);
   }
 
-  return serializeReviewForViewer(review, viewer?._id);
+  return serializeReviewForViewer(
+    review,
+    viewer?._id,
+    commentCounts.get(normalizedReviewId) || 0
+  );
 }
 
 export async function getReviewsByAuthenticatedUser(email) {
   const user = await resolveUserByEmail(email);
   const reviews = await findReviewsByUserId(user._id);
+  const commentCounts = await getCommentCounts(reviews);
 
-  return reviews.map((review) => serializeReviewForViewer(review, user._id));
+  return reviews.map((review) =>
+    serializeReviewForViewer(
+      review,
+      user._id,
+      commentCounts.get(review._id.toString()) || 0
+    )
+  );
 }
 
 export async function updateReview({
@@ -516,7 +542,12 @@ export async function updateReview({
     }
 
     await deleteCloudinaryPhotos(normalizedDeletePhotoPublicIds);
-    return serializeReviewForViewer(updatedReview, user._id);
+    const commentCounts = await getCommentCounts([updatedReview]);
+    return serializeReviewForViewer(
+      updatedReview,
+      user._id,
+      commentCounts.get(updatedReview._id.toString()) || 0
+    );
   } catch (error) {
     await rollbackUploadedPhotos(uploadedPhotos);
     throw error;
@@ -536,10 +567,20 @@ export async function deleteReview({ reviewId, email }) {
 
   assertReviewOwnership(review, user, "delete");
 
-  const deletedReview = await deleteReviewById(normalizedReviewId);
+  const session = await mongoose.startSession();
+  let deletedReview;
 
-  if (!deletedReview) {
-    throw new ReviewServiceError("Review not found.", 404);
+  try {
+    await session.withTransaction(async () => {
+      await deleteCommentsByReviewId(normalizedReviewId, { session });
+      deletedReview = await deleteReviewById(normalizedReviewId, { session });
+
+      if (!deletedReview) {
+        throw new ReviewServiceError("Review not found.", 404);
+      }
+    });
+  } finally {
+    await session.endSession();
   }
 
   await deleteCloudinaryPhotos(
@@ -702,17 +743,26 @@ async function deleteCloudinaryPhotos(publicIds) {
   }
 }
 
-function serializeReviewForViewer(review, viewerId = null) {
+function serializeReviewForViewer(
+  review,
+  viewerId = null,
+  commentCount = 0
+) {
   const publicReview = { ...review };
   delete publicReview.likes;
 
   return {
     ...publicReview,
     ...createReviewLikeState(review, viewerId),
+    commentCount: normalizeCommentCount(commentCount),
   };
 }
 
-function serializeCommunityReviewForViewer(review, viewerId = null) {
+function serializeCommunityReviewForViewer(
+  review,
+  viewerId = null,
+  commentCount = 0
+) {
   const reviewer = review._communityReviewer;
   const attraction = review._communityAttraction;
   const likeState = createReviewLikeState(review, viewerId);
@@ -752,6 +802,7 @@ function serializeCommunityReviewForViewer(review, viewerId = null) {
     })),
     createdAt: review.createdAt || null,
     ...likeState,
+    commentCount: normalizeCommentCount(commentCount),
   };
 }
 
@@ -776,4 +827,23 @@ function createReviewLikeState(review, viewerId = null) {
     likedByCurrentUser:
       Boolean(normalizedViewerId) && uniqueLikeIds.has(normalizedViewerId),
   };
+}
+
+async function getCommentCounts(reviews) {
+  const reviewIds = reviews
+    .map((review) => review?._id?.toString())
+    .filter(Boolean);
+  const counts = await countCommentsByReviewIds(reviewIds);
+
+  return new Map(
+    counts.map((item) => [
+      item._id.toString(),
+      normalizeCommentCount(item.commentCount),
+    ])
+  );
+}
+
+function normalizeCommentCount(value) {
+  const count = Number(value);
+  return Number.isInteger(count) && count > 0 ? count : 0;
 }
