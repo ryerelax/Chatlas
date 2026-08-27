@@ -19,6 +19,7 @@ export async function GET(request) {
       page: searchParams.get("page"),
       search: searchParams.get("search"),
       sort: searchParams.get("sort"),
+      filter: searchParams.get("filter"),
     });
 
     return NextResponse.json({
@@ -27,6 +28,7 @@ export async function GET(request) {
       data: result.reviews,
       search: result.search,
       sort: result.sort,
+      filter: result.filter,
       pagination: {
         page: result.page,
         limit: result.limit,

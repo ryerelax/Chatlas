@@ -138,10 +138,26 @@ export async function findCommunityReviews({
   limit,
   sort,
   searchPattern,
+  filter,
 }) {
   const skip = (page - 1) * limit;
   const hasSearch = Boolean(searchPattern);
   const pipeline = [];
+
+  if (filter === "with-photos") {
+    pipeline.push({
+      $match: {
+        photos: {
+          $elemMatch: {
+            url: { $regex: /^https:\/\/res\.cloudinary\.com\//i },
+            publicId: { $regex: /\S/ },
+          },
+        },
+      },
+    });
+  } else if (filter === "rating-4-plus") {
+    pipeline.push({ $match: { rating: { $gte: 4 } } });
+  }
 
   if (hasSearch) {
     pipeline.push(

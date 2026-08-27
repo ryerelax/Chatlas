@@ -43,6 +43,11 @@ const COMMUNITY_REVIEW_SORT_OPTIONS = new Set([
   "highest-rating",
   "most-liked",
 ]);
+const COMMUNITY_REVIEW_FILTER_OPTIONS = new Set([
+  "all",
+  "with-photos",
+  "rating-4-plus",
+]);
 
 export class ReviewServiceError extends Error {
   constructor(message, statusCode) {
@@ -172,6 +177,7 @@ export async function getCommunityReviews({
   page,
   sort,
   search,
+  filter,
 }) {
   const normalizedPage = normalizeReviewListInteger(page, {
     defaultValue: DEFAULT_REVIEW_PAGE,
@@ -180,6 +186,7 @@ export async function getCommunityReviews({
   });
   const normalizedSort = normalizeCommunityReviewSort(sort);
   const normalizedSearch = normalizeCommunityReviewSearch(search);
+  const normalizedFilter = normalizeCommunityReviewFilter(filter);
   const searchPattern = normalizedSearch
     ? escapeRegularExpression(normalizedSearch)
     : "";
@@ -190,6 +197,7 @@ export async function getCommunityReviews({
       limit: COMMUNITY_REVIEW_LIMIT,
       sort: normalizedSort,
       searchPattern,
+      filter: normalizedFilter,
     }),
     findOptionalUserByEmail(email),
   ]);
@@ -206,6 +214,7 @@ export async function getCommunityReviews({
     limit: COMMUNITY_REVIEW_LIMIT,
     search: normalizedSearch,
     sort: normalizedSort,
+    filter: normalizedFilter,
     totalReviews,
     totalPages,
   };
@@ -269,6 +278,20 @@ function normalizeCommunityReviewSort(sort) {
   }
 
   return normalizedSort;
+}
+
+function normalizeCommunityReviewFilter(filter) {
+  if (filter === undefined || filter === null || filter === "") {
+    return "all";
+  }
+
+  const normalizedFilter = typeof filter === "string" ? filter.trim() : "";
+
+  if (!COMMUNITY_REVIEW_FILTER_OPTIONS.has(normalizedFilter)) {
+    throw new ReviewServiceError("Invalid Community review filter.", 400);
+  }
+
+  return normalizedFilter;
 }
 
 function normalizeCommunityReviewSearch(search) {

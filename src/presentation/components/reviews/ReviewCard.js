@@ -5,7 +5,12 @@ import Link from "next/link";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 
-export default function ReviewCard({ review = {}, onLikeUpdated }) {
+export default function ReviewCard({
+  review = {},
+  onLikeUpdated,
+  showAttractionCta = false,
+  attractionCtaLabel = "",
+}) {
   const { status: sessionStatus } = useSession();
   const userName =
     review.reviewer?.name || review.userName || "Chatlas traveller";
@@ -339,7 +344,11 @@ export default function ReviewCard({ review = {}, onLikeUpdated }) {
         </div>
       )}
 
-      <div className="mt-5 sm:ml-[72px]">
+      <div
+        className={`mt-5 sm:ml-[72px] ${
+          showAttractionCta ? "flex flex-wrap items-center gap-3" : ""
+        }`}
+      >
         <button
           type="button"
           onClick={handleLikeClick}
@@ -379,8 +388,22 @@ export default function ReviewCard({ review = {}, onLikeUpdated }) {
           <span aria-live="polite">{likeCount}</span>
         </button>
 
+        {showAttractionCta && attractionHref && attractionCtaLabel && (
+          <Link
+            href={attractionHref}
+            className="inline-flex min-h-11 items-center justify-center rounded-[10px] border border-attraction-border-strong bg-white px-4 text-sm font-semibold text-attraction-primary-dark transition-colors duration-200 hover:border-attraction-primary hover:bg-attraction-primary-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-attraction-primary"
+          >
+            {attractionCtaLabel} <span aria-hidden="true">→</span>
+          </Link>
+        )}
+
         {likeError && (
-          <p role="alert" className="mt-2 text-sm text-attraction-error">
+          <p
+            role="alert"
+            className={`mt-2 text-sm text-attraction-error ${
+              showAttractionCta ? "basis-full" : ""
+            }`}
+          >
             {likeError}
           </p>
         )}
