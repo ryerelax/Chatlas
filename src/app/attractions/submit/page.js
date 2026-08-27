@@ -42,6 +42,7 @@ export default function AddAttractionPage() {
   const [submittedAttraction, setSubmittedAttraction] = useState(null);
 
   const abortControllerRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const isResultsOpen =
     !selectedPlace &&
@@ -271,9 +272,7 @@ export default function AddAttractionPage() {
         <h1 className="mb-2 text-2xl font-bold tracking-tight text-attraction-ink md:text-3xl">
           {t("addAttractionTitle")}
         </h1>
-        <p className="mb-7 text-attraction-body">
-          {t("searchPlaceholder")}
-        </p>
+        <p className="mb-7 text-attraction-body">{t("searchPlaceholder")}</p>
 
         {submittedAttraction ? (
           <div className="rounded-[18px] border border-attraction-border bg-white p-6 text-center shadow-sm">
@@ -379,7 +378,7 @@ export default function AddAttractionPage() {
                 onChange={(event) => setCategory(event.target.value)}
                 className="w-full rounded-lg border border-attraction-border px-4 py-3 text-attraction-ink outline-none focus:border-attraction-primary"
               >
-                <option value="">{t("selectStateTerritory")}</option>
+                <option value="">{t("selectCategory")}</option>
                 {ATTRACTION_CATEGORIES.map((item) => (
                   <option key={item} value={item}>
                     {translateCategory ? translateCategory(item) : item}
@@ -406,7 +405,7 @@ export default function AddAttractionPage() {
                 onChange={(event) => setDescription(event.target.value)}
                 rows={4}
                 maxLength={MAX_DESCRIPTION_LENGTH}
-                placeholder={t("bioPlaceholder")}
+                placeholder={t("attractionDescriptionPlaceholder")}
                 className="w-full rounded-lg border border-attraction-border px-4 py-3 text-attraction-ink outline-none focus:border-attraction-primary"
               />
               <p className="mt-1 text-right text-xs text-attraction-muted">
@@ -420,13 +419,10 @@ export default function AddAttractionPage() {
             </div>
 
             <div className="mt-5">
-              <label
-                htmlFor="photos"
-                className="mb-2 block font-semibold text-attraction-ink"
-              >
+              <label className="mb-2 block font-semibold text-attraction-ink">
                 {t("photos")}{" "}
                 <span className="font-normal text-attraction-muted">
-                  ({t("attractionDescriptionOptional")})
+                  ({t("photosOptional")})
                 </span>
               </label>
 
@@ -436,7 +432,7 @@ export default function AddAttractionPage() {
                     <div key={item.id} className="relative">
                       <img
                         src={item.previewUrl}
-                        alt="Selected photo preview"
+                        alt=""
                         className="h-20 w-20 rounded-lg object-cover"
                       />
                       <button
@@ -453,14 +449,31 @@ export default function AddAttractionPage() {
               )}
 
               {photoItems.length < MAX_PHOTOS && (
-                <input
-                  id="photos"
-                  type="file"
-                  multiple
-                  accept="image/jpeg,image/png,image/webp"
-                  onChange={handlePhotoChange}
-                  className="w-full text-sm text-attraction-body file:mr-4 file:rounded-lg file:border-0 file:bg-attraction-primary-soft file:px-4 file:py-2 file:text-sm file:font-semibold file:text-attraction-primary"
-                />
+                <>
+                  <input
+                    ref={fileInputRef}
+                    id="photos"
+                    type="file"
+                    multiple
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handlePhotoChange}
+                    className="sr-only"
+                  />
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="rounded-lg border border-attraction-border bg-attraction-primary-soft px-4 py-2 text-sm font-semibold text-attraction-primary transition hover:bg-[#CDF5E5]"
+                    >
+                      {t("choosePhoto")}
+                    </button>
+                    <span className="text-sm text-attraction-muted">
+                      {photoItems.length === 0
+                        ? t("noFileChosen")
+                        : t("photosSelected", { count: photoItems.length })}
+                    </span>
+                  </div>
+                </>
               )}
 
               <p className="mt-2 text-xs text-attraction-muted">

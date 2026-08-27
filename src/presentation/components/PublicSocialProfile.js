@@ -9,17 +9,14 @@ import ProfileAvatar from "@/presentation/components/ProfileAvatar";
 import SocialExplorationMap from "@/presentation/components/SocialExplorationMap";
 import SocialProfileStatus from "@/presentation/components/SocialProfileStatus";
 import StarRating from "@/presentation/components/StarRating";
+import { useLanguage } from "@/presentation/contexts/LanguageContext";
 
-const TABS = [
-  { id: "overview", label: "Overview" },
-  { id: "reviews", label: "Reviews" },
-  { id: "exploration", label: "Explore progress" },
-  { id: "compare", label: "Compare" },
-];
+const TAB_IDS = ["overview", "reviews", "exploration", "compare"];
 
 export default function PublicSocialProfile() {
   const { id } = useParams();
   const { status } = useSession();
+  const { t, translateState, lang } = useLanguage();
   const [profile, setProfile] = useState(null);
   const [profileState, setProfileState] = useState("loading");
   const [profileError, setProfileError] = useState("");
@@ -30,6 +27,13 @@ export default function PublicSocialProfile() {
     message: "",
     code: "",
   });
+
+  const tabs = [
+    { id: "overview", label: t("overview") },
+    { id: "reviews", label: t("community") },
+    { id: "exploration", label: t("exploreProgressTab") },
+    { id: "compare", label: t("compare") },
+  ];
 
   useEffect(() => {
     const controller = new AbortController();
@@ -42,7 +46,7 @@ export default function PublicSocialProfile() {
         const result = await response.json();
 
         if (!response.ok) {
-          throw new Error(result.message || "Unable to load the public profile.");
+          throw new Error(result.message || t("profileDoesNotExist"));
         }
 
         setProfile(result.data);
@@ -57,11 +61,14 @@ export default function PublicSocialProfile() {
 
     loadProfile();
     return () => controller.abort();
-  }, [id]);
+  }, [id, t]);
 
   useEffect(() => {
     if (activeTab === "overview") return;
-    if ((activeTab === "exploration" || activeTab === "compare") && status !== "authenticated") {
+    if (
+      (activeTab === "exploration" || activeTab === "compare") &&
+      status !== "authenticated"
+    ) {
       return;
     }
 
@@ -84,7 +91,7 @@ export default function PublicSocialProfile() {
           setSectionState({
             status: "error",
             data: null,
-            message: result.message || "This section is currently unavailable.",
+            message: result.message || t("sectionUnavailable"),
             code: result.code || "",
           });
           return;
@@ -101,7 +108,7 @@ export default function PublicSocialProfile() {
           setSectionState({
             status: "error",
             data: null,
-            message: "This section is currently unavailable.",
+            message: t("sectionUnavailable"),
             code: "",
           });
         }
@@ -110,7 +117,7 @@ export default function PublicSocialProfile() {
 
     loadSection();
     return () => controller.abort();
-  }, [activeTab, id, status]);
+  }, [activeTab, id, status, t]);
 
   function selectTab(tabId) {
     setActiveTab(tabId);
@@ -130,16 +137,26 @@ export default function PublicSocialProfile() {
         <div className="mx-auto max-w-2xl">
           <SocialProfileStatus
             icon="!"
-            title="User profile not found"
-            message={profileError || "This public profile does not exist."}
+            title={t("profileNotFound")}
+            message={profileError || t("profileDoesNotExist")}
             actionHref="/profiles"
-            actionLabel="Browse traveller profiles"
+            actionLabel={t("browseTravellers")}
             tone="error"
           />
         </div>
       </main>
     );
   }
+
+  const locationLabel = profile.location
+    ? translateState
+      ? translateState(profile.location)
+      : profile.location
+    : t("locationNotShared");
+
+  const joinedLabel = profile.joinedAt
+    ? t("memberSince", { date: formatJoinedAt(profile.joinedAt, lang) })
+    : t("memberSinceUnavailable");
 
   return (
     <main className="min-h-screen bg-attraction-page-bg">
@@ -148,7 +165,7 @@ export default function PublicSocialProfile() {
           href="/profiles"
           className="inline-flex min-h-11 items-center rounded-full border border-attraction-border bg-white px-4 text-sm font-semibold text-attraction-body transition hover:bg-attraction-surface-soft focus:outline-none focus:ring-2 focus:ring-attraction-primary"
         >
-          ← Back to travellers
+          ← {t("backToTravellers")}
         </Link>
 
         <section className="mt-5 rounded-[18px] border border-attraction-border bg-white p-5 shadow-sm md:p-7">
@@ -159,16 +176,18 @@ export default function PublicSocialProfile() {
               size="large"
             />
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-attraction-primary">Public traveller profile</p>
+              <p className="text-sm font-semibold text-attraction-primary">
+                {t("publicTravellerProfile")}
+              </p>
               <h1 className="mt-1 text-3xl font-bold tracking-tight text-attraction-ink">
                 {profile.displayName}
               </h1>
               <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-attraction-muted">
-                <span>{profile.location || "Location not shared"}</span>
-                <span>Member since {formatJoinedAt(profile.joinedAt)}</span>
+                <span>{locationLabel}</span>
+                <span>{joinedLabel}</span>
               </div>
               <p className="mt-4 max-w-3xl text-base leading-relaxed text-attraction-body">
-                {profile.bio || "This traveller has not added a public bio yet."}
+                {profile.bio || t("noPublicBio")}
               </p>
             </div>
           </div>
@@ -176,10 +195,10 @@ export default function PublicSocialProfile() {
 
         <nav
           className="mt-6 overflow-x-auto border-b border-attraction-divider"
-          aria-label="Public profile sections"
+          aria-label={t("publicTravellerProfile")}
         >
           <div className="flex min-w-max gap-1">
-            {TABS.map((tab) => (
+            {tabs.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
@@ -198,16 +217,25 @@ export default function PublicSocialProfile() {
         </nav>
 
         <section className="mt-6 rounded-[18px] border border-attraction-border bg-white p-5 md:p-6">
-          {activeTab === "overview" && <OverviewSection profile={profile} />}
-          {activeTab === "reviews" && <ReviewsSection state={sectionState} />}
+          {activeTab === "overview" && (
+            <OverviewSection profile={profile} t={t} />
+          )}
+          {activeTab === "reviews" && (
+            <ReviewsSection state={sectionState} t={t} lang={lang} />
+          )}
           {activeTab === "exploration" && (
-            <ExplorationProgressSection authStatus={status} state={sectionState} />
+            <ExplorationProgressSection
+              authStatus={status}
+              state={sectionState}
+              t={t}
+            />
           )}
           {activeTab === "compare" && (
             <ComparisonSection
               authStatus={status}
               profile={profile}
               state={sectionState}
+              t={t}
             />
           )}
         </section>
@@ -216,25 +244,39 @@ export default function PublicSocialProfile() {
   );
 }
 
-function OverviewSection({ profile }) {
+function OverviewSection({ profile, t }) {
   return (
     <div>
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
-          <p className="text-sm font-semibold text-attraction-primary">Travel activity</p>
-          <h2 className="mt-1 text-xl font-bold text-attraction-ink">Public activity summary</h2>
+          <p className="text-sm font-semibold text-attraction-primary">
+            {t("travelActivity")}
+          </p>
+          <h2 className="mt-1 text-xl font-bold text-attraction-ink">
+            {t("publicActivitySummary")}
+          </h2>
         </div>
         <span className="rounded-full bg-attraction-surface-soft px-3 py-1 text-xs font-semibold text-attraction-muted">
-          See activity tabs
+          {t("seeActivityTabs")}
         </span>
       </div>
       <div className="mt-5 grid gap-4 sm:grid-cols-3">
-        <SummaryCard label="Reviews written" value={profile.activitySummary.reviewsWritten} />
-        <SummaryCard label="Attractions visited" value={profile.activitySummary.visitedAttractions} />
-        <SummaryCard label="Exploration progress" value={profile.activitySummary.explorationProgress} suffix="%" />
+        <SummaryCard
+          label={t("reviewsWritten")}
+          value={profile.activitySummary.reviewsWritten}
+        />
+        <SummaryCard
+          label={t("attractionsVisited")}
+          value={profile.activitySummary.visitedAttractions}
+        />
+        <SummaryCard
+          label={t("exploreProgress")}
+          value={profile.activitySummary.explorationProgress}
+          suffix="%"
+        />
       </div>
       <p className="mt-5 rounded-[10px] bg-[#EAF3FA] px-4 py-3 text-sm leading-relaxed text-attraction-body">
-        Visits and progress are based on verified visits.
+        {t("visitsBasedOnVerified")}
       </p>
     </div>
   );
@@ -251,13 +293,19 @@ function SummaryCard({ label, value, suffix = "" }) {
   );
 }
 
-function ReviewsSection({ state }) {
-  if (state.status === "loading") return <SectionSkeleton label="Loading reviews" />;
+function ReviewsSection({ state, t, lang }) {
+  if (state.status === "loading") {
+    return <SectionSkeleton label={t("loading")} />;
+  }
   if (state.status === "error") {
     return (
       <SocialProfileStatus
         icon="i"
-        title={state.code === "REVIEWS_UNAVAILABLE" ? "Reviews are not available yet" : "Unable to load reviews"}
+        title={
+          state.code === "REVIEWS_UNAVAILABLE"
+            ? t("reviewsUnavailable")
+            : t("unableLoadReviews")
+        }
         message={state.message}
         tone={state.code === "REVIEWS_UNAVAILABLE" ? "info" : "error"}
       />
@@ -269,22 +317,24 @@ function ReviewsSection({ state }) {
     return (
       <SocialProfileStatus
         icon="☆"
-        title="No reviews available"
-        message="This traveller has not published any reviews yet."
+        title={t("noReviewsAvailable")}
+        message={t("noReviewsPublished")}
       />
     );
   }
 
   return (
     <div>
-      <h2 className="text-xl font-bold text-attraction-ink">Public reviews</h2>
+      <h2 className="text-xl font-bold text-attraction-ink">
+        {t("publicReviews")}
+      </h2>
       <div className="mt-3 divide-y divide-attraction-divider">
         {reviews.map((review) => (
           <article key={review.id} className="py-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <StarRating rating={Number(review.rating) || 0} />
               <time className="text-xs text-attraction-muted">
-                {formatReviewDate(review.createdAt)}
+                {formatReviewDate(review.createdAt, lang, t)}
               </time>
             </div>
             {review.attraction?.id && review.attraction?.name && (
@@ -301,7 +351,10 @@ function ReviewsSection({ state }) {
             {Array.isArray(review.photos) && review.photos.length > 0 && (
               <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {review.photos.map((photo, index) => (
-                  <div key={photo} className="relative aspect-[4/3] overflow-hidden rounded-[10px]">
+                  <div
+                    key={photo}
+                    className="relative aspect-[4/3] overflow-hidden rounded-[10px]"
+                  >
                     <Image
                       src={photo}
                       alt={`${review.attraction?.name || "Attraction"} review photo ${index + 1}`}
@@ -320,26 +373,34 @@ function ReviewsSection({ state }) {
   );
 }
 
-function ExplorationProgressSection({ authStatus, state }) {
-  if (authStatus === "loading") return <SectionSkeleton label="Checking access" />;
+function ExplorationProgressSection({ authStatus, state, t }) {
+  if (authStatus === "loading") {
+    return <SectionSkeleton label={t("checkingAccess")} />;
+  }
   if (authStatus !== "authenticated") {
     return (
       <SocialProfileStatus
         icon="⌖"
-        title="Log in to view explore progress"
-        message="Verified exploration maps are available to registered Chatlas users."
+        title={t("loginToViewProgress")}
+        message={t("loginForExploreMaps")}
         actionHref="/login"
-        actionLabel="Log in with Google"
+        actionLabel={t("loginWithGoogle")}
         tone="info"
       />
     );
   }
-  if (state.status === "loading") return <SectionSkeleton label="Loading explore progress" />;
+  if (state.status === "loading") {
+    return <SectionSkeleton label={t("loadingExploreProgress")} />;
+  }
   if (state.status === "error") {
     return (
       <SocialProfileStatus
         icon="⌖"
-        title={state.code === "EXPLORATION_UNAVAILABLE" ? "Explore progress is not available yet" : "Explore progress is currently unavailable"}
+        title={
+          state.code === "EXPLORATION_UNAVAILABLE"
+            ? t("exploreProgressNotYet")
+            : t("exploreProgressUnavailable")
+        }
         message={state.message}
         tone={state.code === "EXPLORATION_UNAVAILABLE" ? "info" : "error"}
       />
@@ -352,15 +413,15 @@ function ExplorationProgressSection({ authStatus, state }) {
       <div>
         <div className="mb-5 flex justify-end">
           <SummaryCard
-            label="Exploration progress"
+            label={t("exploreProgress")}
             value={state.data?.progressPercentage ?? 0}
             suffix="%"
           />
         </div>
         <SocialProfileStatus
           icon="⌖"
-          title="No verified visits available"
-          message="This traveller has not verified a visit to any supported attraction yet."
+          title={t("noVerifiedVisits")}
+          message={t("noVerifiedVisitsHint")}
         />
       </div>
     );
@@ -370,42 +431,60 @@ function ExplorationProgressSection({ authStatus, state }) {
     <div>
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-attraction-ink">Verified exploration map</h2>
+          <h2 className="text-xl font-bold text-attraction-ink">
+            {t("verifiedExplorationMap")}
+          </h2>
           <p className="mt-1 text-sm text-attraction-muted">
-            {attractions.length} verified attraction{attractions.length === 1 ? "" : "s"}
+            {t("verifiedAttractionsCount", { count: attractions.length })}
           </p>
         </div>
-        <SummaryCard label="Exploration progress" value={state.data.progressPercentage} suffix="%" />
+        <SummaryCard
+          label={t("exploreProgress")}
+          value={state.data.progressPercentage}
+          suffix="%"
+        />
       </div>
       <SocialExplorationMap attractions={attractions} />
       <p className="mt-4 rounded-[10px] bg-[#EAF3FA] px-4 py-3 text-sm leading-relaxed text-attraction-body">
-        Only verified visits are shown. Precise verification coordinates and photo evidence remain private.
+        {t("onlyVerifiedShown")}
       </p>
-      <ExploredAttractionList title="Verified locations" attractions={attractions} />
+      <ExploredAttractionList
+        title={t("verifiedLocations")}
+        attractions={attractions}
+        t={t}
+      />
     </div>
   );
 }
 
-function ComparisonSection({ authStatus, profile, state }) {
-  if (authStatus === "loading") return <SectionSkeleton label="Checking access" />;
+function ComparisonSection({ authStatus, profile, state, t }) {
+  if (authStatus === "loading") {
+    return <SectionSkeleton label={t("checkingAccess")} />;
+  }
   if (authStatus !== "authenticated") {
     return (
       <SocialProfileStatus
         icon="⇄"
-        title="Log in to compare explored places"
-        message={`Log in with Google to compare your verified exploration with ${profile.displayName}.`}
+        title={t("loginToCompare")}
+        message={t("loginToCompareHint", { name: profile.displayName })}
         actionHref="/login"
-        actionLabel="Log in with Google"
+        actionLabel={t("loginWithGoogle")}
         tone="info"
       />
     );
   }
-  if (state.status === "loading") return <SectionSkeleton label="Comparing explored places" />;
+  if (state.status === "loading") {
+    return <SectionSkeleton label={t("comparingPlaces")} />;
+  }
   if (state.status === "error") {
     return (
       <SocialProfileStatus
         icon="⇄"
-        title={state.code === "COMPARISON_UNAVAILABLE" ? "Comparison is not available yet" : "Unable to compare explored places"}
+        title={
+          state.code === "COMPARISON_UNAVAILABLE"
+            ? t("comparisonNotYet")
+            : t("unableCompare")
+        }
         message={state.message}
         tone={state.code === "COMPARISON_UNAVAILABLE" ? "info" : "error"}
       />
@@ -425,86 +504,119 @@ function ComparisonSection({ authStatus, profile, state }) {
 
   return (
     <div>
-      <h2 className="text-xl font-bold text-attraction-ink">Attraction coverage comparison</h2>
+      <h2 className="text-xl font-bold text-attraction-ink">
+        {t("coverageComparison")}
+      </h2>
       <div className="mt-5 grid gap-4 md:grid-cols-2">
-        <CoverageComparisonCard user={comparison.viewer} label="You" />
-        <CoverageComparisonCard user={comparison.target} label={profile.displayName} />
+        <CoverageComparisonCard
+          user={comparison.viewer}
+          label={t("you")}
+          t={t}
+        />
+        <CoverageComparisonCard
+          user={comparison.target}
+          label={profile.displayName}
+          t={t}
+        />
       </div>
       <section className="mt-8">
         <h3 className="text-base font-bold text-attraction-ink">
-          Explored maps
+          {t("exploredMaps")}
         </h3>
         <p className="mt-1 text-sm text-attraction-muted">
-          Compare the attractions each traveller has reached through a verified visit. Verification evidence remains private.
+          {t("exploredMapsHint")}
         </p>
         <div className="mt-4 grid gap-5 lg:grid-cols-2">
           <ComparisonMap
-            label="Your explored places"
+            label={t("yourExploredPlaces")}
             attractions={viewerAttractions}
+            t={t}
           />
           <ComparisonMap
-            label={`${profile.displayName}'s explored places`}
+            label={t("theirExploredPlaces", { name: profile.displayName })}
             attractions={targetAttractions}
+            t={t}
           />
         </div>
       </section>
       <div className="mt-8 space-y-7">
-        <ExploredAttractionList title="Explored by both travellers" attractions={comparison.common || []} />
-        <ExploredAttractionList title="Only explored by you" attractions={comparison.viewerOnly || []} />
-        <ExploredAttractionList title={`Only explored by ${profile.displayName}`} attractions={comparison.targetOnly || []} />
+        <ExploredAttractionList
+          title={t("exploredByBoth")}
+          attractions={comparison.common || []}
+          t={t}
+        />
+        <ExploredAttractionList
+          title={t("onlyExploredByYou")}
+          attractions={comparison.viewerOnly || []}
+          t={t}
+        />
+        <ExploredAttractionList
+          title={t("onlyExploredByThem", { name: profile.displayName })}
+          attractions={comparison.targetOnly || []}
+          t={t}
+        />
       </div>
     </div>
   );
 }
 
-function CoverageComparisonCard({ user, label }) {
-  const coverage = Math.min(100, Math.max(0, Number(user?.coveragePercentage) || 0));
+function CoverageComparisonCard({ user, label, t }) {
+  const coverage = Math.min(
+    100,
+    Math.max(0, Number(user?.coveragePercentage) || 0)
+  );
   const coverageLabel = coverage.toFixed(1);
   return (
     <article className="rounded-[14px] bg-attraction-primary-soft p-5">
       <div className="flex items-center justify-between gap-3">
         <h3 className="font-bold text-attraction-ink">{label}</h3>
-        <span className="text-sm font-semibold text-attraction-primary-dark">{coverageLabel}%</span>
+        <span className="text-sm font-semibold text-attraction-primary-dark">
+          {coverageLabel}%
+        </span>
       </div>
-      <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-white" aria-label={`${label} attraction coverage: ${coverageLabel}%`}>
-        <div className="h-full rounded-full bg-attraction-primary" style={{ width: `${coverage}%` }} />
+      <div
+        className="mt-4 h-2.5 overflow-hidden rounded-full bg-white"
+        aria-label={`${label} attraction coverage: ${coverageLabel}%`}
+      >
+        <div
+          className="h-full rounded-full bg-attraction-primary"
+          style={{ width: `${coverage}%` }}
+        />
       </div>
       <p className="mt-3 text-sm text-attraction-body">
-        {user?.exploredCount || 0} attraction{user?.exploredCount === 1 ? "" : "s"} explored
+        {t("attractionsExplored", { count: user?.exploredCount || 0 })}
       </p>
     </article>
   );
 }
 
-function ComparisonMap({ label, attractions }) {
+function ComparisonMap({ label, attractions, t }) {
   return (
     <article className="rounded-[16px] border border-attraction-border bg-attraction-surface-soft p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h4 className="font-bold text-attraction-ink">{label}</h4>
         <span className="text-xs font-semibold text-attraction-muted">
-          {attractions.length} explored
+          {t("exploredCount", { count: attractions.length })}
         </span>
       </div>
       {attractions.length > 0 ? (
         <SocialExplorationMap attractions={attractions} ariaLabel={label} />
       ) : (
         <div className="flex min-h-80 items-center justify-center rounded-[18px] border border-attraction-border bg-white px-6 text-center">
-          <p className="text-sm text-attraction-muted">
-            No verified attractions to display on this map.
-          </p>
+          <p className="text-sm text-attraction-muted">{t("noVerifiedOnMap")}</p>
         </div>
       )}
     </article>
   );
 }
 
-function ExploredAttractionList({ title, attractions }) {
+function ExploredAttractionList({ title, attractions, t }) {
   return (
     <section className="mt-6">
       <h3 className="text-base font-bold text-attraction-ink">{title}</h3>
       {attractions.length === 0 ? (
         <p className="mt-2 rounded-[10px] bg-attraction-surface-soft px-4 py-3 text-sm text-attraction-muted">
-          No attractions in this group.
+          {t("noAttractionsInGroup")}
         </p>
       ) : (
         <ul className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -514,7 +626,9 @@ function ExploredAttractionList({ title, attractions }) {
                 href={`/attractions/${attraction.id}`}
                 className="block min-h-11 rounded-[10px] border border-attraction-border bg-white px-4 py-3 transition hover:border-attraction-primary-muted hover:bg-attraction-primary-soft focus:outline-none focus:ring-2 focus:ring-attraction-primary"
               >
-                <span className="font-semibold text-attraction-ink">{attraction.name}</span>
+                <span className="font-semibold text-attraction-ink">
+                  {attraction.name}
+                </span>
                 {(attraction.locationArea || attraction.address) && (
                   <span className="mt-1 block text-xs text-attraction-muted">
                     {attraction.locationArea || attraction.address}
@@ -554,17 +668,19 @@ function ProfileSkeleton() {
   );
 }
 
-function formatJoinedAt(value) {
-  if (!value) return "date unavailable";
-  return new Intl.DateTimeFormat("en-GB", {
+function formatJoinedAt(value, lang = "en") {
+  if (!value) return "";
+  const locale = lang === "zh" ? "zh-CN" : lang === "ms" ? "ms-MY" : "en-GB";
+  return new Intl.DateTimeFormat(locale, {
     month: "long",
     year: "numeric",
   }).format(new Date(value));
 }
 
-function formatReviewDate(value) {
-  if (!value) return "Date unavailable";
-  return new Intl.DateTimeFormat("en-GB", {
+function formatReviewDate(value, lang = "en", t) {
+  if (!value) return t ? t("dateUnavailable") : "Date unavailable";
+  const locale = lang === "zh" ? "zh-CN" : lang === "ms" ? "ms-MY" : "en-GB";
+  return new Intl.DateTimeFormat(locale, {
     day: "numeric",
     month: "short",
     year: "numeric",
