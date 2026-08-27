@@ -11,30 +11,24 @@ import { getVisitedAuthenticationPresentation } from "@/presentation/lib/explora
 import { createExplorationRankPresentation } from "@/presentation/lib/explorationRankPresentation";
 
 const RANK_BADGE_CLASSES = Object.freeze({
-  [EXPLORER_RANK.NEW]:
-    "border-[#BBC8D0] bg-[#F1F4F6] text-[#405066]",
-  [EXPLORER_RANK.BRONZE]:
-    "border-[#D9B38C] bg-[#FFF3E6] text-[#714000]",
-  [EXPLORER_RANK.SILVER]:
-    "border-[#BCC8D3] bg-[#F4F7FA] text-[#354A5F]",
-  [EXPLORER_RANK.GOLD]:
-    "border-[#E3BF5B] bg-[#FFF8D9] text-[#6B4A00]",
-  [EXPLORER_RANK.MASTER]:
-    "border-[#87CFB4] bg-[#E6F7F0] text-[#004638]",
+  [EXPLORER_RANK.NEW]: "border-[#BBC8D0] bg-[#F1F4F6] text-[#405066]",
+  [EXPLORER_RANK.BRONZE]: "border-[#D9B38C] bg-[#FFF3E6] text-[#714000]",
+  [EXPLORER_RANK.SILVER]: "border-[#BCC8D3] bg-[#F4F7FA] text-[#354A5F]",
+  [EXPLORER_RANK.GOLD]: "border-[#E3BF5B] bg-[#FFF8D9] text-[#6B4A00]",
+  [EXPLORER_RANK.MASTER]: "border-[#87CFB4] bg-[#E6F7F0] text-[#004638]",
 });
 
-function ProgressState({ status }) {
+function ProgressState({ status, t }) {
   const isError = status === VISITED_DATA_STATUS.ERROR;
   const authenticationPresentation =
     getVisitedAuthenticationPresentation(status);
-  const message =
-    authenticationPresentation
-      ? "Sign in to view exploration progress"
-      : status === VISITED_DATA_STATUS.LOADING
-      ? "Loading exploration progress..."
+  const message = authenticationPresentation
+    ? t("progressSignIn")
+    : status === VISITED_DATA_STATUS.LOADING
+      ? t("progressLoading")
       : isError
-        ? "Unable to load exploration progress"
-        : "Exploration progress unavailable";
+        ? t("progressLoadFailed")
+        : t("progressUnavailable");
 
   return (
     <div
@@ -74,7 +68,7 @@ function ProgressState({ status }) {
 }
 
 export default function ExplorationProgress({ progress }) {
-  const { lang } = useLanguage();
+  const { lang, t } = useLanguage();
   const status = progress?.status;
   const isSuccess = status === VISITED_DATA_STATUS.SUCCESS;
   const totalCount = Number.isInteger(progress?.totalCount)
@@ -99,14 +93,14 @@ export default function ExplorationProgress({ progress }) {
     >
       <div className="mb-4">
         <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#006C56]">
-          Personal exploration
+          {t("personalExploration")}
         </p>
         <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
           <h3
             id="exploration-progress-heading"
             className="text-lg font-bold text-[#10213B]"
           >
-            Exploration progress
+            {t("explorationProgress")}
           </h3>
           {rankPresentation && (
             <span
@@ -121,19 +115,22 @@ export default function ExplorationProgress({ progress }) {
           )}
         </div>
         <p className="mt-1 text-sm leading-6 text-[#65748A]">
-          Your verified visits across supported Melaka attractions.
+          {t("progressHint")}
         </p>
       </div>
 
-      {!isSuccess && <ProgressState status={status} />}
+      {!isSuccess && <ProgressState status={status} t={t} />}
 
       {isSuccess && totalCount === 0 && (
-        <div className="rounded-2xl border border-[#D8E1E7] bg-white px-5 py-8 text-center" role="status">
+        <div
+          className="rounded-2xl border border-[#D8E1E7] bg-white px-5 py-8 text-center"
+          role="status"
+        >
           <p className="font-semibold text-[#10213B]">
-            No supported attractions available
+            {t("noSupportedAttractions")}
           </p>
           <p className="mt-1 text-sm text-[#65748A]">
-            Progress will appear when supported attractions are available.
+            {t("progressWhenAvailable")}
           </p>
         </div>
       )}
@@ -142,7 +139,10 @@ export default function ExplorationProgress({ progress }) {
         <div className="rounded-2xl border border-[#CFE4DB] bg-white p-5">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <p className="text-sm font-semibold text-[#405066]">
-              {visitedCount} of {totalCount} attractions visited
+              {t("ofAttractionsVisited", {
+                visited: visitedCount,
+                total: totalCount,
+              })}
             </p>
             <p className="text-3xl font-bold tracking-tight text-[#004638]">
               {percentageLabel}
@@ -152,11 +152,14 @@ export default function ExplorationProgress({ progress }) {
           <div
             className="mt-5 h-3 overflow-hidden rounded-full bg-[#DCE8E3]"
             role="progressbar"
-            aria-label="Exploration progress"
+            aria-label={t("explorationProgress")}
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={percentage}
-            aria-valuetext={`${visitedCount} of ${totalCount} attractions visited, ${percentageLabel}${
+            aria-valuetext={`${t("ofAttractionsVisited", {
+              visited: visitedCount,
+              total: totalCount,
+            })}, ${percentageLabel}${
               rankPresentation ? `, ${rankPresentation.rankAriaLabel}` : ""
             }`}
             aria-describedby={

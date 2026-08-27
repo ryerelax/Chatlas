@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { isMelakaBasedUser } from "@/business/services/locationGate";
 import { useLanguage } from "@/presentation/contexts/LanguageContext";
 
@@ -15,6 +15,7 @@ export default function CommunityPhotoUpload({ attractionId, onPhotoAdded }) {
   const { data: session } = useSession();
   const { t } = useLanguage();
   const isEligible = isMelakaBasedUser(session);
+  const fileInputRef = useRef(null);
 
   const [isExpanded, setIsExpanded] = useState(false);
   const [photoFile, setPhotoFile] = useState(null);
@@ -65,6 +66,9 @@ export default function CommunityPhotoUpload({ attractionId, onPhotoAdded }) {
     setPreviewUrl("");
     setError("");
     setIsExpanded(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   }
 
   async function handleUpload() {
@@ -100,6 +104,9 @@ export default function CommunityPhotoUpload({ attractionId, onPhotoAdded }) {
       setIsExpanded(false);
       setJustAdded(true);
       setTimeout(() => setJustAdded(false), 4000);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     } catch (err) {
       console.error("Failed to add community photo:", err);
       setError(err.message);
@@ -142,6 +149,14 @@ export default function CommunityPhotoUpload({ attractionId, onPhotoAdded }) {
         </button>
       ) : (
         <div className="rounded-[14px] border border-attraction-border bg-white p-4">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={handleFileChange}
+            className="hidden"
+          />
+
           {previewUrl ? (
             <div className="mb-3 flex items-center gap-4">
               <img
@@ -155,6 +170,9 @@ export default function CommunityPhotoUpload({ attractionId, onPhotoAdded }) {
                   URL.revokeObjectURL(previewUrl);
                   setPhotoFile(null);
                   setPreviewUrl("");
+                  if (fileInputRef.current) {
+                    fileInputRef.current.value = "";
+                  }
                 }}
                 className="text-sm font-semibold text-attraction-error"
               >
@@ -162,12 +180,18 @@ export default function CommunityPhotoUpload({ attractionId, onPhotoAdded }) {
               </button>
             </div>
           ) : (
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              onChange={handleFileChange}
-              className="mb-3 w-full text-sm text-attraction-body file:mr-4 file:rounded-lg file:border-0 file:bg-attraction-primary-soft file:px-4 file:py-2 file:text-sm file:font-semibold file:text-attraction-primary"
-            />
+            <div className="mb-3 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="rounded-[10px] border border-attraction-border-strong bg-attraction-primary-soft px-4 py-2 text-sm font-semibold text-attraction-primary"
+              >
+                {t("choosePhoto")}
+              </button>
+              <span className="text-sm text-attraction-muted">
+                {t("noFileChosen")}
+              </span>
+            </div>
           )}
 
           {error && (

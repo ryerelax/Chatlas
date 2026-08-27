@@ -32,6 +32,7 @@ import {
   requestCurrentBrowserPosition,
 } from "@/presentation/lib/visitVerificationPresentation";
 import { publishVerifiedVisitorPhotosInvalidation } from "@/presentation/lib/verifiedVisitorPhotosPresentation";
+import { useLanguage } from "@/presentation/contexts/LanguageContext";
 
 const FLOW_STATE = Object.freeze({
   IDLE: "idle",
@@ -71,6 +72,7 @@ export default function VisitVerificationFlow({
   onAuthenticationRetry,
   onVerified,
 }) {
+  const { t } = useLanguage();
   const videoRef = useRef(null);
   const captureButtonRef = useRef(null);
   const uploadButtonRef = useRef(null);
@@ -186,9 +188,7 @@ export default function VisitVerificationFlow({
   const checkCapacity = useCallback(
     async (operationId, attractionId) => {
       const requestController = new AbortController();
-      if (
-        !operationController.claimCapacity(operationId, requestController)
-      ) {
+      if (!operationController.claimCapacity(operationId, requestController)) {
         return;
       }
 
@@ -366,8 +366,7 @@ export default function VisitVerificationFlow({
 
     requestCurrentBrowserPosition(
       navigator.geolocation,
-      (browserPosition) =>
-        handleLocatedPosition(operationId, browserPosition),
+      (browserPosition) => handleLocatedPosition(operationId, browserPosition),
       (error) => failFlow(operationId, getGeolocationErrorMessage(error))
     );
   }, [
@@ -499,13 +498,15 @@ export default function VisitVerificationFlow({
   }, [operationController, transitionToFlowState]);
 
   const submitPhoto = useCallback(async () => {
-    if (!canSubmitVerifiedVisitPhoto({
-      flowState,
-      currentCapture,
-      capturePending,
-      position,
-      attractionId: selectedAttractionId,
-    })) {
+    if (
+      !canSubmitVerifiedVisitPhoto({
+        flowState,
+        currentCapture,
+        capturePending,
+        position,
+        attractionId: selectedAttractionId,
+      })
+    ) {
       return;
     }
 
@@ -513,11 +514,9 @@ export default function VisitVerificationFlow({
     const requestController = new AbortController();
 
     if (
-      !operationController.claimSubmission(
-        operationId,
-        requestController,
-        { capturePending }
-      )
+      !operationController.claimSubmission(operationId, requestController, {
+        capturePending,
+      })
     ) {
       return;
     }
@@ -573,10 +572,7 @@ export default function VisitVerificationFlow({
     }
 
     if (
-      !operationController.completeSubmission(
-        operationId,
-        requestController
-      )
+      !operationController.completeSubmission(operationId, requestController)
     ) {
       return;
     }
@@ -645,9 +641,7 @@ export default function VisitVerificationFlow({
     );
     operationController.updateAuthentication(authenticationConfirmed);
 
-    setAuthenticationPromptVisible(
-      transition.authenticationPromptVisible
-    );
+    setAuthenticationPromptVisible(transition.authenticationPromptVisible);
     setAuthenticationUnavailableVisible(
       transition.authenticationUnavailableVisible
     );
@@ -750,17 +744,16 @@ export default function VisitVerificationFlow({
       <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between sm:p-6">
         <div className="min-w-0">
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#006C56]">
-            Verified visit
+            {t("verifiedVisitBadge")}
           </p>
           <h3
             id="visit-verification-heading"
             className="mt-1 text-xl font-bold text-[#10213B]"
           >
-            Verify a nearby place
+            {t("verifyNearbyPlace")}
           </h3>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[#405066]">
-            When you start, Chatlas checks your current location once and then
-            opens your live camera. It does not track your movement.
+            {t("verifyNearbyHint")}
           </p>
         </div>
 
@@ -772,8 +765,8 @@ export default function VisitVerificationFlow({
             className={`${BUTTON_CLASS} w-full shrink-0 bg-[#006C56] text-white hover:bg-[#005E4B] sm:w-auto`}
           >
             {authenticationPending
-              ? "Checking sign-in..."
-              : "Verify Nearby Visit"}
+              ? t("checkingSignIn")
+              : t("verifyNearbyVisit")}
           </button>
         )}
       </div>
@@ -785,17 +778,16 @@ export default function VisitVerificationFlow({
           aria-live="polite"
         >
           <p className="font-semibold text-[#10213B]">
-            Sign in before verifying a visit
+            {t("signInBeforeVerify")}
           </p>
           <p className="mt-1 text-sm leading-6 text-[#405066]">
-            Sign-in is required before Chatlas asks for location or camera
-            permission.
+            {t("signInBeforeVerifyHint")}
           </p>
           <Link
             href="/login"
             className={`${BUTTON_CLASS} mt-3 w-full bg-[#006C56] text-white hover:bg-[#005E4B] sm:w-auto`}
           >
-            Sign in
+            {t("signIn")}
           </Link>
         </div>
       )}
@@ -809,11 +801,10 @@ export default function VisitVerificationFlow({
             aria-live="polite"
           >
             <p className="font-semibold text-[#704A00]">
-              Sign-in status unavailable
+              {t("signInStatusUnavailable")}
             </p>
             <p className="mt-1 text-sm leading-6 text-[#704A00]">
-              Chatlas must confirm your sign-in before requesting location or
-              camera permission. Try the check again or sign in.
+              {t("signInStatusUnavailableHint")}
             </p>
             <div className="mt-3 flex flex-col gap-3 sm:flex-row">
               {typeof onAuthenticationRetry === "function" && (
@@ -822,14 +813,14 @@ export default function VisitVerificationFlow({
                   onClick={onAuthenticationRetry}
                   className={`${BUTTON_CLASS} w-full border border-[#B88924] bg-white text-[#704A00] hover:bg-[#FFF1C2] sm:w-auto`}
                 >
-                  Check sign-in again
+                  {t("checkSignInAgain")}
                 </button>
               )}
               <Link
                 href="/login"
                 className={`${BUTTON_CLASS} w-full bg-[#006C56] text-white hover:bg-[#005E4B] sm:w-auto`}
               >
-                Sign in
+                {t("signIn")}
               </Link>
             </div>
           </div>
@@ -842,17 +833,17 @@ export default function VisitVerificationFlow({
           aria-live="polite"
         >
           <p className="font-semibold text-[#10213B]">
-            Checking your current location...
+            {t("checkingLocation")}
           </p>
           <p className="mt-1 text-sm text-[#65748A]">
-            Keep this page open while your device finds a fresh GPS position.
+            {t("checkingLocationHint")}
           </p>
           <button
             type="button"
             onClick={closeFlow}
             className={`${BUTTON_CLASS} mt-4 w-full border border-[#BBC8D0] bg-white text-[#405066] hover:bg-[#F1F4F6] sm:w-auto`}
           >
-            Cancel
+            {t("cancel")}
           </button>
         </div>
       )}
@@ -861,10 +852,10 @@ export default function VisitVerificationFlow({
         <div className="border-t border-[#B7E5D2] bg-white px-5 py-5 sm:px-6">
           <fieldset>
             <legend className="font-bold text-[#10213B]">
-              Choose the place you are visiting
+              {t("choosePlaceVisiting")}
             </legend>
             <p className="mt-1 text-sm leading-6 text-[#65748A]">
-              Several supported attractions are nearby. Select one to continue.
+              {t("choosePlaceHint")}
             </p>
             <div className="mt-4 grid gap-3">
               {candidates.map((candidate) => {
@@ -905,7 +896,7 @@ export default function VisitVerificationFlow({
               onClick={closeFlow}
               className={`${BUTTON_CLASS} border border-[#BBC8D0] bg-white text-[#405066] hover:bg-[#F1F4F6]`}
             >
-              Cancel
+              {t("cancel")}
             </button>
             <button
               type="button"
@@ -913,7 +904,7 @@ export default function VisitVerificationFlow({
               disabled={!selectedAttractionId}
               className={`${BUTTON_CLASS} bg-[#006C56] text-white hover:bg-[#005E4B]`}
             >
-              Continue to camera
+              {t("continueToCamera")}
             </button>
           </div>
         </div>
@@ -926,18 +917,17 @@ export default function VisitVerificationFlow({
           aria-live="polite"
         >
           <p className="font-semibold text-[#10213B]">
-            Checking today&apos;s photo limit...
+            {t("checkingPhotoLimit")}
           </p>
           <p className="mt-1 text-sm leading-6 text-[#65748A]">
-            The camera will open only when this attraction has an available
-            photo slot.
+            {t("checkingPhotoLimitHint")}
           </p>
           <button
             type="button"
             onClick={closeFlow}
             className={`${BUTTON_CLASS} mt-4 w-full border border-[#BBC8D0] bg-white text-[#405066] hover:bg-[#F1F4F6] sm:w-auto`}
           >
-            Cancel
+            {t("cancel")}
           </button>
         </div>
       )}
@@ -948,7 +938,7 @@ export default function VisitVerificationFlow({
           role="status"
           aria-live="polite"
         >
-          <p className="font-bold text-[#704A00]">Today&apos;s limit is full</p>
+          <p className="font-bold text-[#704A00]">{t("limitFull")}</p>
           <p className="mt-1 text-sm leading-6 text-[#704A00]">
             {getVerifiedVisitLimitReachedMessage()}
           </p>
@@ -957,7 +947,7 @@ export default function VisitVerificationFlow({
             onClick={closeFlow}
             className={`${BUTTON_CLASS} mt-4 w-full border border-[#B88924] bg-white text-[#704A00] hover:bg-[#FFF1C2] sm:w-auto`}
           >
-            Close
+            {t("close")}
           </button>
         </div>
       )}
@@ -966,8 +956,11 @@ export default function VisitVerificationFlow({
         <div className="border-t border-[#B7E5D2] bg-[#10213B] p-4 sm:p-5">
           {selectedCandidate && (
             <p className="mb-3 text-sm font-semibold text-[#E6F7F0]">
-              {candidates.length === 1 ? "Automatically selected: " : "Selected: "}
-              {selectedCandidate.attraction.name} · {selectedCandidate.distanceLabel}
+              {candidates.length === 1
+                ? t("autoSelected")
+                : t("selectedLabel")}
+              {selectedCandidate.attraction.name} ·{" "}
+              {selectedCandidate.distanceLabel}
             </p>
           )}
           <div className="relative aspect-video w-full overflow-hidden rounded-2xl bg-black">
@@ -994,7 +987,8 @@ export default function VisitVerificationFlow({
               <Image
                 src={currentCapture.url}
                 alt={`Current photo preview for ${
-                  selectedCandidate?.attraction.name || "the selected attraction"
+                  selectedCandidate?.attraction.name ||
+                  "the selected attraction"
                 }`}
                 fill
                 sizes="(max-width: 1280px) 100vw, 1100px"
@@ -1008,14 +1002,13 @@ export default function VisitVerificationFlow({
                 role="status"
                 aria-live="polite"
               >
-                Opening live camera...
+                {t("openingCamera")}
               </div>
             )}
           </div>
           {flowState === FLOW_STATE.PREVIEW && (
             <p className="mt-4 rounded-2xl border border-[#E9B949] bg-[#FFF7DD] px-4 py-3 text-sm font-semibold leading-6 text-[#704A00]">
-              This photo will be publicly visible. Avoid capturing faces or
-              private information.
+              {t("photoPublicWarning")}
             </p>
           )}
           <div className="mt-4 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
@@ -1026,7 +1019,7 @@ export default function VisitVerificationFlow({
                   onClick={retakePhoto}
                   className={`${BUTTON_CLASS} border border-[#8390A2] bg-transparent text-white hover:bg-white/10 focus-visible:outline-white`}
                 >
-                  Retake
+                  {t("retake")}
                 </button>
                 <button
                   ref={uploadButtonRef}
@@ -1045,7 +1038,7 @@ export default function VisitVerificationFlow({
                   onClick={closeFlow}
                   className={`${BUTTON_CLASS} border border-[#8390A2] bg-transparent text-white hover:bg-white/10 focus-visible:outline-white`}
                 >
-                  Cancel
+                  {t("cancel")}
                 </button>
                 <button
                   ref={captureButtonRef}
@@ -1054,7 +1047,7 @@ export default function VisitVerificationFlow({
                   disabled={!cameraReady || capturePending}
                   className={`${BUTTON_CLASS} bg-white text-[#004638] hover:bg-[#E6F7F0] focus-visible:outline-white`}
                 >
-                  {capturePending ? "Capturing..." : "Capture Photo"}
+                  {capturePending ? t("capturing") : t("capturePhoto")}
                 </button>
               </>
             )}
@@ -1068,11 +1061,9 @@ export default function VisitVerificationFlow({
           role="status"
           aria-live="polite"
         >
-          <p className="font-bold text-[#10213B]">Uploading photo...</p>
+          <p className="font-bold text-[#10213B]">{t("uploadingPhoto")}</p>
           <p className="mt-1 text-sm leading-6 text-[#65748A]">
-            Keep this page open while Chatlas verifies and saves the photo.
-            Closing the page cannot undo an upload the server has already
-            received.
+            {t("uploadingPhotoHint")}
           </p>
         </div>
       )}
@@ -1083,9 +1074,9 @@ export default function VisitVerificationFlow({
           role="alert"
           aria-live="assertive"
         >
-          <p className="font-bold text-[#8A2520]">Upload paused</p>
+          <p className="font-bold text-[#8A2520]">{t("uploadPaused")}</p>
           <p className="mt-1 break-words text-sm leading-6 text-[#63312E]">
-            {errorMessage} Your selected photo is still ready to retry.
+            {errorMessage} {t("photoStillReady")}
           </p>
           <div className="mt-4 flex flex-col-reverse gap-3 sm:flex-row">
             <button
@@ -1093,7 +1084,7 @@ export default function VisitVerificationFlow({
               onClick={closeFlow}
               className={`${BUTTON_CLASS} border border-[#D8B3AF] bg-white text-[#63312E] hover:bg-[#FBE9E8]`}
             >
-              Cancel
+              {t("cancel")}
             </button>
             {currentCapture && (
               <button
@@ -1116,17 +1107,16 @@ export default function VisitVerificationFlow({
           role="status"
           aria-live="polite"
         >
-          <p className="font-bold text-[#004638]">Visit verified</p>
+          <p className="font-bold text-[#004638]">{t("visitVerified")}</p>
           <p className="mt-1 text-sm leading-6 text-[#31463F]">
-            Your public photo was saved. Your exploration progress is
-            refreshing.
+            {t("visitVerifiedHint")}
           </p>
           <button
             type="button"
             onClick={closeFlow}
             className={`${BUTTON_CLASS} mt-3 w-full bg-[#006C56] text-white hover:bg-[#005E4B] sm:w-auto`}
           >
-            Done
+            {t("done")}
           </button>
         </div>
       )}
@@ -1137,7 +1127,7 @@ export default function VisitVerificationFlow({
           role="alert"
           aria-live="assertive"
         >
-          <p className="font-bold text-[#8A2520]">Verification paused</p>
+          <p className="font-bold text-[#8A2520]">{t("verificationPaused")}</p>
           <p className="mt-1 break-words text-sm leading-6 text-[#63312E]">
             {errorMessage}
           </p>
@@ -1148,14 +1138,14 @@ export default function VisitVerificationFlow({
                 onClick={closeFlow}
                 className={`${BUTTON_CLASS} border border-[#D8B3AF] bg-white text-[#63312E] hover:bg-[#FBE9E8]`}
               >
-                Close
+                {t("close")}
               </button>
               <button
                 type="button"
                 onClick={startVerification}
                 className={`${BUTTON_CLASS} bg-[#006C56] text-white hover:bg-[#005E4B]`}
               >
-                Try again
+                {t("tryAgain")}
               </button>
             </div>
           )}

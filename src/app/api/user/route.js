@@ -5,6 +5,20 @@ import { NextResponse } from "next/server";
 import { connectToDatabase } from "src/infrastructure/database/mongodb.js";
 import User from "src/data/models/User";
 
+function toUserPayload(user) {
+  return {
+    displayName: user.displayName || "",
+    name: user.name,
+    email: user.email,
+    profilePicture: user.profilePicture || "",
+    bio: user.bio || "",
+    location: user.location || "",
+    // Prefer custom joinedAt; fall back to mongoose timestamps createdAt
+    joinedAt: user.joinedAt || user.createdAt || null,
+    createdAt: user.createdAt || user.joinedAt || null,
+  };
+}
+
 // GET - Get current user information
 export async function GET(request) {
   try {
@@ -38,14 +52,7 @@ export async function GET(request) {
 
     return NextResponse.json({
       success: true,
-      data: {
-        displayName: user.displayName || "",
-        name: user.name,
-        email: user.email,
-        profilePicture: user.profilePicture || "",
-        bio: user.bio || "",
-        location: user.location || "",
-      },
+      data: toUserPayload(user),
     });
   } catch (error) {
     console.error("Error fetching user:", error);
@@ -122,14 +129,7 @@ export async function PUT(request) {
 
     return NextResponse.json({
       success: true,
-      data: {
-        displayName: updatedUser.displayName || "",
-        name: updatedUser.name,
-        email: updatedUser.email,
-        profilePicture: updatedUser.profilePicture || "",
-        bio: updatedUser.bio || "",
-        location: updatedUser.location || "",
-      },
+      data: toUserPayload(updatedUser),
     });
   } catch (error) {
     console.error("Error updating user:", error);
