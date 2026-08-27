@@ -15,11 +15,11 @@ import {
   getVisitedAuthenticationPresentation,
 } from "@/presentation/lib/explorationMapPresentation";
 
-function LoadingState() {
+function LoadingState({ t }) {
   return (
     <div>
       <p className="mb-3 text-sm font-semibold text-[#405066]">
-        Loading visited attractions...
+        {t("loadingVisited")}
       </p>
 
       <div className="grid gap-3 sm:grid-cols-2" aria-hidden="true">
@@ -49,6 +49,7 @@ function StateMessage({
   actionHref,
   actionLabel,
   onRetry,
+  t,
 }) {
   const isError = tone === "error";
 
@@ -88,41 +89,39 @@ function StateMessage({
           onClick={onRetry}
           className="mt-4 min-h-11 rounded-xl border border-[#BBC8D0] bg-white px-4 py-2.5 text-sm font-semibold text-[#004638] transition hover:border-[#006C56] hover:bg-[#E6F7F0] focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#006C56]"
         >
-          Try again
+          {t("tryAgain")}
         </button>
       )}
     </div>
   );
 }
 
-function getLiveAnnouncement(status, attractions, message) {
+function getLiveAnnouncement(status, attractions, message, t) {
   if (status === "loading") {
-    return "Loading visited attractions.";
+    return t("loadingVisited");
   }
 
   if (status === "error") {
-    return message || "Visited attractions could not be loaded.";
+    return message || t("couldNotLoadVisited");
   }
 
   if (status === "auth-required") {
-    return message || "Sign in to view your verified visits.";
+    return message || t("signInViewVisited");
   }
 
   if (status === "unavailable") {
-    return message || "Visited attraction data is unavailable.";
+    return message || t("visitedDataUnavailable");
   }
 
   if (status === "success" && attractions.length === 0) {
-    return "No visited attractions yet.";
+    return t("noVisitedYet");
   }
 
   if (status === "success") {
-    return `${attractions.length} visited attraction${
-      attractions.length === 1 ? "" : "s"
-    } loaded.`;
+    return t("visitedCountLabel", { count: attractions.length });
   }
 
-  return "Visited attraction data is unavailable.";
+  return t("visitedDataUnavailable");
 }
 
 export default function VisitedAttractionsList({
@@ -133,7 +132,7 @@ export default function VisitedAttractionsList({
   onFocusAttraction,
   onRetry,
 }) {
-  const { lang } = useLanguage();
+  const { lang, t } = useLanguage();
   const hasValidAttractions = Array.isArray(attractions);
   const visitedAttractions = useMemo(
     () => (hasValidAttractions ? attractions : []),
@@ -154,7 +153,8 @@ export default function VisitedAttractionsList({
   const announcement = getLiveAnnouncement(
     displayStatus,
     visitedAttractions,
-    message
+    message,
+    t
   );
   const authenticationPresentation =
     getVisitedAuthenticationPresentation(displayStatus);
@@ -177,64 +177,62 @@ export default function VisitedAttractionsList({
       <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#006C56]">
-            Personal exploration
+            {t("personalExploration")}
           </p>
           <h3
             id="visited-attractions-heading"
             className="mt-1 text-lg font-bold text-[#10213B]"
           >
-            Visited attractions
+            {t("visitedAttractions")}
           </h3>
           <p className="mt-1 text-sm leading-6 text-[#65748A]">
-            Places confirmed by your verified visits.
+            {t("visitedConfirmedHint")}
           </p>
         </div>
 
         {displayStatus === "success" && (
           <span className="w-fit rounded-full border border-[#BDE8D7] bg-[#E6F7F0] px-3 py-1.5 text-xs font-semibold text-[#004638]">
-            {visitedAttractions.length} visited
+            {t("visitedCountLabel", { count: visitedAttractions.length })}
           </span>
         )}
       </div>
 
-      {displayStatus === "loading" && <LoadingState />}
+      {displayStatus === "loading" && <LoadingState t={t} />}
 
       {authenticationPresentation && (
         <StateMessage
-          title="Sign in to view visited attractions"
+          title={t("signInViewVisited")}
           description={message || authenticationPresentation.message}
           actionHref={authenticationPresentation.signInHref}
           actionLabel={authenticationPresentation.signInLabel}
+          t={t}
         />
       )}
 
       {displayStatus === "unavailable" && (
         <StateMessage
-          title="Visited data unavailable"
-          description={
-            message ||
-            "Your visited attractions are not available right now."
-          }
+          title={t("visitedDataUnavailable")}
+          description={message || t("visitedUnavailableHint")}
           onRetry={onRetry}
+          t={t}
         />
       )}
 
       {displayStatus === "error" && (
         <StateMessage
-          title="Could not load visited attractions"
-          description={
-            message ||
-            "We could not load your visited attractions. Please try again."
-          }
+          title={t("couldNotLoadVisited")}
+          description={message || t("couldNotLoadVisitedHint")}
           tone="error"
           onRetry={onRetry}
+          t={t}
         />
       )}
 
       {displayStatus === "success" && visitedAttractions.length === 0 && (
         <StateMessage
-          title="No visited attractions yet"
-          description="Attractions confirmed through a verified visit will appear in this list."
+          title={t("noVisitedYet")}
+          description={t("visitedListHint")}
+          t={t}
         />
       )}
 
@@ -242,94 +240,123 @@ export default function VisitedAttractionsList({
         <>
           <label className="mb-4 block text-sm font-semibold text-[#405066]">
             {copy.sortBy}
-            <select value={sort} onChange={(event) => { setSort(event.target.value); setPage(1); }} className="mt-1 block min-h-11 w-full rounded-xl border border-[#BBC8D0] bg-white px-3">
-              <option value={VISITED_ATTRACTIONS_SORT.MOST_RECENT}>{copy.mostRecent}</option>
-              <option value={VISITED_ATTRACTIONS_SORT.OLDEST}>{copy.oldest}</option>
-              <option value={VISITED_ATTRACTIONS_SORT.NAME_ASC}>{copy.nameAsc}</option>
+            <select
+              value={sort}
+              onChange={(event) => {
+                setSort(event.target.value);
+                setPage(1);
+              }}
+              className="mt-1 block min-h-11 w-full rounded-xl border border-[#BBC8D0] bg-white px-3"
+            >
+              <option value={VISITED_ATTRACTIONS_SORT.MOST_RECENT}>
+                {copy.mostRecent}
+              </option>
+              <option value={VISITED_ATTRACTIONS_SORT.OLDEST}>
+                {copy.oldest}
+              </option>
+              <option value={VISITED_ATTRACTIONS_SORT.NAME_ASC}>
+                {copy.nameAsc}
+              </option>
             </select>
           </label>
-        <ul className="grid gap-3 sm:grid-cols-2">
-          {pagination.items.map((attraction) => {
-            const verificationPresentation =
-              createVisitedVerificationPresentation(attraction, lang);
+          <ul className="grid gap-3 sm:grid-cols-2">
+            {pagination.items.map((attraction) => {
+              const verificationPresentation =
+                createVisitedVerificationPresentation(attraction, lang);
 
-            return (
-            <li
-              key={attraction.id}
-              className="rounded-2xl border border-[#D8E1E7] bg-white p-4"
-            >
-              <div className="flex items-start gap-3">
-                <span
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#E6F7F0] text-[#006C56]"
-                  aria-hidden="true"
+              return (
+                <li
+                  key={attraction.id}
+                  className="rounded-2xl border border-[#D8E1E7] bg-white p-4"
                 >
-                  <svg
-                    viewBox="0 0 20 20"
-                    className="h-5 w-5"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.2"
-                  >
-                    <path
-                      d="m5 10 3 3 7-7"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </span>
-                <div className="min-w-0">
-                  <p className="font-semibold text-[#10213B]">
-                    {attraction.name}
+                  <div className="flex items-start gap-3">
+                    <span
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#E6F7F0] text-[#006C56]"
+                      aria-hidden="true"
+                    >
+                      <svg
+                        viewBox="0 0 20 20"
+                        className="h-5 w-5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.2"
+                      >
+                        <path
+                          d="m5 10 3 3 7-7"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </span>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-[#10213B]">
+                        {attraction.name}
+                      </p>
+                      <p className="mt-1 text-sm leading-5 text-[#65748A]">
+                        {attraction.address}
+                      </p>
+                      <span className="mt-2 inline-block rounded-full bg-[#F1F6F4] px-2.5 py-1 text-xs font-semibold text-[#405066]">
+                        {attraction.category}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="mt-3 text-sm text-[#65748A]">
+                    {verificationPresentation.label}:{" "}
+                    {verificationPresentation.value}
+                    {verificationPresentation.timeUnavailable && (
+                      <> · {verificationPresentation.timeUnavailableLabel}</>
+                    )}
                   </p>
-                  <p className="mt-1 text-sm leading-5 text-[#65748A]">
-                    {attraction.address}
-                  </p>
-                  <span className="mt-2 inline-block rounded-full bg-[#F1F6F4] px-2.5 py-1 text-xs font-semibold text-[#405066]">
-                    {attraction.category}
-                  </span>
-                </div>
-              </div>
-              <p className="mt-3 text-sm text-[#65748A]">
-                {verificationPresentation.label}: {verificationPresentation.value}
-                {verificationPresentation.timeUnavailable && (
-                  <> · {verificationPresentation.timeUnavailableLabel}</>
-                )}
-              </p>
 
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => onFocusAttraction(attraction)}
-                  disabled={!canFocusMap}
-                  aria-label={`Focus ${attraction.name} on map`}
-                  title={
-                    canFocusMap
-                      ? undefined
-                      : "Available when the interactive map is ready"
-                  }
-                  className="min-h-11 rounded-xl border border-[#BBC8D0] bg-white px-3.5 py-2 text-sm font-semibold text-[#004638] transition hover:border-[#006C56] hover:bg-[#E6F7F0] focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#006C56] disabled:cursor-not-allowed disabled:border-[#D8E1E7] disabled:bg-[#F1F3F5] disabled:text-[#7A8797]"
-                >
-                  Focus on map
-                </button>
-                <Link
-                  href={getAttractionDetailsHref(attraction.id)}
-                  aria-label={`View details for ${attraction.name}`}
-                  className="inline-flex min-h-11 items-center rounded-xl px-3.5 py-2 text-sm font-semibold text-[#006C56] underline-offset-4 hover:bg-[#E6F7F0] hover:underline focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#006C56]"
-                >
-                  View details
-                </Link>
-              </div>
-            </li>
-            );
-          })}
-        </ul>
-        {sortedAttractions.length > 10 && (
-          <div className="mt-4 flex items-center justify-between gap-3 text-sm">
-            <button type="button" disabled={pagination.page === 1} onClick={() => setPage(pagination.page - 1)} className="min-h-11 rounded-xl border px-4 disabled:opacity-50">Previous</button>
-            <span aria-live="polite">Page {pagination.page} of {pagination.totalPages}</span>
-            <button type="button" disabled={pagination.page === pagination.totalPages} onClick={() => setPage(pagination.page + 1)} className="min-h-11 rounded-xl border px-4 disabled:opacity-50">Next</button>
-          </div>
-        )}
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onFocusAttraction(attraction)}
+                      disabled={!canFocusMap}
+                      aria-label={`${t("focusOnMap")}: ${attraction.name}`}
+                      title={canFocusMap ? undefined : t("mapNotReady")}
+                      className="min-h-11 rounded-xl border border-[#BBC8D0] bg-white px-3.5 py-2 text-sm font-semibold text-[#004638] transition hover:border-[#006C56] hover:bg-[#E6F7F0] focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#006C56] disabled:cursor-not-allowed disabled:border-[#D8E1E7] disabled:bg-[#F1F3F5] disabled:text-[#7A8797]"
+                    >
+                      {t("focusOnMap")}
+                    </button>
+                    <Link
+                      href={getAttractionDetailsHref(attraction.id)}
+                      aria-label={`${t("viewDetails")}: ${attraction.name}`}
+                      className="inline-flex min-h-11 items-center rounded-xl px-3.5 py-2 text-sm font-semibold text-[#006C56] underline-offset-4 hover:bg-[#E6F7F0] hover:underline focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#006C56]"
+                    >
+                      {t("viewDetails")}
+                    </Link>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          {sortedAttractions.length > 10 && (
+            <div className="mt-4 flex items-center justify-between gap-3 text-sm">
+              <button
+                type="button"
+                disabled={pagination.page === 1}
+                onClick={() => setPage(pagination.page - 1)}
+                className="min-h-11 rounded-xl border px-4 disabled:opacity-50"
+              >
+                {t("previous")}
+              </button>
+              <span aria-live="polite">
+                {t("pageOf", {
+                  page: pagination.page,
+                  total: pagination.totalPages,
+                })}
+              </span>
+              <button
+                type="button"
+                disabled={pagination.page === pagination.totalPages}
+                onClick={() => setPage(pagination.page + 1)}
+                className="min-h-11 rounded-xl border px-4 disabled:opacity-50"
+              >
+                {t("next")}
+              </button>
+            </div>
+          )}
         </>
       )}
 
@@ -337,10 +364,9 @@ export default function VisitedAttractionsList({
         displayStatus
       ) && (
         <StateMessage
-          title="Visited data unavailable"
-          description={
-            message || "Visited attraction data is not available right now."
-          }
+          title={t("visitedDataUnavailable")}
+          description={message || t("visitedUnavailableHint")}
+          t={t}
         />
       )}
     </section>

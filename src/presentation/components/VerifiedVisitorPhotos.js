@@ -18,6 +18,7 @@ import {
   VERIFIED_PHOTOS_LOAD_ERROR,
   VERIFIED_VISITOR_PHOTOS_INVALIDATED_EVENT,
 } from "@/presentation/lib/verifiedVisitorPhotosPresentation";
+import { useLanguage } from "@/presentation/contexts/LanguageContext";
 
 function createRequestController() {
   let currentController = null;
@@ -36,6 +37,7 @@ function createRequestController() {
 }
 
 export default function VerifiedVisitorPhotos({ attractionId }) {
+  const { t } = useLanguage();
   const [photos, setPhotos] = useState([]);
   const [status, setStatus] = useState("loading");
   const [deletingPhotoId, setDeletingPhotoId] = useState("");
@@ -108,16 +110,15 @@ export default function VerifiedVisitorPhotos({ attractionId }) {
       VERIFIED_VISITOR_PHOTOS_INVALIDATED_EVENT,
       refreshInvalidatedAttraction
     );
-    return () => window.removeEventListener(
-      VERIFIED_VISITOR_PHOTOS_INVALIDATED_EVENT,
-      refreshInvalidatedAttraction
-    );
+    return () =>
+      window.removeEventListener(
+        VERIFIED_VISITOR_PHOTOS_INVALIDATED_EVENT,
+        refreshInvalidatedAttraction
+      );
   }, [attractionId, requestCanonicalRefresh]);
 
   async function deletePhoto(photo) {
-    const confirmed = window.confirm(
-      "Delete this verified visitor photo? This action cannot be undone."
-    );
+    const confirmed = window.confirm(t("deleteVerifiedPhotoConfirm"));
     if (!confirmed || deletingPhotoId) return;
 
     const controller = deleteRequestController.replace();
@@ -141,9 +142,9 @@ export default function VerifiedVisitorPhotos({ attractionId }) {
         throw new Error(VERIFIED_PHOTO_DELETE_ERROR);
       }
       if (controller.signal.aborted) return;
-      setPhotos((currentPhotos) => (
+      setPhotos((currentPhotos) =>
         removeConfirmedVerifiedPhoto(currentPhotos, photo.photoId)
-      ));
+      );
       requestCanonicalRefresh();
     } catch (error) {
       if (error?.name === "AbortError" || controller.signal.aborted) return;
@@ -155,14 +156,14 @@ export default function VerifiedVisitorPhotos({ attractionId }) {
 
   let content;
   if (status === "loading") {
-    content = <LoadingState />;
+    content = <LoadingState t={t} />;
   } else if (status === "error") {
-    content = <ErrorState onRetry={requestInitialLoad} />;
+    content = <ErrorState onRetry={requestInitialLoad} t={t} />;
   } else if (photos.length === 0) {
     content = (
       <div className="rounded-[14px] border border-dashed border-attraction-border-strong bg-attraction-surface-soft px-5 py-8 text-center">
         <p className="text-sm font-medium text-attraction-muted">
-          No verified visitor photos yet.
+          {t("noVerifiedPhotos")}
         </p>
       </div>
     );
@@ -180,6 +181,7 @@ export default function VerifiedVisitorPhotos({ attractionId }) {
             })}
             deleteFailed={deleteErrorPhotoId === photo.photoId}
             onDelete={deletePhoto}
+            t={t}
           />
         ))}
       </div>
@@ -203,20 +205,21 @@ export default function VerifiedVisitorPhotos({ attractionId }) {
             id="verified-visitor-photos-heading"
             className="text-xl font-bold text-attraction-ink"
           >
-            Verified Visitor Photos
+            {t("verifiedVisitorPhotos")}
           </h2>
           <p className="mt-1 text-sm leading-relaxed text-attraction-muted">
-            Public on-site photos shared by travellers who verified their visit.
+            {t("verifiedVisitorPhotosHint")}
           </p>
         </div>
       </div>
       {authenticationRequired && (
-        <AuthenticationRequiredState onReload={requestCanonicalRefresh} />
+        <AuthenticationRequiredState onReload={requestCanonicalRefresh} t={t} />
       )}
       {(refreshPending || refreshError) && (
         <RefreshState
           isPending={refreshPending}
           onRetry={requestCanonicalRefresh}
+          t={t}
         />
       )}
       {content}
@@ -224,38 +227,38 @@ export default function VerifiedVisitorPhotos({ attractionId }) {
   );
 }
 
-function AuthenticationRequiredState({ onReload }) {
+function AuthenticationRequiredState({ onReload, t }) {
   return (
     <div
       role="status"
       className="mb-4 rounded-[14px] border border-attraction-border bg-attraction-surface-soft p-4"
     >
       <p className="text-sm font-semibold text-attraction-ink">
-        Sign in to manage your verified visitor photos.
+        {t("signInManageVerified")}
       </p>
       <p className="mt-1 text-sm leading-relaxed text-attraction-muted">
-        Your photos remain public, but deletion requires a signed-in owner session.
+        {t("signInManageVerifiedHint")}
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         <Link
           href="/login"
           className="inline-flex min-h-11 items-center rounded-[10px] bg-attraction-primary px-4 text-sm font-semibold text-white transition hover:bg-attraction-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-attraction-primary focus-visible:ring-offset-2"
         >
-          Sign in
+          {t("signIn")}
         </Link>
         <button
           type="button"
           onClick={onReload}
           className="min-h-11 rounded-[10px] border border-attraction-border-strong bg-white px-4 text-sm font-semibold text-attraction-primary-dark transition hover:bg-attraction-primary-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-attraction-primary focus-visible:ring-offset-2"
         >
-          Reload photos
+          {t("reloadPhotos")}
         </button>
       </div>
     </div>
   );
 }
 
-function RefreshState({ isPending, onRetry }) {
+function RefreshState({ isPending, onRetry, t }) {
   if (isPending) {
     return (
       <p
@@ -263,7 +266,7 @@ function RefreshState({ isPending, onRetry }) {
         aria-live="polite"
         className="mb-4 rounded-[10px] bg-attraction-primary-soft px-4 py-3 text-sm font-medium text-attraction-primary-dark"
       >
-        Refreshing verified visitor photos...
+        {t("refreshVerifiedPhotos")}
       </p>
     );
   }
@@ -274,24 +277,24 @@ function RefreshState({ isPending, onRetry }) {
       className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-attraction-border bg-attraction-surface-soft px-4 py-3"
     >
       <p className="text-sm font-medium text-attraction-ink">
-        The latest verified visitor photos could not be loaded. The current photos are preserved below.
+        {t("refreshVerifiedFailed")}
       </p>
       <button
         type="button"
         onClick={onRetry}
         className="min-h-11 shrink-0 rounded-[10px] border border-attraction-border-strong bg-white px-4 text-sm font-semibold text-attraction-primary-dark transition hover:bg-attraction-primary-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-attraction-primary focus-visible:ring-offset-2"
       >
-        Retry refresh
+        {t("retryRefresh")}
       </button>
     </div>
   );
 }
 
-function LoadingState() {
+function LoadingState({ t }) {
   return (
     <div role="status" aria-live="polite">
       <p className="mb-3 text-sm font-medium text-attraction-muted">
-        Loading verified visitor photos...
+        {t("loadingVerifiedPhotos")}
       </p>
       <div aria-hidden="true" className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {[0, 1].map((index) => (
@@ -311,7 +314,7 @@ function LoadingState() {
   );
 }
 
-function ErrorState({ onRetry }) {
+function ErrorState({ onRetry, t }) {
   return (
     <div
       role="alert"
@@ -325,13 +328,20 @@ function ErrorState({ onRetry }) {
         onClick={onRetry}
         className="mt-4 min-h-11 rounded-[10px] border border-attraction-border-strong bg-white px-5 text-sm font-semibold text-attraction-primary-dark transition hover:bg-attraction-primary-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-attraction-primary focus-visible:ring-offset-2"
       >
-        Retry
+        {t("reset")}
       </button>
     </div>
   );
 }
 
-function PhotoCard({ photo, isDeleting, deleteActionState, deleteFailed, onDelete }) {
+function PhotoCard({
+  photo,
+  isDeleting,
+  deleteActionState,
+  deleteFailed,
+  onDelete,
+  t,
+}) {
   const displayDate = formatMalaysiaDisplayDate(photo.capturedDate);
   const displayName = photo.user.displayName || "Chatlas user";
   const initial = displayName.trim().charAt(0).toUpperCase() || "C";
@@ -349,7 +359,7 @@ function PhotoCard({ photo, isDeleting, deleteActionState, deleteFailed, onDelet
         />
         <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-attraction-primary-dark px-3 py-1.5 text-xs font-bold text-white shadow-sm">
           <span aria-hidden="true">✓</span>
-          Verified Visit
+          {t("verifiedVisit")}
         </span>
       </div>
 
@@ -397,11 +407,15 @@ function PhotoCard({ photo, isDeleting, deleteActionState, deleteFailed, onDelet
               aria-describedby={deleteFailed ? deleteErrorId : undefined}
               className="min-h-11 w-full rounded-[10px] border border-attraction-border-strong bg-white px-4 text-sm font-semibold text-attraction-error transition hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-attraction-primary focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60"
             >
-              {isDeleting ? "Deleting photo..." : deleteFailed ? "Try delete again" : "Delete photo"}
+              {isDeleting
+                ? t("deletingPhoto")
+                : deleteFailed
+                  ? t("tryDeleteAgain")
+                  : t("deletePhoto")}
             </button>
             {isDeleting && (
               <span role="status" aria-live="polite" className="sr-only">
-                Deleting verified visitor photo
+                {t("deletingPhoto")}
               </span>
             )}
           </div>

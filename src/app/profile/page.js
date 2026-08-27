@@ -8,11 +8,20 @@ import { useReviews } from "@/presentation/contexts/ReviewsContext";
 import { useLanguage } from "@/presentation/contexts/LanguageContext";
 import { loadVisitedAttractionIds } from "@/presentation/lib/visitedAttractionsAdapter";
 
+function formatJoinedAt(value, lang = "en") {
+  if (!value) return "";
+  const locale = lang === "zh" ? "zh-CN" : lang === "ms" ? "ms-MY" : "en-GB";
+  return new Intl.DateTimeFormat(locale, {
+    month: "long",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
 export default function ProfilePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const { reviews, isLoading, loadReviews, refreshReviews } = useReviews();
-  const { t, translateState } = useLanguage();
+  const { t, translateState, lang } = useLanguage();
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [statsLoading, setStatsLoading] = useState(true);
@@ -204,6 +213,17 @@ export default function ProfilePage() {
     (translateState && location ? translateState(location) : location) ||
     location;
 
+  // Prefer real account fields from API; fall back only if missing
+  const joinedRaw =
+    userData?.createdAt ||
+    userData?.joinedAt ||
+    userData?.created_at ||
+    null;
+
+  const memberSinceLabel = joinedRaw
+    ? t("memberSince", { date: formatJoinedAt(joinedRaw, lang) })
+    : t("memberSinceUnavailable");
+
   return (
     <div className="min-h-screen bg-[#F7F9FB] px-4 py-10">
       <div className="mx-auto max-w-4xl">
@@ -227,13 +247,7 @@ export default function ProfilePage() {
                   {t("locationLabel")}: {locationDisplay}
                 </p>
               )}
-              <p className="text-sm text-[#65748A]">
-                {t("memberSince")}{" "}
-                {new Date().toLocaleDateString("en-US", {
-                  month: "long",
-                  year: "numeric",
-                })}
-              </p>
+              <p className="text-sm text-[#65748A]">{memberSinceLabel}</p>
               {bio && <p className="mt-2 text-[#405066]">{bio}</p>}
             </div>
             <Link
@@ -293,19 +307,32 @@ export default function ProfilePage() {
           </div>
 
           <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
-            {/* Wishlist / Favourites / Reviews / Photos / Travel History — 结构与原来完全一致，仅标签用 t() */}
             <Link
               href="/wishlist"
               className="group relative rounded-xl border-2 border-[#FEF2F2] bg-gradient-to-br from-[#FEF2F2] to-white p-5 text-center transition-all duration-300 hover:-translate-y-1 hover:border-[#C2413B] hover:shadow-lg"
             >
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#C2413B] text-white shadow-md transition-transform duration-300 group-hover:scale-110">
-                <svg className="h-7 w-7" fill="white" stroke="white" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                <svg
+                  className="h-7 w-7"
+                  fill="white"
+                  stroke="white"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                  />
                 </svg>
               </div>
-              <p className="mt-3 text-base font-bold text-[#10213B]">{t("wishlist")}</p>
+              <p className="mt-3 text-base font-bold text-[#10213B]">
+                {t("wishlist")}
+              </p>
               <p className="text-sm text-[#65748A]">
-                {statsLoading ? "..." : `${stats.wishlistCount || 0} ${t("itemsSaved")}`}
+                {statsLoading
+                  ? "..."
+                  : `${stats.wishlistCount || 0} ${t("itemsSaved")}`}
               </p>
               <div className="mt-3 text-sm font-medium text-[#C2413B] opacity-0 transition-opacity duration-300 group-hover:opacity-100">
                 {t("view")}
@@ -317,13 +344,27 @@ export default function ProfilePage() {
               className="group relative rounded-xl border-2 border-[#FFF3D6] bg-gradient-to-br from-[#FFF3D6] to-white p-5 text-center transition-all duration-300 hover:-translate-y-1 hover:border-[#FFAB00] hover:shadow-lg"
             >
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#FFAB00] text-white shadow-md transition-transform duration-300 group-hover:scale-110">
-                <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                <svg
+                  className="h-7 w-7"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <polygon
+                    points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
                 </svg>
               </div>
-              <p className="mt-3 text-base font-bold text-[#10213B]">{t("favourites")}</p>
+              <p className="mt-3 text-base font-bold text-[#10213B]">
+                {t("favourites")}
+              </p>
               <p className="text-sm text-[#65748A]">
-                {statsLoading ? "..." : `${stats.favouritesCount || 0} ${t("itemsSaved")}`}
+                {statsLoading
+                  ? "..."
+                  : `${stats.favouritesCount || 0} ${t("itemsSaved")}`}
               </p>
               <div className="mt-3 text-sm font-medium text-[#FFAB00] opacity-0 transition-opacity duration-300 group-hover:opacity-100">
                 {t("view")}
@@ -335,13 +376,27 @@ export default function ProfilePage() {
               className="group relative rounded-xl border-2 border-[#EAF3FA] bg-gradient-to-br from-[#EAF3FA] to-white p-5 text-center transition-all duration-300 hover:-translate-y-1 hover:border-[#2F6DA1] hover:shadow-lg"
             >
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#2F6DA1] text-white shadow-md transition-transform duration-300 group-hover:scale-110">
-                <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                <svg
+                  className="h-7 w-7"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                  />
                 </svg>
               </div>
-              <p className="mt-3 text-base font-bold text-[#10213B]">{t("myReviews")}</p>
+              <p className="mt-3 text-base font-bold text-[#10213B]">
+                {t("myReviews")}
+              </p>
               <p className="text-sm text-[#65748A]">
-                {statsLoading ? "..." : `${reviewsWritten || 0} ${t("reviewsWrittenCount")}`}
+                {statsLoading
+                  ? "..."
+                  : `${reviewsWritten || 0} ${t("reviewsWrittenCount")}`}
               </p>
               <div className="mt-3 text-sm font-medium text-[#2F6DA1] opacity-0 transition-opacity duration-300 group-hover:opacity-100">
                 {t("view")}
@@ -353,13 +408,27 @@ export default function ProfilePage() {
               className="group relative rounded-xl border-2 border-[#F3F0FF] bg-gradient-to-br from-[#F3F0FF] to-white p-5 text-center transition-all duration-300 hover:-translate-y-1 hover:border-[#7C3AED] hover:shadow-lg"
             >
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#7C3AED] text-white shadow-md transition-transform duration-300 group-hover:scale-110">
-                <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                <svg
+                  className="h-7 w-7"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                  />
                 </svg>
               </div>
-              <p className="mt-3 text-base font-bold text-[#10213B]">{t("myPhotos")}</p>
+              <p className="mt-3 text-base font-bold text-[#10213B]">
+                {t("myPhotos")}
+              </p>
               <p className="text-sm text-[#65748A]">
-                {statsLoading ? "..." : `${photosCount || 0} ${t("photosUploadedCount")}`}
+                {statsLoading
+                  ? "..."
+                  : `${photosCount || 0} ${t("photosUploadedCount")}`}
               </p>
               <div className="mt-3 text-sm font-medium text-[#7C3AED] opacity-0 transition-opacity duration-300 group-hover:opacity-100">
                 {t("view")}
@@ -371,14 +440,25 @@ export default function ProfilePage() {
               className="group relative rounded-xl border-2 border-[#E8F7EF] bg-gradient-to-br from-[#E8F7EF] to-white p-5 text-center transition-all duration-300 hover:-translate-y-1 hover:border-[#16845B] hover:shadow-lg"
             >
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#16845B] text-white shadow-md transition-transform duration-300 group-hover:scale-110">
-                <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <svg
+                  className="h-7 w-7"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 </svg>
               </div>
-              <p className="mt-3 text-base font-bold text-[#10213B]">{t("travelHistory")}</p>
+              <p className="mt-3 text-base font-bold text-[#10213B]">
+                {t("travelHistory")}
+              </p>
               <p className="text-sm text-[#65748A]">
-                {visitedCount}{" "}
-                {visitedCount === 1 ? t("attractions") : t("attractions")}
+                {visitedCount} {t("attractions")}
               </p>
               <div className="mt-3 text-sm font-medium text-[#16845B] opacity-0 transition-opacity duration-300 group-hover:opacity-100">
                 {t("view")}

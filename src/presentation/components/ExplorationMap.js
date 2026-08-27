@@ -935,10 +935,7 @@ export default function ExplorationMap({ mapOnly = false }) {
           </div>
 
           <div className="w-fit rounded-full bg-[#E6F7F0] px-4 py-2 text-sm font-semibold text-[#004638]">
-            {getExplorationMapFilterCountLabel(
-              visibleAttractions.length,
-              mapVisitFilter
-            )}
+            {t("attractionsCount", { count: visibleAttractions.length })}
           </div>
         </div>
       )}
