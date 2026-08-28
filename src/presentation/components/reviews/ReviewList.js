@@ -26,11 +26,11 @@ export default function ReviewList({ attractionId, refreshVersion = 0 }) {
   const isBackgroundOrderRefreshRef = useRef(false);
 
   const sortOptions = [
-    { value: "newest", label: t("sortNewest") },
-    { value: "oldest", label: t("sortNameAsc") },
-    { value: "highest-rating", label: t("sortRating") },
-    { value: "lowest-rating", label: t("sortRating") },
-    { value: "most-liked", label: t("sortMostReviewed") },
+    { value: "newest", label: t("reviewSortNewest") },
+    { value: "oldest", label: t("reviewSortOldest") },
+    { value: "highest-rating", label: t("reviewSortHighestRating") },
+    { value: "lowest-rating", label: t("reviewSortLowestRating") },
+    { value: "most-liked", label: t("reviewSortMostLiked") },
   ];
 
   if (lastRefreshVersion !== refreshVersion) {

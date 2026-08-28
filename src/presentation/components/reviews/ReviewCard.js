@@ -4,9 +4,18 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
+import ReviewComments from "@/presentation/components/reviews/ReviewComments";
+import { useLanguage } from "@/presentation/contexts/LanguageContext";
 
-export default function ReviewCard({ review = {}, onLikeUpdated }) {
+export default function ReviewCard({
+  review = {},
+  onLikeUpdated,
+  showAttractionCta = false,
+  attractionCtaLabel = "",
+  enableComments = false,
+}) {
   const { status: sessionStatus } = useSession();
+  const { t } = useLanguage();
   const userName =
     review.reviewer?.name || review.userName || "Chatlas traveller";
   const userAvatar = review.reviewer?.avatar || review.userAvatar || "";
@@ -29,12 +38,17 @@ export default function ReviewCard({ review = {}, onLikeUpdated }) {
   );
   const [isUpdatingLike, setIsUpdatingLike] = useState(false);
   const [likeError, setLikeError] = useState("");
+  const [commentCount, setCommentCount] = useState(() =>
+    normalizeCommentCount(review.commentCount)
+  );
+  const [commentsExpanded, setCommentsExpanded] = useState(false);
   const [activePhotoIndex, setActivePhotoIndex] = useState(null);
   const dialogRef = useRef(null);
   const closeButtonRef = useRef(null);
   const lightboxImageRef = useRef(null);
   const originatingTriggerRef = useRef(null);
   const counterId = useId();
+  const commentsSectionId = useId();
   const isLightboxOpen = activePhotoIndex !== null;
   const activePhoto = isLightboxOpen ? photos[activePhotoIndex] : null;
 
@@ -339,7 +353,13 @@ export default function ReviewCard({ review = {}, onLikeUpdated }) {
         </div>
       )}
 
-      <div className="mt-5 sm:ml-[72px]">
+      <div
+        className={`mt-5 sm:ml-[72px] ${
+          showAttractionCta || enableComments
+            ? "flex flex-wrap items-center gap-3"
+            : ""
+        }`}
+      >
         <button
           type="button"
           onClick={handleLikeClick}
@@ -379,12 +399,75 @@ export default function ReviewCard({ review = {}, onLikeUpdated }) {
           <span aria-live="polite">{likeCount}</span>
         </button>
 
+        {enableComments && (
+          <button
+            type="button"
+            onClick={() => setCommentsExpanded((expanded) => !expanded)}
+            aria-expanded={commentsExpanded}
+            aria-controls={commentsSectionId}
+            aria-label={`${
+              commentsExpanded
+                ? t("reviewHideComments")
+                : t("reviewViewComments")
+            }. ${commentCount} ${
+              commentCount === 1
+                ? t("reviewComment")
+                : t("reviewComments")
+            }.`}
+            className="inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-[10px] border border-attraction-border-strong bg-white px-4 text-sm font-semibold text-attraction-body transition-colors duration-200 hover:bg-attraction-primary-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-attraction-primary"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path
+                d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <span>
+              {commentCount === 1
+                ? t("reviewComment")
+                : t("reviewComments")}
+            </span>
+            <span aria-live="polite">{commentCount}</span>
+          </button>
+        )}
+
+        {showAttractionCta && attractionHref && attractionCtaLabel && (
+          <Link
+            href={attractionHref}
+            className="inline-flex min-h-11 items-center justify-center rounded-[10px] border border-attraction-border-strong bg-white px-4 text-sm font-semibold text-attraction-primary-dark transition-colors duration-200 hover:border-attraction-primary hover:bg-attraction-primary-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-attraction-primary"
+          >
+            {attractionCtaLabel} <span aria-hidden="true">→</span>
+          </Link>
+        )}
+
         {likeError && (
-          <p role="alert" className="mt-2 text-sm text-attraction-error">
+          <p
+            role="alert"
+            className={`mt-2 text-sm text-attraction-error ${
+              showAttractionCta || enableComments ? "basis-full" : ""
+            }`}
+          >
             {likeError}
           </p>
         )}
       </div>
+
+      {enableComments && commentsExpanded && reviewId && (
+        <ReviewComments
+          reviewId={reviewId}
+          sectionId={commentsSectionId}
+          onCommentCountChange={setCommentCount}
+        />
+      )}
 
       {activePhoto && (
         <div
@@ -542,6 +625,11 @@ function getInitials(userName) {
     .map((namePart) => namePart[0])
     .join("")
     .toUpperCase();
+}
+
+function normalizeCommentCount(value) {
+  const count = Number(value);
+  return Number.isInteger(count) && count > 0 ? count : 0;
 }
 
 function createDocumentHref(basePath, documentId) {

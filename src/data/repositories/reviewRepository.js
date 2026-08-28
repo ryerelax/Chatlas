@@ -138,10 +138,26 @@ export async function findCommunityReviews({
   limit,
   sort,
   searchPattern,
+  filter,
 }) {
   const skip = (page - 1) * limit;
   const hasSearch = Boolean(searchPattern);
   const pipeline = [];
+
+  if (filter === "with-photos") {
+    pipeline.push({
+      $match: {
+        photos: {
+          $elemMatch: {
+            url: { $regex: /^https:\/\/res\.cloudinary\.com\//i },
+            publicId: { $regex: /\S/ },
+          },
+        },
+      },
+    });
+  } else if (filter === "rating-4-plus") {
+    pipeline.push({ $match: { rating: { $gte: 4 } } });
+  }
 
   if (hasSearch) {
     pipeline.push(
@@ -314,8 +330,9 @@ export async function removeReviewPhotoByPublicId(reviewId, publicId) {
   ).lean();
 }
 
-export async function deleteReviewById(reviewId) {
-  return Review.findByIdAndDelete(reviewId).lean();
+export async function deleteReviewById(reviewId, { session } = {}) {
+  const query = Review.findByIdAndDelete(reviewId);
+  return session ? query.session(session).lean() : query.lean();
 }
 
 export async function addReviewLike(reviewId, userId) {
