@@ -33,6 +33,7 @@ const ATTRACTION_DATA_STATUS_VALUES = new Set(
 );
 const MAP_STATUS_VALUES = new Set(Object.values(MAP_STATUS));
 const MAP_VISIT_FILTER_VALUES = new Set(Object.values(MAP_VISIT_FILTER));
+const EARTH_RADIUS_METERS = 6371000;
 
 function normaliseMapVisitFilter(value) {
   return MAP_VISIT_FILTER_VALUES.has(value) ? value : MAP_VISIT_FILTER.ALL;
@@ -51,6 +52,75 @@ export function createVisibleAttractions(attractions, filter = MAP_VISIT_FILTER.
   if (resolvedFilter === MAP_VISIT_FILTER.ALL) return attractions;
   const isVisited = resolvedFilter === MAP_VISIT_FILTER.VISITED;
   return attractions.filter((attraction) => attraction?.isVisited === isVisited);
+}
+
+function normaliseCoordinatePair(position) {
+  const latitude = normaliseCoordinate(position?.latitude, -90, 90);
+  const longitude = normaliseCoordinate(position?.longitude, -180, 180);
+
+  return latitude === null || longitude === null
+    ? null
+    : { latitude, longitude };
+}
+
+export function calculateHaversineDistanceMeters(origin, destination) {
+  const start = normaliseCoordinatePair(origin);
+  const end = normaliseCoordinatePair(destination);
+
+  if (!start || !end) {
+    return null;
+  }
+
+  const degreesToRadians = Math.PI / 180;
+  const latitudeDelta = (end.latitude - start.latitude) * degreesToRadians;
+  const longitudeDelta = (end.longitude - start.longitude) * degreesToRadians;
+  const startLatitude = start.latitude * degreesToRadians;
+  const endLatitude = end.latitude * degreesToRadians;
+  const haversine =
+    Math.sin(latitudeDelta / 2) ** 2 +
+    Math.cos(startLatitude) *
+      Math.cos(endLatitude) *
+      Math.sin(longitudeDelta / 2) ** 2;
+  const angularDistance = 2 * Math.atan2(
+    Math.sqrt(haversine),
+    Math.sqrt(1 - haversine)
+  );
+
+  return EARTH_RADIUS_METERS * angularDistance;
+}
+
+export function orderAttractionsByDistance(attractions, position) {
+  if (!Array.isArray(attractions)) {
+    return [];
+  }
+
+  if (!normaliseCoordinatePair(position)) {
+    return [...attractions];
+  }
+
+  return attractions
+    .map((attraction, originalIndex) => ({
+      attraction: {
+        ...attraction,
+        distanceMeters: calculateHaversineDistanceMeters(position, attraction),
+      },
+      originalIndex,
+    }))
+    .sort((first, second) => {
+      const firstDistance = first.attraction.distanceMeters;
+      const secondDistance = second.attraction.distanceMeters;
+      const firstHasDistance = Number.isFinite(firstDistance);
+      const secondHasDistance = Number.isFinite(secondDistance);
+
+      if (firstHasDistance && secondHasDistance) {
+        return firstDistance - secondDistance || first.originalIndex - second.originalIndex;
+      }
+
+      if (firstHasDistance) return -1;
+      if (secondHasDistance) return 1;
+      return first.originalIndex - second.originalIndex;
+    })
+    .map(({ attraction }) => attraction);
 }
 
 export function getExplorationMapFilterCountLabel(count, filter = MAP_VISIT_FILTER.ALL) {

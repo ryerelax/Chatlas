@@ -21,6 +21,7 @@ const LIVE_LOCATION_COPY = Object.freeze({
     retry: "Retry live location",
     requesting: "Finding your live location…",
     tracking: "Live location is on",
+    stoppedLastLocation: "Live location stopped. Distances are based on your last known location.",
     markerLabel: "Your live location",
     controlsLabel: "Live location controls",
     actionsLabel: "Live location actions",
@@ -41,6 +42,7 @@ const LIVE_LOCATION_COPY = Object.freeze({
     retry: "重试实时位置",
     requesting: "正在取得你的实时位置…",
     tracking: "实时位置已开启",
+    stoppedLastLocation: "实时定位已停止。距离根据你最后的位置计算。",
     markerLabel: "你的实时位置",
     controlsLabel: "实时位置控制",
     actionsLabel: "实时位置操作",
@@ -61,6 +63,7 @@ const LIVE_LOCATION_COPY = Object.freeze({
     retry: "Cuba semula lokasi langsung",
     requesting: "Sedang mendapatkan lokasi langsung anda…",
     tracking: "Lokasi langsung dihidupkan",
+    stoppedLastLocation: "Lokasi langsung telah dihentikan. Jarak adalah berdasarkan lokasi terakhir anda.",
     markerLabel: "Lokasi langsung anda",
     controlsLabel: "Kawalan lokasi langsung",
     actionsLabel: "Tindakan lokasi langsung",
@@ -114,6 +117,29 @@ export function getLiveLocationCopy(language = "en") {
   return LIVE_LOCATION_COPY[language] || LIVE_LOCATION_COPY.en;
 }
 
+export function getLiveLocationStatusPresentation({
+  language = "en",
+  status,
+  hasLastSuccessfulPosition = false,
+} = {}) {
+  const copy = getLiveLocationCopy(language);
+  const message =
+    status === LIVE_LOCATION_STATUS.REQUESTING
+      ? copy.requesting
+      : status === LIVE_LOCATION_STATUS.TRACKING
+        ? copy.tracking
+        : hasLastSuccessfulPosition
+          ? copy.stoppedLastLocation
+          : copy.show;
+
+  return {
+    message,
+    role: "status",
+    ariaLive: "polite",
+    ariaAtomic: true,
+  };
+}
+
 export function canStartLiveLocation(mapStatus) {
   return mapStatus === "ready";
 }
@@ -145,6 +171,7 @@ export function createLiveLocationController({
     status: LIVE_LOCATION_STATUS.IDLE,
     errorKey: null,
     position: null,
+    lastSuccessfulPosition: null,
   };
 
   function updateSnapshot(nextSnapshot) {
@@ -177,6 +204,7 @@ export function createLiveLocationController({
       status: LIVE_LOCATION_STATUS.ERROR,
       errorKey,
       position: null,
+      lastSuccessfulPosition: snapshot.lastSuccessfulPosition,
     });
   }
 
@@ -197,6 +225,7 @@ export function createLiveLocationController({
         status: LIVE_LOCATION_STATUS.ERROR,
         errorKey: "unsupported",
         position: null,
+        lastSuccessfulPosition: snapshot.lastSuccessfulPosition,
       });
       return false;
     }
@@ -209,6 +238,7 @@ export function createLiveLocationController({
       status: LIVE_LOCATION_STATUS.REQUESTING,
       errorKey: null,
       position: null,
+      lastSuccessfulPosition: snapshot.lastSuccessfulPosition,
     });
 
     let watchId;
@@ -231,6 +261,7 @@ export function createLiveLocationController({
             status: LIVE_LOCATION_STATUS.TRACKING,
             errorKey: null,
             position,
+            lastSuccessfulPosition: position,
           });
           onPosition(position, { shouldCenter });
         },
@@ -269,6 +300,7 @@ export function createLiveLocationController({
         status: LIVE_LOCATION_STATUS.IDLE,
         errorKey: null,
         position: null,
+        lastSuccessfulPosition: snapshot.lastSuccessfulPosition,
       });
     }
 
@@ -285,6 +317,9 @@ export function createLiveLocationController({
       return {
         ...snapshot,
         position: snapshot.position ? { ...snapshot.position } : null,
+        lastSuccessfulPosition: snapshot.lastSuccessfulPosition
+          ? { ...snapshot.lastSuccessfulPosition }
+          : null,
       };
     },
   };

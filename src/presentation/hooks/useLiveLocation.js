@@ -12,6 +12,7 @@ const INITIAL_STATE = Object.freeze({
   status: LIVE_LOCATION_STATUS.IDLE,
   errorKey: null,
   position: null,
+  lastSuccessfulPosition: null,
 });
 
 export default function useLiveLocation({ mapStatus, onPosition, onClear }) {
@@ -52,11 +53,12 @@ export default function useLiveLocation({ mapStatus, onPosition, onClear }) {
 
   const start = useCallback(() => {
     if (!canStartLiveLocation(mapStatus)) {
-      setState({
+      setState((currentState) => ({
+        ...currentState,
         status: LIVE_LOCATION_STATUS.ERROR,
         errorKey: "mapUnavailable",
         position: null,
-      });
+      }));
       return false;
     }
 
@@ -69,6 +71,10 @@ export default function useLiveLocation({ mapStatus, onPosition, onClear }) {
 
   return {
     ...state,
+    isTracking: [
+      LIVE_LOCATION_STATUS.REQUESTING,
+      LIVE_LOCATION_STATUS.TRACKING,
+    ].includes(state.status),
     canStart: canStartLiveLocation(mapStatus),
     start,
     stop,
