@@ -4,6 +4,7 @@ import { useLanguage } from "@/presentation/contexts/LanguageContext";
 import {
   LIVE_LOCATION_STATUS,
   getLiveLocationCopy,
+  getLiveLocationStatusPresentation,
 } from "@/presentation/lib/liveLocationPresentation";
 
 const PRIMARY_BUTTON_CLASS =
@@ -15,6 +16,7 @@ export default function LiveLocationControls({
   status,
   errorKey,
   hasPosition,
+  hasLastSuccessfulPosition,
   canStart,
   onStart,
   onRecenter,
@@ -26,6 +28,11 @@ export default function LiveLocationControls({
   const isTracking = status === LIVE_LOCATION_STATUS.TRACKING;
   const isError = status === LIVE_LOCATION_STATUS.ERROR;
   const isActive = isRequesting || isTracking;
+  const statusPresentation = getLiveLocationStatusPresentation({
+    language: lang,
+    status,
+    hasLastSuccessfulPosition,
+  });
 
   return (
     <section
@@ -36,9 +43,9 @@ export default function LiveLocationControls({
         <div className="min-w-0">
           <div
             className="flex items-center gap-2 text-sm font-bold text-[#25496F]"
-            role="status"
-            aria-live="polite"
-            aria-atomic="true"
+            role={statusPresentation.role}
+            aria-live={statusPresentation.ariaLive}
+            aria-atomic={statusPresentation.ariaAtomic}
           >
             <span
               className={`h-3 w-3 shrink-0 rounded-full border-2 border-white shadow-[0_0_0_2px_#1769E0] ${
@@ -47,11 +54,7 @@ export default function LiveLocationControls({
               aria-hidden="true"
             />
             <span>
-              {isRequesting
-                ? copy.requesting
-                : isTracking
-                  ? copy.tracking
-                  : copy.show}
+              {statusPresentation.message}
             </span>
           </div>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-[#52677E]">

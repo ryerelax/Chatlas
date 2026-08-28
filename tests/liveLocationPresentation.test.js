@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import * as liveLocationPresentation from "../src/presentation/lib/liveLocationPresentation.js";
 import {
   LIVE_LOCATION_STATUS,
   LIVE_LOCATION_WATCH_OPTIONS,
@@ -86,6 +87,7 @@ test("live location is idle and does not request geolocation before an explicit 
     status: LIVE_LOCATION_STATUS.IDLE,
     errorKey: null,
     position: null,
+    lastSuccessfulPosition: null,
   });
 });
 
@@ -120,6 +122,11 @@ test("the first valid position requests one automatic centre and later positions
     status: LIVE_LOCATION_STATUS.TRACKING,
     errorKey: null,
     position: { latitude: 2.191, longitude: 102.252, accuracyMeters: 12 },
+    lastSuccessfulPosition: {
+      latitude: 2.191,
+      longitude: 102.252,
+      accuracyMeters: 12,
+    },
   });
 });
 
@@ -188,7 +195,7 @@ test("map overlays are created once, auto-centre once, update in place, and rece
   assert.deepEqual(mapCalls.zooms, [16, 16]);
 });
 
-test("stop clears the active watch and overlays, resets state, and ignores stale callbacks", () => {
+test("stop clears the active watch and overlays, retains the last position, and ignores stale callbacks", () => {
   const harness = createControllerHarness();
   harness.controller.start();
   const staleSuccess = harness.geolocation.watches[0].onSuccess;
@@ -201,11 +208,53 @@ test("stop clears the active watch and overlays, resets state, and ignores stale
     status: LIVE_LOCATION_STATUS.IDLE,
     errorKey: null,
     position: null,
+    lastSuccessfulPosition: {
+      latitude: 2.1896,
+      longitude: 102.2501,
+      accuracyMeters: 18.5,
+    },
   });
 
   staleSuccess(secondBrowserPosition);
   assert.equal(harness.positions.length, 1);
   assert.equal(harness.controller.getSnapshot().status, LIVE_LOCATION_STATUS.IDLE);
+  assert.deepEqual(harness.controller.getSnapshot().lastSuccessfulPosition, {
+    latitude: 2.1896,
+    longitude: 102.2501,
+    accuracyMeters: 18.5,
+  });
+});
+
+test("restart creates one new watcher and replaces the retained position only after new success", () => {
+  const harness = createControllerHarness();
+  harness.controller.start();
+  const staleSuccess = harness.geolocation.watches[0].onSuccess;
+  staleSuccess(firstBrowserPosition);
+  harness.controller.stop();
+
+  assert.equal(harness.controller.start(), true);
+  assert.equal(harness.geolocation.watches.length, 2);
+  assert.deepEqual(harness.geolocation.clearedWatchIds, [41]);
+  assert.deepEqual(harness.controller.getSnapshot().lastSuccessfulPosition, {
+    latitude: 2.1896,
+    longitude: 102.2501,
+    accuracyMeters: 18.5,
+  });
+
+  staleSuccess(secondBrowserPosition);
+  assert.deepEqual(harness.controller.getSnapshot().lastSuccessfulPosition, {
+    latitude: 2.1896,
+    longitude: 102.2501,
+    accuracyMeters: 18.5,
+  });
+
+  harness.geolocation.watches[1].onSuccess(secondBrowserPosition);
+  assert.deepEqual(harness.controller.getSnapshot().lastSuccessfulPosition, {
+    latitude: 2.191,
+    longitude: 102.252,
+    accuracyMeters: 12,
+  });
+  assert.deepEqual(harness.positions.at(-1).options, { shouldCenter: true });
 });
 
 test("dispose clears the active browser watch without leaving background tracking", () => {
@@ -232,6 +281,7 @@ test("permission, unavailable, and timeout errors clear the watch and allow retr
       assert.deepEqual(harness.geolocation.clearedWatchIds, [41]);
       assert.equal(harness.controller.getSnapshot().status, LIVE_LOCATION_STATUS.ERROR);
       assert.equal(harness.controller.getSnapshot().errorKey, errorKey);
+      assert.equal(harness.controller.getSnapshot().lastSuccessfulPosition, null);
       assert.equal(harness.controller.start(), true);
       assert.equal(harness.geolocation.watches.length, 2);
     });
@@ -246,6 +296,28 @@ test("unsupported geolocation fails safely without creating a watch", () => {
     status: LIVE_LOCATION_STATUS.ERROR,
     errorKey: "unsupported",
     position: null,
+    lastSuccessfulPosition: null,
+  });
+});
+
+test("an error after a valid position clears active tracking but retains the last success", () => {
+  const harness = createControllerHarness();
+  harness.controller.start();
+  harness.geolocation.watches[0].onSuccess(firstBrowserPosition);
+
+  harness.geolocation.watches[0].onError({ code: 3 });
+
+  assert.deepEqual(harness.geolocation.clearedWatchIds, [41]);
+  assert.equal(harness.getClearCount(), 1);
+  assert.deepEqual(harness.controller.getSnapshot(), {
+    status: LIVE_LOCATION_STATUS.ERROR,
+    errorKey: "timeout",
+    position: null,
+    lastSuccessfulPosition: {
+      latitude: 2.1896,
+      longitude: 102.2501,
+      accuracyMeters: 18.5,
+    },
   });
 });
 
@@ -263,6 +335,7 @@ test("invalid latitude, longitude, and accuracy stop tracking without exposing c
       assert.equal(harness.controller.getSnapshot().status, LIVE_LOCATION_STATUS.ERROR);
       assert.equal(harness.controller.getSnapshot().errorKey, "invalidPosition");
       assert.equal(harness.controller.getSnapshot().position, null);
+      assert.equal(harness.controller.getSnapshot().lastSuccessfulPosition, null);
       assert.deepEqual(harness.geolocation.clearedWatchIds, [41]);
     });
   }
@@ -300,6 +373,7 @@ test("a map becoming unavailable stops the active watch instead of tracking in t
   );
   assert.deepEqual(harness.geolocation.clearedWatchIds, [41]);
   assert.equal(harness.controller.getSnapshot().status, LIVE_LOCATION_STATUS.IDLE);
+  assert.deepEqual(harness.controller.getSnapshot().lastSuccessfulPosition, null);
 });
 
 test("clearing overlays removes both the blue marker and accuracy circle", () => {
@@ -333,6 +407,7 @@ test("EN, Chinese, and BM copy covers controls, privacy, errors, and accessible 
       retry: "Retry live location",
       requesting: "Finding your live location…",
       tracking: "Live location is on",
+      stoppedLastLocation: "Live location stopped. Distances are based on your last known location.",
       markerLabel: "Your live location",
       controlsLabel: "Live location controls",
       actionsLabel: "Live location actions",
@@ -345,6 +420,7 @@ test("EN, Chinese, and BM copy covers controls, privacy, errors, and accessible 
       retry: "重试实时位置",
       requesting: "正在取得你的实时位置…",
       tracking: "实时位置已开启",
+      stoppedLastLocation: "实时定位已停止。距离根据你最后的位置计算。",
       markerLabel: "你的实时位置",
       controlsLabel: "实时位置控制",
       actionsLabel: "实时位置操作",
@@ -357,6 +433,7 @@ test("EN, Chinese, and BM copy covers controls, privacy, errors, and accessible 
       retry: "Cuba semula lokasi langsung",
       requesting: "Sedang mendapatkan lokasi langsung anda…",
       tracking: "Lokasi langsung dihidupkan",
+      stoppedLastLocation: "Lokasi langsung telah dihentikan. Jarak adalah berdasarkan lokasi terakhir anda.",
       markerLabel: "Lokasi langsung anda",
       controlsLabel: "Kawalan lokasi langsung",
       actionsLabel: "Tindakan lokasi langsung",
@@ -381,6 +458,42 @@ test("EN, Chinese, and BM copy covers controls, privacy, errors, and accessible 
       assert.ok(copy.errors[errorKey].length > 0);
       assert.doesNotMatch(copy.errors[errorKey], /\d+\.\d+[, ]+\d+\.\d+/u);
     }
+  }
+});
+
+test("stopped last-location status is polite, atomic, and never claims tracking", async (context) => {
+  assert.equal(
+    typeof liveLocationPresentation.getLiveLocationStatusPresentation,
+    "function",
+    "getLiveLocationStatusPresentation must be exported as a function"
+  );
+  const getLiveLocationStatusPresentation =
+    liveLocationPresentation.getLiveLocationStatusPresentation;
+  const expectedMessages = {
+    en: "Live location stopped. Distances are based on your last known location.",
+    zh: "实时定位已停止。距离根据你最后的位置计算。",
+    ms: "Lokasi langsung telah dihentikan. Jarak adalah berdasarkan lokasi terakhir anda.",
+  };
+
+  for (const [language, message] of Object.entries(expectedMessages)) {
+    await context.test(language, () => {
+      const presentation = getLiveLocationStatusPresentation({
+        language,
+        status: LIVE_LOCATION_STATUS.IDLE,
+        hasLastSuccessfulPosition: true,
+      });
+
+      assert.deepEqual(presentation, {
+        message,
+        role: "status",
+        ariaLive: "polite",
+        ariaAtomic: true,
+      });
+      assert.doesNotMatch(
+        presentation.message,
+        /Live location is on|tracking|updating|实时位置已开启|dihidupkan/iu
+      );
+    });
   }
 });
 

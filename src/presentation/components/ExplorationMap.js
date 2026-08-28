@@ -30,10 +30,13 @@ import {
   MAP_VISIT_FILTER,
   MAP_STATUS,
   normaliseMapAttractions,
+  orderAttractionsByDistance,
   VISITED_DATA_STATUS,
 } from "@/business/services/explorationMapService";
 import {
+  formatApproximateDistance,
   getAttractionDetailsHref,
+  getAttractionsPanelMapStatusMessageKey,
   getMapMarkerPresentation,
   MELAKA_MAP_CENTRE,
 } from "@/presentation/lib/explorationMapPresentation";
@@ -490,6 +493,16 @@ export default function ExplorationMap({ mapOnly = false }) {
     () => createVisibleAttractions(mapAttractions, mapVisitFilter),
     [mapAttractions, mapVisitFilter]
   );
+  const orderedVisibleAttractions = useMemo(
+    () =>
+      orderAttractionsByDistance(
+        visibleAttractions,
+        liveLocation.lastSuccessfulPosition
+      ),
+    [liveLocation.lastSuccessfulPosition, visibleAttractions]
+  );
+  const attractionsPanelMapStatusMessageKey =
+    getAttractionsPanelMapStatusMessageKey(mapStatus);
   const visitedAttractions = explorationViewModel.visitedAttractions.map(
     (attraction) => ({
       ...attraction,
@@ -741,7 +754,7 @@ export default function ExplorationMap({ mapOnly = false }) {
       return;
     }
 
-    mapAttractions.forEach((attraction, index) => {
+    orderedVisibleAttractions.forEach((attraction, index) => {
       const marker = markerByAttractionIdRef.current.get(attraction.id);
 
       if (!marker) {
@@ -775,7 +788,7 @@ export default function ExplorationMap({ mapOnly = false }) {
         )
       );
     }
-  }, [mapAttractions, mapStatus, t, translateCategory]);
+  }, [mapStatus, orderedVisibleAttractions, t, translateCategory]);
 
   function focusAttraction(attraction) {
     const map = mapInstanceRef.current;
@@ -935,7 +948,7 @@ export default function ExplorationMap({ mapOnly = false }) {
           </div>
 
           <div className="w-fit rounded-full bg-[#E6F7F0] px-4 py-2 text-sm font-semibold text-[#004638]">
-            {t("attractionsCount", { count: visibleAttractions.length })}
+            {t("attractionsCount", { count: orderedVisibleAttractions.length })}
           </div>
         </div>
       )}
@@ -970,6 +983,9 @@ export default function ExplorationMap({ mapOnly = false }) {
           hasPosition={
             Boolean(liveLocation.position) && mapStatus === MAP_STATUS.READY
           }
+          hasLastSuccessfulPosition={Boolean(
+            liveLocation.lastSuccessfulPosition
+          )}
           canStart={liveLocation.canStart}
           onStart={liveLocation.start}
           onRecenter={() => liveLocationOverlayRef.current?.recenter()}
@@ -1053,12 +1069,14 @@ export default function ExplorationMap({ mapOnly = false }) {
               <h3 className="text-lg font-bold text-[#10213B]">
                 {t("attractions")}
               </h3>
-              <p className="mt-1 text-sm text-[#65748A]">
-                {t("mapFailed")}
-              </p>
+              {attractionsPanelMapStatusMessageKey && (
+                <p className="mt-1 text-sm text-[#65748A]">
+                  {t(attractionsPanelMapStatusMessageKey)}
+                </p>
+              )}
             </div>
 
-            {visibleAttractions.length === 0 ? (
+            {orderedVisibleAttractions.length === 0 ? (
               <div className="p-8 text-center">
                 <p className="font-semibold text-[#10213B]">
                   {t("noAttractionsFound")}
@@ -1066,7 +1084,7 @@ export default function ExplorationMap({ mapOnly = false }) {
               </div>
             ) : (
               <ol className="max-h-[calc(34rem-92px)] divide-y divide-[#E8EDF1] overflow-y-auto">
-                {visibleAttractions.map((attraction, index) => (
+                {orderedVisibleAttractions.map((attraction, index) => (
                   <li key={attraction.id} className="p-4">
                     <button
                       type="button"
@@ -1091,6 +1109,14 @@ export default function ExplorationMap({ mapOnly = false }) {
                         <span className="mt-1 block text-sm leading-5 text-[#65748A]">
                           {attraction.address}
                         </span>
+                        {Number.isFinite(attraction.distanceMeters) && (
+                          <span className="mt-1 block text-sm font-semibold text-[#006C56]">
+                            {formatApproximateDistance(
+                              attraction.distanceMeters,
+                              lang
+                            )}
+                          </span>
+                        )}
                       </span>
                     </button>
 
