@@ -315,7 +315,9 @@ export default function AttractionDetailsPage() {
             <a
               href={
                 attraction.googlePlaceId
-                  ? `https://www.google.com/maps/place/?q=place_id:${attraction.googlePlaceId}`
+                  ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                      attraction.name
+                    )}&query_place_id=${attraction.googlePlaceId}`
                   : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
                       attraction.address
                     )}`

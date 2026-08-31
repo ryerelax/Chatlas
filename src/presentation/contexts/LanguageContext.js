@@ -124,7 +124,7 @@ const translations = {
     noPhotosYet: "No photos yet",
     noReviewsYetAttraction: "No reviews yet",
     communitySubmitted: "Community submitted",
-    openInMaps: "Open in maps",
+    openInMaps: "Open in Google Maps",
     aboutAttraction: "About Description",
     descriptionPlaceholder:
       "Share what makes this attraction worth visiting…",
@@ -584,7 +584,7 @@ const translations = {
     noPhotosYet: "暂无照片",
     noReviewsYetAttraction: "暂无评价",
     communitySubmitted: "社区提交",
-    openInMaps: "在地图中打开",
+    openInMaps: "在Google地图中打开",
     aboutAttraction: "关于此景点",
     descriptionPlaceholder: "分享这个景点值得一游的原因…",
     noDescription: "此景点暂无简介。",
@@ -1017,7 +1017,8 @@ const translations = {
     noPhotosYet: "Tiada foto lagi",
     noReviewsYetAttraction: "Tiada ulasan lagi",
     communitySubmitted: "Diserahkan komuniti",
-    openInMaps: "Buka dalam peta",
+    // TODO: Confirm this Bahasa Melayu wording with a native speaker.
+    openInMaps: "Buka dalam Google Maps",
     aboutAttraction: "Mengenai tarikan ini",
     descriptionPlaceholder:
       "Kongsi mengapa tarikan ini berbaloi dilawati…",
