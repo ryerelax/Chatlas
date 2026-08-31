@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { useEffect, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useLanguage } from "@/presentation/contexts/LanguageContext";
 import NavDropdown from "@/presentation/components/NavDropdown";
@@ -9,6 +10,27 @@ export default function Header() {
   const { lang, changeLang, t } = useLanguage();
 
   const isLoggedIn = status === "authenticated";
+
+  const mobileMenuRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (
+        mobileMenuRef.current &&
+        mobileMenuRef.current.open &&
+        !mobileMenuRef.current.contains(event.target)
+      ) {
+        mobileMenuRef.current.open = false;
+      }
+    }
+
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, []);
+
+  function closeMobileMenu() {
+    if (mobileMenuRef.current) mobileMenuRef.current.open = false;
+  }
 
   return (
     <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/95 shadow-sm backdrop-blur">
@@ -26,12 +48,6 @@ export default function Header() {
 
         {/* Desktop navigation */}
         <nav className="hidden items-center gap-2 md:flex" aria-label="Main navigation">
-          <Link
-            href="/"
-            className="rounded-lg px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-emerald-50 hover:text-emerald-700"
-          >
-            {t("home")}
-          </Link>
           {isLoggedIn ? (
             <NavDropdown
               trigger={t("attractions")}
@@ -157,7 +173,7 @@ export default function Header() {
         </div>
 
         {/* Mobile navigation */}
-        <details className="relative md:hidden">
+        <details ref={mobileMenuRef} className="relative md:hidden">
           <summary className="cursor-pointer list-none rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700">
             {t("menu")}
           </summary>
@@ -195,22 +211,18 @@ export default function Header() {
               </button>
             </div>
 
-            <Link
-              href="/"
-              className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700"
-            >
-              {t("home")}
-            </Link>
             {isLoggedIn ? (
               <>
                 <Link
                   href="/#attractions"
+                  onClick={closeMobileMenu}
                   className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700"
                 >
                   {t("browseAttractions")}
                 </Link>
                 <Link
                   href="/attractions/submit"
+                  onClick={closeMobileMenu}
                   className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700"
                 >
                   {t("addAttraction")}
@@ -219,6 +231,7 @@ export default function Header() {
             ) : (
               <Link
                 href="/#attractions"
+                onClick={closeMobileMenu}
                 className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700"
               >
                 {t("attractions")}
@@ -226,18 +239,21 @@ export default function Header() {
             )}
             <Link
               href="/exploration-map"
+              onClick={closeMobileMenu}
               className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700"
             >
               {t("map")}
             </Link>
             <Link
               href="/profiles"
+              onClick={closeMobileMenu}
               className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700"
             >
               {t("travellers")}
             </Link>
             <Link
               href="/community"
+              onClick={closeMobileMenu}
               className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700"
             >
               {t("community")}
@@ -248,12 +264,16 @@ export default function Header() {
               <>
                 <Link
                   href="/profile"
+                  onClick={closeMobileMenu}
                   className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700"
                 >
                   👤 {t("myProfile")}
                 </Link>
                 <button
-                  onClick={() => signOut({ redirectTo: "/login" })}
+                  onClick={() => {
+                    closeMobileMenu();
+                    signOut({ redirectTo: "/login" });
+                  }}
                   className="w-full rounded-lg px-4 py-3 text-left text-sm font-semibold text-red-600 hover:bg-gray-50"
                 >
                   🚪 {t("logout")}
@@ -262,6 +282,7 @@ export default function Header() {
             ) : (
               <Link
                 href="/login"
+                onClick={closeMobileMenu}
                 className="block rounded-lg bg-emerald-600 px-4 py-3 text-center text-sm font-semibold text-white hover:bg-emerald-700"
               >
                 {t("signIn")}
