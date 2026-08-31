@@ -396,7 +396,7 @@ export default function TravelHistoryPage() {
               className="cursor-pointer rounded-lg border border-[#D8E1E7] bg-white px-3 py-2 text-sm text-[#10213B] outline-none focus:border-[#006C56]"
             >
               <option value="newest">{t("sortNewest")}</option>
-              <option value="oldest">{t("sortNameAsc")}</option>
+              <option value="oldest">{t("sortOldest")}</option>
             </select>
           </div>
         </div>
