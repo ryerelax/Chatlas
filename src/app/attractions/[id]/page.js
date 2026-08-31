@@ -312,13 +312,21 @@ export default function AttractionDetailsPage() {
               />
             </div>
 
-            <Link
-              href={`/attractions/${attractionId}/location`}
+            <a
+              href={
+                attraction.googlePlaceId
+                  ? `https://www.google.com/maps/place/?q=place_id:${attraction.googlePlaceId}`
+                  : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                      attraction.address
+                    )}`
+              }
+              target="_blank"
+              rel="noopener noreferrer"
               className="flex h-[46px] w-full items-center justify-center gap-2 rounded-[10px] bg-attraction-primary text-[15px] font-semibold text-white transition hover:bg-attraction-primary-hover"
             >
               <LocationPinIcon />
               {t("openInMaps")}
-            </Link>
+            </a>
           </div>
         </div>
       </div>
