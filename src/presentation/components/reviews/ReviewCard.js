@@ -15,7 +15,7 @@ export default function ReviewCard({
   enableComments = false,
 }) {
   const { status: sessionStatus } = useSession();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const userName =
     review.reviewer?.name || review.userName || "Chatlas traveller";
   const userAvatar = review.reviewer?.avatar || review.userAvatar || "";
@@ -222,10 +222,10 @@ export default function ReviewCard({
   const isLikeDisabled =
     sessionStatus !== "authenticated" || !reviewId || isUpdatingLike;
   const likeButtonLabel = isGuest
-    ? "Sign in to like this review"
-    : likedByCurrentUser
-      ? "Unlike this review"
-      : "Like this review";
+  ? t("signInToLikeReview")
+  : likedByCurrentUser
+    ? t("unlikeReview")
+    : t("likeReview");
   const reviewerAvatar = userAvatar ? (
     <img
       src={userAvatar}
@@ -292,7 +292,7 @@ export default function ReviewCard({
               </div>
               {attractionHref && review.attraction?.name && (
                 <p className="mt-2 text-sm text-attraction-muted">
-                  Reviewed{" "}
+                  {t("reviewed")}{" "}
                   <Link
                     href={attractionHref}
                     className="rounded-sm font-semibold text-attraction-primary-dark transition-colors duration-200 hover:text-attraction-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-attraction-primary"
@@ -307,7 +307,7 @@ export default function ReviewCard({
               dateTime={review.createdAt}
               className="shrink-0 pt-0.5 text-right text-[13px] font-medium text-attraction-muted"
             >
-              {formatReviewDate(review.createdAt)}
+              {formatReviewDate(review.createdAt, lang)}
             </time>
           </div>
         </div>
@@ -365,7 +365,9 @@ export default function ReviewCard({
           onClick={handleLikeClick}
           disabled={isLikeDisabled}
           aria-pressed={likedByCurrentUser}
-          aria-label={`${likeButtonLabel}. ${likeCount} ${likeCount === 1 ? "like" : "likes"}.`}
+          aria-label={`${likeButtonLabel}. ${likeCount} ${
+            likeCount === 1 ? t("likeSingular") : t("likePlural")
+          }.`}
           className={`inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-[10px] border px-4 text-sm font-semibold transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-attraction-primary disabled:cursor-not-allowed disabled:opacity-60 ${
             likedByCurrentUser
               ? "border-attraction-primary bg-attraction-primary-soft-strong text-attraction-primary-dark"
@@ -389,12 +391,12 @@ export default function ReviewCard({
           </svg>
           <span>
             {isUpdatingLike
-              ? "Updating..."
+              ? t("updating")
               : isGuest
-                ? "Sign in to like"
+                ? t("signInToLike")
                 : likedByCurrentUser
-                  ? "Liked"
-                  : "Like"}
+                  ? t("liked")
+                  : t("like")}
           </span>
           <span aria-live="polite">{likeCount}</span>
         </button>
@@ -641,14 +643,17 @@ function createDocumentHref(basePath, documentId) {
     : "";
 }
 
-function formatReviewDate(value) {
+function formatReviewDate(value, lang = "en") {
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
     return "Date unavailable";
   }
 
-  return new Intl.DateTimeFormat("en-GB", {
+  const locale =
+    lang === "zh" ? "zh-CN" : lang === "ms" ? "ms-MY" : "en-GB";
+
+  return new Intl.DateTimeFormat(locale, {
     day: "numeric",
     month: "short",
     year: "numeric",
