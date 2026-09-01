@@ -37,7 +37,7 @@ function createRequestController() {
 }
 
 export default function VerifiedVisitorPhotos({ attractionId }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [photos, setPhotos] = useState([]);
   const [status, setStatus] = useState("loading");
   const [deletingPhotoId, setDeletingPhotoId] = useState("");
@@ -182,6 +182,7 @@ export default function VerifiedVisitorPhotos({ attractionId }) {
             deleteFailed={deleteErrorPhotoId === photo.photoId}
             onDelete={deletePhoto}
             t={t}
+            lang={lang}
           />
         ))}
       </div>
@@ -321,7 +322,7 @@ function ErrorState({ onRetry, t }) {
       className="rounded-[14px] border border-attraction-border bg-attraction-surface-soft px-5 py-6 text-center"
     >
       <p className="text-sm font-semibold text-attraction-ink">
-        {VERIFIED_PHOTOS_LOAD_ERROR}
+        {t("verifiedPhotosLoadError")}
       </p>
       <button
         type="button"
@@ -341,8 +342,9 @@ function PhotoCard({
   deleteFailed,
   onDelete,
   t,
+  lang,
 }) {
-  const displayDate = formatMalaysiaDisplayDate(photo.capturedDate);
+  const displayDate = formatMalaysiaDisplayDate(photo.capturedDate, lang);
   const displayName = photo.user.displayName || "Chatlas user";
   const initial = displayName.trim().charAt(0).toUpperCase() || "C";
   const deleteErrorId = `delete-error-${photo.photoId.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
@@ -396,7 +398,7 @@ function PhotoCard({
                 role="alert"
                 className="mb-2 text-sm text-attraction-error"
               >
-                {VERIFIED_PHOTO_DELETE_ERROR}
+                {t("verifiedPhotoDeleteError")}
               </p>
             )}
             <button

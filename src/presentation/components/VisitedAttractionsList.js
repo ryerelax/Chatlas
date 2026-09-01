@@ -202,9 +202,9 @@ export default function VisitedAttractionsList({
       {authenticationPresentation && (
         <StateMessage
           title={t("signInViewVisited")}
-          description={message || authenticationPresentation.message}
+          description={t("signInViewVisitedHint")}
           actionHref={authenticationPresentation.signInHref}
-          actionLabel={authenticationPresentation.signInLabel}
+          actionLabel={t("signIn")}
           t={t}
         />
       )}

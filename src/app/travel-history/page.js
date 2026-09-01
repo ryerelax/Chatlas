@@ -8,11 +8,12 @@ import { useReviews } from "@/presentation/contexts/ReviewsContext";
 import { useLanguage } from "@/presentation/contexts/LanguageContext";
 import ExplorationMap from "@/presentation/components/ExplorationMap";
 import { loadVisitedAttractionIds } from "@/presentation/lib/visitedAttractionsAdapter";
+import { formatLocaleDate } from "@/presentation/lib/formatLocaleDate";
 
 export default function TravelHistoryPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
-  const { t, translateCategory } = useLanguage();
+  const { t, translateCategory, lang } = useLanguage();
   const { reviews, loadReviews } = useReviews();
   const [activities, setActivities] = useState([]);
   const [filteredActivities, setFilteredActivities] = useState([]);
@@ -265,16 +266,8 @@ export default function TravelHistoryPage() {
   };
 
   const formatDate = (dateString) => {
-    if (!dateString) return "N/A";
-    try {
-      return new Date(dateString).toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      });
-    } catch {
-      return "N/A";
-    }
+  if (!dateString) return "N/A";
+  return formatLocaleDate(dateString, lang, "long") || "N/A";
   };
 
   const getReviewCount = (reviewsList) => {
@@ -510,7 +503,7 @@ export default function TravelHistoryPage() {
                           onClick={() => toggleExpand(activity.id)}
                           className="flex items-center gap-1.5 rounded-lg border border-[#D8E1E7] bg-[#F7F9FB] px-4 py-2 text-sm font-medium text-[#10213B] transition-colors hover:bg-[#EAF3FA]"
                         >
-                          {isExpanded ? t("hideFilters") : t("details")}
+                          {isExpanded ? t("hideDetails") : t("showDetails")}
                           <svg
                             className={`h-4 w-4 transition-transform ${
                               isExpanded ? "rotate-180" : ""

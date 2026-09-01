@@ -199,7 +199,15 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.message || t("errorGeneric"));
+        const apiMsg =
+          typeof result?.message === "string" ? result.message : "";
+        const isAuthError =
+          response.status === 401 ||
+          /sign in|signed in|log in|unauthorized/i.test(apiMsg);
+
+        throw new Error(
+          isAuthError ? t("mustSignInToReview") : apiMsg || t("errorGeneric")
+        );
       }
 
       setRating(0);

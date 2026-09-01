@@ -173,7 +173,7 @@ export default function AddAttractionPage() {
     setSubmitError("");
 
     if (!selectedPlace) {
-      setSubmitError(t("searchPlaceholder"));
+      setSubmitError("searchPlaceholder");
       return;
     }
 
@@ -487,7 +487,7 @@ export default function AddAttractionPage() {
 
             {submitError && (
               <p className="mt-5 rounded-lg bg-red-50 px-4 py-3 text-sm text-attraction-error">
-                {submitError}
+                {t(submitError)}
               </p>
             )}
 

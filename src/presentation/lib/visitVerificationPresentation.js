@@ -152,7 +152,7 @@ export function getVisitVerificationResponseDecision(
     ? fallbackMessages.authentication
     : fallbackMessages.verification;
   const message = response?.status === 409
-    ? VERIFIED_VISIT_LIMIT_REACHED_MESSAGE
+    ? "verifiedVisitLimitReached"
     : selectSafeApiMessage(result, fallbackMessage);
 
   return {
@@ -589,35 +589,23 @@ export function getNoNearbyAttractionMessage(attractions, position) {
 }
 
 export function getGeolocationErrorMessage(error) {
-  if (error?.code === 1) {
-    return "Location access was denied. Allow location access and try again.";
-  }
-
-  if (error?.code === 2) {
-    return "Your current location is unavailable. Move to an open area and try again.";
-  }
-
-  if (error?.code === 3) {
-    return "Finding your current location timed out. Try again where you have a clear signal.";
-  }
-
-  return "We could not confirm your current location. Please try again.";
+  if (error?.code === 1) return "locationAccessDenied";
+  if (error?.code === 2) return "locationUnavailable";
+  if (error?.code === 3) return "locationTimeout";
+  return "locationConfirmFailed";
 }
 
 export function getCameraErrorMessage(error) {
   if (["NotAllowedError", "SecurityError"].includes(error?.name)) {
-    return "Camera access was denied. Allow camera access and try again.";
+    return "cameraAccessDenied";
   }
-
   if (["NotFoundError", "OverconstrainedError"].includes(error?.name)) {
-    return "A usable camera was not found on this device.";
+    return "cameraNotFound";
   }
-
   if (["NotReadableError", "AbortError"].includes(error?.name)) {
-    return "The camera is unavailable or already in use. Close other camera apps and try again.";
+    return "cameraInUse";
   }
-
-  return "We could not open the camera. Please try again.";
+  return "cameraOpenFailed";
 }
 
 export function selectSafeApiMessage(result, fallbackMessage) {
@@ -667,11 +655,11 @@ export function buildVerifiedVisitCapacityUrl(attractionId) {
 }
 
 export function getVerifiedVisitUploadLabel() {
-  return "Upload Photo";
+  return "uploadPhoto";
 }
 
 export function getVerifiedVisitLimitReachedMessage() {
-  return VERIFIED_VISIT_LIMIT_REACHED_MESSAGE;
+  return "verifiedVisitLimitReached";
 }
 
 export function canSubmitVerifiedVisitPhoto({
