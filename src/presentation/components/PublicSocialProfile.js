@@ -10,6 +10,7 @@ import SocialExplorationMap from "@/presentation/components/SocialExplorationMap
 import SocialProfileStatus from "@/presentation/components/SocialProfileStatus";
 import StarRating from "@/presentation/components/StarRating";
 import { useLanguage } from "@/presentation/contexts/LanguageContext";
+import { formatLocaleDate } from "@/presentation/lib/formatLocaleDate";
 
 const TAB_IDS = ["overview", "reviews", "exploration", "compare"];
 
@@ -670,19 +671,22 @@ function ProfileSkeleton() {
 
 function formatJoinedAt(value, lang = "en") {
   if (!value) return "";
-  const locale = lang === "zh" ? "zh-CN" : lang === "ms" ? "ms-MY" : "en-GB";
-  return new Intl.DateTimeFormat(locale, {
-    month: "long",
-    year: "numeric",
-  }).format(new Date(value));
+  const full = formatLocaleDate(value, lang, "long");
+  if (!full) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const months = {
+    en: ["January","February","March","April","May","June","July","August","September","October","November","December"],
+    zh: ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"],
+    ms: ["Januari","Februari","Mac","April","Mei","Jun","Julai","Ogos","September","Oktober","November","Disember"],
+  };
+  const m = (months[lang] || months.en)[d.getMonth()];
+  const y = d.getFullYear();
+  if (lang === "zh") return `${y}年${m}`;
+  return `${m} ${y}`;
 }
 
 function formatReviewDate(value, lang = "en", t) {
   if (!value) return t ? t("dateUnavailable") : "Date unavailable";
-  const locale = lang === "zh" ? "zh-CN" : lang === "ms" ? "ms-MY" : "en-GB";
-  return new Intl.DateTimeFormat(locale, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(value));
+  return formatLocaleDate(value, lang, "short") || (t ? t("dateUnavailable") : "");
 }

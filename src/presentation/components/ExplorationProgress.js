@@ -23,7 +23,7 @@ function ProgressState({ status, t }) {
   const authenticationPresentation =
     getVisitedAuthenticationPresentation(status);
   const message = authenticationPresentation
-    ? t("progressSignIn")
+    ? t("signInViewProgress")
     : status === VISITED_DATA_STATUS.LOADING
       ? t("progressLoading")
       : isError
@@ -51,18 +51,18 @@ function ProgressState({ status, t }) {
       </span>
       <p className="mt-3 font-semibold text-[#10213B]">{message}</p>
       {authenticationPresentation && (
-        <>
-          <p className="mt-1 text-sm text-[#65748A]">
-            {authenticationPresentation.message}
-          </p>
-          <Link
-            href={authenticationPresentation.signInHref}
-            className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-[#006C56] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#005E4B] focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#006C56]"
-          >
-            {authenticationPresentation.signInLabel}
-          </Link>
-        </>
-      )}
+      <>
+        <p className="mt-1 text-sm text-[#65748A]">
+          {t("signInViewProgressHint")}
+        </p>
+        <Link
+          href={authenticationPresentation.signInHref}
+          className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-[#006C56] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#005E4B] focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#006C56]"
+        >
+          {t("signIn")}
+        </Link>
+      </>
+    )}
     </div>
   );
 }

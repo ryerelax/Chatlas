@@ -53,12 +53,9 @@ const CAMERA_CONSTRAINTS = Object.freeze({
   audio: false,
 });
 
-const VERIFY_ERROR_MESSAGE =
-  "We could not verify this visit. Please try again.";
-const AUTHENTICATION_ERROR_MESSAGE =
-  "Your session has expired. Sign in and try again.";
-const CAPACITY_ERROR_MESSAGE =
-  "We could not check today's photo limit. Please try again.";
+const VERIFY_ERROR_MESSAGE = "verifyVisitFailed";
+const AUTHENTICATION_ERROR_MESSAGE = "sessionExpiredSignIn";
+const CAPACITY_ERROR_MESSAGE = "capacityCheckFailed";
 const BUTTON_CLASS =
   "inline-flex min-h-11 items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors motion-reduce:transition-none focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#006C56] disabled:cursor-not-allowed disabled:opacity-60";
 
@@ -156,10 +153,7 @@ export default function VisitVerificationFlow({
       }
 
       if (typeof navigator.mediaDevices?.getUserMedia !== "function") {
-        failFlow(
-          operationId,
-          "Live camera capture is unavailable in this browser."
-        );
+        failFlow(operationId, "cameraUnavailableBrowser");
         return;
       }
 
@@ -235,10 +229,10 @@ export default function VisitVerificationFlow({
       let nextCapacity;
       try {
         nextCapacity = normaliseVerifiedVisitCapacity(result, attractionId);
-      } catch {
-        failFlow(operationId, CAPACITY_ERROR_MESSAGE);
-        return;
-      }
+     } catch {
+      failFlow(operationId, CAPACITY_ERROR_MESSAGE);
+      return;
+    }
 
       if (
         !operationController.completeCapacity(
@@ -277,12 +271,7 @@ export default function VisitVerificationFlow({
           currentPosition
         );
       } catch (error) {
-        failFlow(
-          operationId,
-          error instanceof Error
-            ? error.message
-            : "We could not validate your current location."
-        );
+        failFlow(operationId, "locationValidateFailed");
         return;
       }
 
@@ -357,17 +346,15 @@ export default function VisitVerificationFlow({
     transitionToFlowState(FLOW_STATE.LOCATING);
 
     if (typeof navigator.geolocation?.getCurrentPosition !== "function") {
-      failFlow(
-        operationId,
-        "Current location is unavailable in this browser."
-      );
+      failFlow(operationId, "locationUnavailableBrowser");
       return;
     }
 
     requestCurrentBrowserPosition(
       navigator.geolocation,
       (browserPosition) => handleLocatedPosition(operationId, browserPosition),
-      (error) => failFlow(operationId, getGeolocationErrorMessage(error))
+      (error) =>
+        failFlow(operationId, getGeolocationErrorMessage(error))
     );
   }, [
     authenticationConfirmed,
@@ -460,7 +447,7 @@ export default function VisitVerificationFlow({
               setCapturePending(false);
               transitionToFlowState(FLOW_STATE.PREVIEW);
             },
-            onFailure: (message) => failFlow(operationId, message),
+            onFailure: () => failFlow(operationId, "cameraCaptureFailed"),
             onSettled: () => {
               if (flowStateRef.current === FLOW_STATE.CAMERA) {
                 setCapturePending(false);
@@ -472,12 +459,7 @@ export default function VisitVerificationFlow({
         0.85
       );
     } catch (error) {
-      failFlow(
-        operationId,
-        error instanceof Error
-          ? error.message
-          : "The camera image could not be captured. Please try again."
-      );
+      failFlow(operationId, "cameraCaptureFailed");
     }
   }, [
     cameraReady,
@@ -526,10 +508,7 @@ export default function VisitVerificationFlow({
       submissionKey = submissionKeyStore.getOrCreate();
     } catch {
       operationController.completeSubmission(operationId, requestController);
-      failFlow(
-        operationId,
-        "A secure upload could not be prepared in this browser. Please try again."
-      );
+      failFlow(operationId, "secureUploadFailed");
       return;
     }
 
@@ -559,7 +538,7 @@ export default function VisitVerificationFlow({
       }
 
       operationController.completeSubmission(operationId, requestController);
-      setErrorMessage(VERIFY_ERROR_MESSAGE);
+      setErrorMessage(t(VERIFY_ERROR_MESSAGE));
       transitionToFlowState(FLOW_STATE.UPLOAD_ERROR);
       return;
     }
@@ -588,11 +567,11 @@ export default function VisitVerificationFlow({
 
     if (responseDecision.type !== "success") {
       if (responseDecision.authenticationRequired) {
-        failFlow(operationId, responseDecision.message, {
-          requireSignIn: true,
-        });
+      failFlow(operationId, responseDecision.message, {
+        requireSignIn: true,
+      });
       } else if (responseDecision.retryable) {
-        setErrorMessage(responseDecision.message);
+        setErrorMessage(t(responseDecision.message));
         transitionToFlowState(FLOW_STATE.UPLOAD_ERROR);
       } else {
         failFlow(operationId, responseDecision.message);
@@ -727,7 +706,7 @@ export default function VisitVerificationFlow({
     }
   }, [cameraReady, flowState]);
 
-  const uploadLabel = getVerifiedVisitUploadLabel();
+  const uploadLabel = t(getVerifiedVisitUploadLabel());
   const uploadEnabled = canSubmitVerifiedVisitPhoto({
     flowState,
     currentCapture,
@@ -940,7 +919,7 @@ export default function VisitVerificationFlow({
         >
           <p className="font-bold text-[#704A00]">{t("limitFull")}</p>
           <p className="mt-1 text-sm leading-6 text-[#704A00]">
-            {getVerifiedVisitLimitReachedMessage()}
+            {t(getVerifiedVisitLimitReachedMessage())}
           </p>
           <button
             type="button"
@@ -1128,8 +1107,11 @@ export default function VisitVerificationFlow({
           aria-live="assertive"
         >
           <p className="font-bold text-[#8A2520]">{t("verificationPaused")}</p>
-          <p className="mt-1 break-words text-sm leading-6 text-[#63312E]">
-            {errorMessage}
+         <p className="mt-1 break-words text-sm leading-6 text-[#63312E]">
+            {errorMessage &&
+            /^[a-zA-Z][a-zA-Z0-9_]*$/.test(errorMessage)
+              ? t(errorMessage)
+              : errorMessage}
           </p>
           {!effectiveAuthenticationRequired && (
             <div className="mt-4 flex flex-col-reverse gap-3 sm:flex-row">

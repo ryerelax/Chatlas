@@ -1,3 +1,6 @@
+import { formatLocaleDate } from "@/presentation/lib/formatLocaleDate";
+
+
 export const VERIFIED_PHOTOS_LOAD_ERROR =
   "Verified visitor photos could not be loaded.";
 export const VERIFIED_PHOTO_DELETE_ERROR =
@@ -88,13 +91,8 @@ export function normaliseVerifiedPhotosPayload(payload) {
     ));
 }
 
-export function formatMalaysiaDisplayDate(capturedDate) {
-  return new Intl.DateTimeFormat("en-MY", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    timeZone: "Asia/Kuala_Lumpur",
-  }).format(new Date(capturedDate));
+export function formatMalaysiaDisplayDate(capturedDate, lang = "en") {
+  return formatLocaleDate(capturedDate, lang, "long") || "";
 }
 
 export function buildVerifiedPhotoDeleteUrl({ visitId, photoId }) {

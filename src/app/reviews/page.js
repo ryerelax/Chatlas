@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { useReviews } from "@/presentation/contexts/ReviewsContext";
 import { useLanguage } from "@/presentation/contexts/LanguageContext";
 import Image from "next/image";
+import { formatLocaleDate } from "@/presentation/lib/formatLocaleDate";
 
 const STAR_OPTIONS = [1, 2, 3, 4, 5];
 const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -16,7 +17,7 @@ const EDIT_WINDOW_DAYS = 3;
 export default function MyReviewsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const { t, translateCategory } = useLanguage();
+  const { t, translateCategory, lang } = useLanguage();
   const {
     reviews,
     isLoading,
@@ -82,11 +83,7 @@ export default function MyReviewsPage() {
   const formatNextEditDate = (review) => {
     const nextDate = getNextEditDate(review);
     if (!nextDate) return "N/A";
-    return nextDate.toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
+    return formatLocaleDate(nextDate, lang, "long") || "N/A";
   };
 
   useEffect(() => {
@@ -824,21 +821,13 @@ export default function MyReviewsPage() {
                           ))}
                         </div>
                         <span className="text-base font-medium text-[#65748A]">
-                          {new Date(review.createdAt).toLocaleDateString(
-                            "en-US",
-                            {
-                              year: "numeric",
-                              month: "long",
-                              day: "numeric",
-                            }
-                          )}
+                          {formatLocaleDate(review.createdAt, lang, "long")}
                         </span>
                         {review.lastEditedAt && (
                           <span className="text-sm text-[#65748A]">
-                            | {t("editedAt", {
-                              date: new Date(
-                                review.lastEditedAt
-                              ).toLocaleDateString(),
+                            |{" "}
+                            {t("editedAt", {
+                              date: formatLocaleDate(review.lastEditedAt, lang, "short"),
                             })}
                           </span>
                         )}

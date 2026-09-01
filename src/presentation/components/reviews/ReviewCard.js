@@ -6,6 +6,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import ReviewComments from "@/presentation/components/reviews/ReviewComments";
 import { useLanguage } from "@/presentation/contexts/LanguageContext";
+import { formatLocaleDate } from "@/presentation/lib/formatLocaleDate";
 
 export default function ReviewCard({
   review = {},
@@ -306,9 +307,9 @@ export default function ReviewCard({
             <time
               dateTime={review.createdAt}
               className="shrink-0 pt-0.5 text-right text-[13px] font-medium text-attraction-muted"
-            >
-              {formatReviewDate(review.createdAt, lang)}
-            </time>
+>
+              {formatLocaleDate(review.createdAt, lang, "short") || t("dateUnavailable")}
+          </time>
           </div>
         </div>
       </div>
@@ -641,21 +642,4 @@ function createDocumentHref(basePath, documentId) {
   return /^[a-f\d]{24}$/i.test(normalizedId)
     ? `${basePath}/${normalizedId}`
     : "";
-}
-
-function formatReviewDate(value, lang = "en") {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "Date unavailable";
-  }
-
-  const locale =
-    lang === "zh" ? "zh-CN" : lang === "ms" ? "ms-MY" : "en-GB";
-
-  return new Intl.DateTimeFormat(locale, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(date);
 }
