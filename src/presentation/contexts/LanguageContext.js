@@ -512,6 +512,12 @@ const translations = {
     verifiedPhotoDeleteError: "Verified Photo Delete Error",
     signInViewProgress: "Sign in to view exploration progress",
     signInViewProgressHint: "Sign in to track verified visits across supported Melaka attractions.",
+    uncategorized: "Uncategorized",
+    addedByChatlasUser: "Added by a Chatlas user",
+    wishlistRemoved: "Removed from wishlist",
+    wishlistAdded: "Added to wishlist! ❤️",
+    wishlistUpdateFailed: "Unable to update wishlist.",
+    reviewCountsLine: "{chatlas} on Chatlas, {google} on Google Maps",
   },
 
   zh: {
@@ -983,6 +989,12 @@ const translations = {
     verifiedPhotoDeleteError: "已验证照片删除错误",
     signInViewProgress: "登录以查看探索进度",
     signInViewProgressHint: "登录以追踪在马六甲指定景点进行的已验证访问。",
+    uncategorized: "未分类",
+    addedByChatlasUser: "由 Chatlas 用户添加",
+    wishlistRemoved: "已从心愿单移除",
+    wishlistAdded: "已加入心愿单！❤️",
+    wishlistUpdateFailed: "无法更新心愿单。",
+    reviewCountsLine: "Chatlas {chatlas} 条，Google Maps {google} 条",
   },
 
   ms: {
@@ -1473,6 +1485,12 @@ const translations = {
     verifiedPhotoDeleteError: "Ralat Pemadaman Foto Disahkan",
     signInViewProgress: "Log masuk untuk melihat kemajuan penerokaan",
     signInViewProgressHint: "Log masuk untuk menjejak kunjungan yang disahkan di lokasi tarikan yang disokong di Melaka.",
+    uncategorized: "Tidak dikategorikan",
+    addedByChatlasUser: "Ditambah oleh pengguna Chatlas",
+    wishlistRemoved: "Dibuang daripada senarai hajat",
+    wishlistAdded: "Ditambah ke senarai hajat! ❤️",
+    wishlistUpdateFailed: "Tidak dapat mengemas kini senarai hajat.",
+    reviewCountsLine: "{chatlas} di Chatlas, {google} di Google Maps",
   },
 };
 
