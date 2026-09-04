@@ -7,10 +7,12 @@ import {
   addToWishlist,
   removeFromWishlist,
 } from "@/business/services/wishlistService";
+import { useLanguage } from "@/presentation/contexts/LanguageContext";
 
 export default function AttractionCard({ attraction }) {
   const { data: session } = useSession();
   const router = useRouter();
+  const { t, translateCategory } = useLanguage();
   const [isInWishlist, setIsInWishlist] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [toast, setToast] = useState(null);
@@ -68,12 +70,12 @@ export default function AttractionCard({ attraction }) {
       if (isInWishlist) {
         await removeFromWishlist(attraction._id);
         setIsInWishlist(false);
-        showToast("Removed from wishlist", "info");
+        showToast(t("wishlistRemoved"), "info");
         window.dispatchEvent(new CustomEvent('wishlistUpdated'));
       } else {
         await addToWishlist(attraction._id);
         setIsInWishlist(true);
-        showToast("Added to wishlist! ❤️", "success");
+        showToast(t("wishlistAdded"), "success");
         window.dispatchEvent(new CustomEvent('wishlistUpdated'));
       }
     } catch (error) {
@@ -84,7 +86,7 @@ export default function AttractionCard({ attraction }) {
           setIsInWishlist(data.inWishlist || false);
         })
         .catch(() => {});
-      const errorMsg = error.response?.data?.message || "Unable to update wishlist.";
+      const errorMsg = error.response?.data?.message || t("wishlistUpdateFailed");
       showToast(errorMsg, "error");
     } finally {
       setIsLoading(false);
@@ -115,12 +117,14 @@ export default function AttractionCard({ attraction }) {
 
         <div className="p-5">
           <span className="inline-block rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
-            {attraction.category || "Uncategorized"}
+            {attraction.category
+              ? translateCategory(attraction.category)
+              : t("uncategorized")}
           </span>
 
           {attraction.submittedBy && (
             <span className="ml-2 inline-block rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-700">
-              Added by a Chatlas user
+              {t("addedByChatlasUser")}
             </span>
           )}
 
@@ -138,7 +142,10 @@ export default function AttractionCard({ attraction }) {
             </span>
 
             <p className="mt-1 text-xs text-gray-500">
-              {chatlasReviewCount.toLocaleString()} on Chatlas, {googleReviewCount.toLocaleString()} on Google Maps
+              {t("reviewCountsLine", {
+                chatlas: chatlasReviewCount.toLocaleString(),
+                google: googleReviewCount.toLocaleString(),
+              })}
             </p>
           </div>
         </div>
@@ -148,7 +155,7 @@ export default function AttractionCard({ attraction }) {
         onClick={handleWishlistToggle}
         disabled={isLoading}
         className="absolute top-3 right-3 w-9 h-9 rounded-full bg-white shadow-md hover:shadow-lg flex items-center justify-center transition-all duration-200 hover:scale-110 disabled:opacity-50"
-        title={isInWishlist ? "Remove from wishlist" : "Add to wishlist"}
+        title={isInWishlist ? t("removeFromWishlist") : t("addToWishlist")}
       >
         <svg
           className="w-5 h-5"
