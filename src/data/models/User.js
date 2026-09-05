@@ -1,66 +1,23 @@
 import mongoose from "mongoose";
 
-const userSchema = new mongoose.Schema(
+const UserSchema = new mongoose.Schema(
   {
-    googleId: {
-      type: String,
-      trim: true,
-      unique: true,
-      sparse: true,
-    },
+    // 来自 Google（只读）
+    name: { type: String, required: true },
+    email: { type: String, required: true, unique: true },
+    googleId: { type: String, required: true, unique: true },
+    profilePicture: { type: String, default: "" },
 
-    name: {
-      type: String,
-      required: true,
-      trim: true,
-      maxlength: 100,
-    },
+    // Chatlas 用户自定义字段
+    displayName: { type: String, default: "" },
+    location: { type: String, default: "" },
+    bio: { type: String, default: "" },
 
-    email: {
-      type: String,
-      required: true,
-      trim: true,
-      lowercase: true,
-      unique: true,
-    },
-
-    profilePicture: {
-      type: String,
-      default: "",
-      trim: true,
-    },
-
-    publicSummary: {
-      type: String,
-      default: "",
-      trim: true,
-      maxlength: 300,
-    },
-
-    isProfilePublic: {
-      type: Boolean,
-      default: true,
-    },
-
-    isActive: {
-      type: Boolean,
-      default: true,
-    },
-
-    // TODO: Add authentication-provider fields when Google Identity integration is implemented.
-
-    // TODO: Add profile customisation fields only after the team confirms
-    // which information should be public and which information should remain private.
-
-    // TODO: Add exploration summary references when PB37-PB39 are implemented.
+    joinedAt: { type: Date, default: Date.now },
   },
-  {
-    timestamps: true,
-    collection: "users",
-  }
+  { timestamps: true }
 );
 
-const User =
-  mongoose.models.User || mongoose.model("User", userSchema);
+UserSchema.index({ displayName: 1 });
 
-export default User;
+export default mongoose.models.User || mongoose.model("User", UserSchema);

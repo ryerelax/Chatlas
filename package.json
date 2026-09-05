@@ -2,17 +2,31 @@
   "name": "chatlas",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "sync:photos": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/syncAttractionPhotos.mjs",
+    "classify:areas": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/classifyLocationAreas.mjs",
+    "fix:address": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/fixAttractionAddress.mjs",
+    "sync:descriptions": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/syncAttractionDescriptions.mjs",
+    "preview:wikidata-descriptions": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/previewWikidataDescriptionMatches.mjs",
+    "backfill:wikidata-descriptions": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/backfillWikidataDescriptions.mjs",
+    "backfill:generic-descriptions": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/backfillGenericDescriptions.mjs",
+    "import:new-attractions": "node --env-file=.env.local --import ./scripts/register-aliases.mjs ./scripts/importNewAttractions.mjs",
+    "test": "node --import ./scripts/register-aliases.mjs --test tests/**/*.test.js"
   },
   "dependencies": {
+    "axios": "^1.19.0",
+    "cloudinary": "^2.10.0",
     "mongoose": "^9.9.0",
     "next": "16.2.12",
+    "next-auth": "^5.0.0-beta.32",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "zustand": "^5.0.15"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

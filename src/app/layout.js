@@ -1,4 +1,6 @@
 import Header from "@/presentation/components/Header";
+import ServiceWorkerRegistration from "@/presentation/components/ServiceWorkerRegistration";
+import Providers from "@/presentation/components/Providers";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -24,14 +26,16 @@ export default function RootLayout({ children }) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col bg-gray-50">
-        {/* TODO: Add a global travel announcement or system notification banner later. */}
-        <Header />
+        <Providers>
+          <ServiceWorkerRegistration />
 
-        <div className="flex-1">
-          {children}
-        </div>
+          {/* TODO: Add a global travel announcement or system notification banner later. */}
+          <Header />
 
-        {/* TODO: Add a shared Chatlas footer after the final branding and navigation structure are confirmed. */}
+          <div className="flex-1">{children}</div>
+
+          {/* TODO: Add a shared Chatlas footer after the final branding and navigation structure are confirmed. */}
+        </Providers>
       </body>
     </html>
   );

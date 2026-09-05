@@ -54,15 +54,13 @@ Do not install packages only to make the dependency list appear more complete.
 
 ## 3. Architecture and Layered Project Structure
 
-Chatlas uses a Layered Architecture with three distinctive logical layers:
+Chatlas uses a Layered Architecture with three logical layers:
 
 1. Presentation Layer
 2. Business Logic Layer
 3. Data Access Layer
 
-All three logical layers are implemented inside one full-stack Next.js Progressive Web Application.
-
-The `infrastructure` folder contains supporting technical helpers. It is not a fourth logical business layer.
+All three logical layers are implemented inside one full-stack Next.js Progressive Web Application. The `infrastructure/` folder contains supporting technical helpers; it is not a fourth logical business layer.
 
 The dependency direction is:
 
@@ -92,43 +90,32 @@ Mongoose Model
 MongoDB Atlas
 ```
 
-Use the following project structure:
+Use the following structure:
 
 ```text
 src/
-├── app/
-│   ├── api/
-│   │   └── attractions/
-│   │       ├── route.js
-│   │       └── [id]/
-│   │           └── route.js
-│   ├── attractions/
-│   │   └── [id]/
-│   │       └── page.js
-│   ├── layout.js
-│   ├── page.js
-│   └── globals.css
+├── app/                          # Route Handlers, pages, layouts (Next.js file conventions)
+├── auth.ts                       # Auth.js v5 config (full, Node runtime)
+├── auth.config.ts                # Auth.js v5 config (Edge-safe subset, used by middleware)
+├── middleware.js                 # Next.js middleware (fixed location — framework-mandated)
 │
 ├── presentation/
-│   └── components/
-│       ├── Header.js
-│       ├── AttractionCard.js
-│       └── AttractionList.js
+│   ├── components/                # Reusable React components
+│   └── lib/                       # Client-side presentation helpers (e.g. browser script loaders)
 │
 ├── business/
-│   └── services/
-│       └── attractionService.js
+│   └── services/                  # Business logic, including one-off/CLI sync services
 │
 ├── data/
-│   ├── models/
-│   │   └── Attraction.js
-│   └── repositories/
-│       └── attractionRepository.js
+│   ├── models/                    # Mongoose schemas and models
+│   └── repositories/              # MongoDB queries
 │
 └── infrastructure/
-    └── database/
-        └── mongodb.js
+    ├── database/                  # MongoDB connection helper
+    └── external/                  # Third-party API clients (Cloudinary, Google Places API (New))
 ```
+
+`src/app/`, `src/auth.ts`, `src/auth.config.ts`, and `src/middleware.js` stay exactly where Next.js/Auth.js require them — do not move these into a nested layer folder even though they implement Presentation/Business-adjacent behaviour.
 
 ### 3.1 Presentation Layer
 
@@ -137,6 +124,7 @@ Locations:
 ```text
 src/app/
 src/presentation/components/
+src/presentation/lib/
 ```
 
 Responsibilities:
@@ -147,6 +135,7 @@ Responsibilities:
 - Forms
 - Client-side interaction
 - Reusable React components
+- Client-side helpers that only make sense in the browser (e.g. dynamically loading a third-party script for a component)
 - Loading states
 - Empty states
 - Error states
@@ -154,11 +143,12 @@ Responsibilities:
 
 Rules:
 
-- Keep route-specific pages and layouts inside `src/app/`.
-- Keep reusable UI components inside `src/presentation/components/`.
 - Do not query MongoDB directly from React components.
-- Do not import Mongoose models into pages or components.
-- Do not place repository logic inside pages.
+- Do not place Mongoose logic inside pages.
+- Do not import repositories or Mongoose models into pages or components.
+- Keep reusable interface elements inside `src/presentation/components/`.
+- Keep route-specific pages and layouts inside `src/app/`.
+- A file only belongs in `src/presentation/lib/` if it has no meaning outside the browser (e.g. it touches `window`/`document`, or is only ever imported by a `"use client"` component). If it also gets used by a script or server code, it belongs in Business Logic or Infrastructure instead.
 
 ### 3.2 Route Handlers / Application Entry Points
 
@@ -199,9 +189,11 @@ Responsibilities:
 - Authentication and authorization rules
 - Visibility rules
 - Exploration progress calculation
-- Coordinating repository calls
+- Classification / derivation rules (e.g. deriving a location zone from an address)
+- Calling repository functions
+- Preparing data for API routes or pages
 - Coordinating external-service operations
-- Preparing data for Route Handlers or pages
+- Orchestrating external API calls into a repository update (e.g. the Places → Cloudinary photo/description sync services), even when only invoked from a maintenance script under `scripts/`, not from a live Route Handler
 
 Rules:
 
@@ -216,8 +208,8 @@ Rules:
 Locations:
 
 ```text
-src/data/models/
 src/data/repositories/
+src/data/models/
 ```
 
 Responsibilities:
@@ -239,35 +231,28 @@ Rules:
 
 ### 3.5 Supporting Infrastructure
 
-Location:
+Locations:
 
 ```text
-src/infrastructure/
-```
-
-Current database helper:
-
-```text
-src/infrastructure/database/mongodb.js
+src/infrastructure/database/    # MongoDB connection helper
+src/infrastructure/external/    # Third-party API clients (Cloudinary, Google Places API (New))
 ```
 
 Responsibilities:
 
-- MongoDB connection management
-- External API clients
-- Image-storage clients
-- Authentication-provider configuration
-- Shared technical configuration
-- Server-side integration helpers
+- MongoDB connection helper (`database/mongodb.js`)
+- External service clients (`external/cloudinary.js`, `external/googlePlaces.js`)
+- Shared configuration
+- Server-side infrastructure code
 
 Rules:
 
 - Infrastructure supports the three logical layers.
-- Infrastructure must not contain page-specific UI.
-- Infrastructure must not contain module business rules.
+- Infrastructure must not contain page-specific UI or module business rules.
 - Private credentials must come from environment variables.
-
-<!-- TODO: Add external-service infrastructure folders only when the related integrations are implemented. -->
+- A file belongs here only if it's server-side and has no business logic of its own — just a thin client/wrapper around an external system. Once it starts making business decisions (what to do with the data), that logic belongs in `src/business/services/`, which may call into `src/infrastructure/`.
+- Client-side helpers (anything that runs in the browser) belong in `src/presentation/lib/` instead, not here.
+- Keep each third-party integration's client under `src/infrastructure/external/`, not loose at the `src/infrastructure/` root, so the database helper and external API clients stay clearly separated.
 
 ---
 
@@ -488,9 +473,10 @@ Expected variables currently include:
 ```env
 MONGODB_URI=
 AUTH_SECRET=
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
+AUTH_GOOGLE_ID=
+AUTH_GOOGLE_SECRET=
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=
+GOOGLE_PLACES_API_KEY=
 CLOUDINARY_CLOUD_NAME=
 CLOUDINARY_API_KEY=
 CLOUDINARY_API_SECRET=
@@ -847,33 +833,34 @@ Do not create separate Coding Standards, Git Workflow, Pull Request Guidelines, 
 
 The current attraction module supports:
 
-- Reading Melaka attractions from MongoDB Atlas
+- Reading Melaka attractions from MongoDB Atlas, with pagination
 - Searching by name, address, or category
-- Filtering by category
-- Filtering by minimum rating
+- Filtering by category, location area, and minimum rating
 - Displaying result counts
 - Resetting search and filters
-- Displaying attraction details
-- Opening attraction locations in Google Maps
+- Displaying attraction details, including photos (synced one-time from Google Places into Cloudinary, not fetched at render time) and a description backfilled from Places editorialSummary
+- Real Google Maps integration on the attraction location page (loaded via `google.maps.importLibrary`, not the legacy synchronous `google.maps.Map` API)
+- Offline/PWA caching for previously-viewed attractions, images, and search results, with a dedicated offline fallback page
 - Shared site header and navigation
 
-The current Attraction Explorer files are arranged as follows:
+The user module (Tan Yi Jia, `feature/user-mgmt`) supports:
 
-```text
-Presentation Layer:
-- src/app/
-- src/presentation/components/
+- Google sign-in via Auth.js v5 (`next-auth` beta), configured in `src/auth.ts` / `src/auth.config.ts`
+- Session-gated private routing via `src/middleware.js`, with guest access retained for attractions, offline support, and public Social Profile routes
+- Persisting a `User` document on first Google sign-in
+- Profile view and edit pages
 
-Business Logic Layer:
-- src/business/services/attractionService.js
+The Social Profile module supports:
 
-Data Access Layer:
-- src/data/models/Attraction.js
-- src/data/repositories/attractionRepository.js
+- Guest and registered-user access to a searchable public traveller directory
+- Public profile pages that expose only display-safe profile fields
+- Public reviews loaded from the Review & Community records, including ratings, attraction links, and available review photos
+- Profile tabs for public reviews, verified exploration progress, and Verified Visit comparison
+- Registered-user access controls for exploration maps and comparisons
+- Registered-user exploration maps derived from distinct Verified Visit attractions, exposing only display-safe attraction details while keeping verification evidence private
+- Registered-user comparison of Verified Visit attraction coverage, common explored places, and places explored by only one traveller; comparison maps expose only display-safe attraction details and never verification evidence
 
-Supporting Infrastructure:
-- src/infrastructure/database/mongodb.js
-```
+Maintenance/data-quality scripts (`scripts/`, run via `npm run <script>`, not part of the live app) exist for one-time or re-runnable backfill and repair jobs: photo sync, description sync, location-area classification, and address repair. See `package.json` for the exact commands.
 
 <!-- TODO: Update this section whenever the implemented feature set changes. -->
 
@@ -883,14 +870,8 @@ Supporting Infrastructure:
 
 Planned work includes:
 
-- Google authentication
-- Interactive exploration map
-- Attraction images
+- Registered-User "Add Attraction" submission flow (Google Places-backed, no free-text entry)
 - Reviews and ratings
-- Social profiles
-- Community features
-- Cloudinary image storage
-- PWA configuration
 - Final Chatlas branding
 - Further responsive and accessibility improvements
 

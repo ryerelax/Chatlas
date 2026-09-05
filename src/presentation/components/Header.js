@@ -1,129 +1,293 @@
+"use client";
 import Link from "next/link";
+import { useEffect, useRef } from "react";
+import { useSession, signOut } from "next-auth/react";
+import { useLanguage } from "@/presentation/contexts/LanguageContext";
+import NavDropdown from "@/presentation/components/NavDropdown";
 
 export default function Header() {
+  const { data: session, status } = useSession();
+  const { lang, changeLang, t } = useLanguage();
+
+  const isLoggedIn = status === "authenticated";
+
+  const mobileMenuRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (
+        mobileMenuRef.current &&
+        mobileMenuRef.current.open &&
+        !mobileMenuRef.current.contains(event.target)
+      ) {
+        mobileMenuRef.current.open = false;
+      }
+    }
+
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, []);
+
+  function closeMobileMenu() {
+    if (mobileMenuRef.current) mobileMenuRef.current.open = false;
+  }
+
   return (
     <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/95 shadow-sm backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-        {/* TODO: Replace this temporary wordmark with the final Chatlas logo and brand icon. */}
-        <Link
-          href="/"
-          className="flex items-center gap-3"
-          aria-label="Chatlas home"
-        >
+        {/* Logo */}
+        <Link href="/" className="flex items-center gap-3" aria-label="Chatlas home">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-xl text-white">
             📍
           </div>
-
           <div>
-            <p className="text-xl font-bold tracking-tight text-gray-900">
-              Chatlas
-            </p>
-
-            <p className="text-xs text-gray-500">
-              Discover Melaka
-            </p>
+            <p className="text-xl font-bold tracking-tight text-gray-900">Chatlas</p>
+            <p className="text-xs text-gray-500">Discover Melaka</p>
           </div>
         </Link>
 
         {/* Desktop navigation */}
-        <nav
-          className="hidden items-center gap-2 md:flex"
-          aria-label="Main navigation"
-        >
+        <nav className="hidden items-center gap-2 md:flex" aria-label="Main navigation">
+          {isLoggedIn ? (
+            <NavDropdown
+              trigger={t("attractions")}
+              triggerClassName="rounded-lg px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-emerald-50 hover:text-emerald-700"
+              menuClassName="absolute left-0 z-10 mt-2 w-56 rounded-lg border border-gray-200 bg-white shadow-lg"
+              items={[
+                { key: "browse", label: t("browseAttractions"), href: "/#attractions" },
+                { key: "add", label: t("addAttraction"), href: "/attractions/submit" },
+              ]}
+            />
+          ) : (
+            <Link
+              href="/#attractions"
+              className="rounded-lg px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-emerald-50 hover:text-emerald-700"
+            >
+              {t("attractions")}
+            </Link>
+          )}
           <Link
-            href="/"
+            href="/exploration-map"
             className="rounded-lg px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-emerald-50 hover:text-emerald-700"
           >
-            Home
+            {t("map")}
           </Link>
-
           <Link
-            href="/#attractions"
+            href="/profiles"
             className="rounded-lg px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-emerald-50 hover:text-emerald-700"
           >
-            Attractions
+            {t("travellers")}
           </Link>
-
-          {/* TODO: Enable this navigation item after the exploration map page is created. */}
-          <span
-            className="cursor-not-allowed rounded-lg px-4 py-2 text-sm font-semibold text-gray-400"
-            title="Coming later"
-            aria-disabled="true"
+          <Link
+            href="/community"
+            className="rounded-lg px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-emerald-50 hover:text-emerald-700"
           >
-            Map
-          </span>
-
-          {/* TODO: Enable this navigation item after the social profile and community modules are created. */}
-          <span
-            className="cursor-not-allowed rounded-lg px-4 py-2 text-sm font-semibold text-gray-400"
-            title="Coming later"
-            aria-disabled="true"
-          >
-            Community
-          </span>
+            {t("community")}
+          </Link>
         </nav>
 
-        <div className="hidden md:block">
-          {/* TODO: Integrate Google Identity Services and replace this disabled button with the real sign-in flow. */}
-          {/* TODO: Replace this button with a user avatar menu after authentication is implemented. */}
-          <button
-            type="button"
-            disabled
-            className="cursor-not-allowed rounded-lg bg-gray-200 px-5 py-2.5 text-sm font-semibold text-gray-500"
-            title="Google Sign In will be added later"
-          >
-            Sign in with Google
-          </button>
+        {/* Desktop auth + language */}
+        <div className="hidden items-center gap-3 md:flex">
+          {/* Language switcher */}
+          <div className="flex overflow-hidden rounded-lg border border-gray-200 text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => changeLang("en")}
+              className={`px-2.5 py-1.5 ${
+                lang === "en"
+                  ? "bg-emerald-600 text-white"
+                  : "bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              EN
+            </button>
+            <button
+              type="button"
+              onClick={() => changeLang("zh")}
+              className={`px-2.5 py-1.5 ${
+                lang === "zh"
+                  ? "bg-emerald-600 text-white"
+                  : "bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              中
+            </button>
+            <button
+              type="button"
+              onClick={() => changeLang("ms")}
+              className={`px-2.5 py-1.5 ${
+                lang === "ms"
+                  ? "bg-emerald-600 text-white"
+                  : "bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              BM
+            </button>
+          </div>
+
+          {isLoggedIn ? (
+            <NavDropdown
+              trigger={
+                <>
+                  <img
+                    src={
+                      session?.user?.image ||
+                      session?.user?.picture ||
+                      "/default-avatar.png"
+                    }
+                    alt={
+                      session?.user?.displayName ||
+                      session?.user?.name ||
+                      "Profile"
+                    }
+                    className="h-8 w-8 rounded-full border border-gray-300 object-cover"
+                    onError={(e) => {
+                      e.currentTarget.src = "/default-avatar.png";
+                    }}
+                  />
+                  <span className="hidden text-sm text-gray-700 sm:inline">
+                    {session?.user?.displayName ||
+                      session?.user?.name?.split(" ")[0] ||
+                      "User"}
+                  </span>
+                </>
+              }
+              items={[
+                { key: "profile", label: <>👤 {t("myProfile")}</>, href: "/profile" },
+                {
+                  key: "logout",
+                  label: <>🚪 {t("logout")}</>,
+                  className: "block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-gray-50",
+                  onClick: () => signOut({ redirectTo: "/login" }),
+                },
+              ]}
+            />
+          ) : (
+            <Link
+              href="/login"
+              className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
+            >
+              {t("signIn")}
+            </Link>
+          )}
         </div>
 
         {/* Mobile navigation */}
-        <details className="relative md:hidden">
+        <details ref={mobileMenuRef} className="relative md:hidden">
           <summary className="cursor-pointer list-none rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700">
-            Menu
+            {t("menu")}
           </summary>
-
-          {/* TODO: Replace this native details menu with a personalized animated mobile drawer later. */}
           <nav
             className="absolute right-0 mt-3 w-56 rounded-xl border border-gray-200 bg-white p-3 shadow-lg"
             aria-label="Mobile navigation"
           >
+            <div className="mb-2 flex overflow-hidden rounded-lg border border-gray-200 text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => changeLang("en")}
+                className={`flex-1 px-2 py-1.5 ${
+                  lang === "en" ? "bg-emerald-600 text-white" : "bg-white text-gray-600"
+                }`}
+              >
+                EN
+              </button>
+              <button
+                type="button"
+                onClick={() => changeLang("zh")}
+                className={`flex-1 px-2 py-1.5 ${
+                  lang === "zh" ? "bg-emerald-600 text-white" : "bg-white text-gray-600"
+                }`}
+              >
+                中
+              </button>
+              <button
+                type="button"
+                onClick={() => changeLang("ms")}
+                className={`flex-1 px-2 py-1.5 ${
+                  lang === "ms" ? "bg-emerald-600 text-white" : "bg-white text-gray-600"
+                }`}
+              >
+                BM
+              </button>
+            </div>
+
+            {isLoggedIn ? (
+              <>
+                <Link
+                  href="/#attractions"
+                  onClick={closeMobileMenu}
+                  className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700"
+                >
+                  {t("browseAttractions")}
+                </Link>
+                <Link
+                  href="/attractions/submit"
+                  onClick={closeMobileMenu}
+                  className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700"
+                >
+                  {t("addAttraction")}
+                </Link>
+              </>
+            ) : (
+              <Link
+                href="/#attractions"
+                onClick={closeMobileMenu}
+                className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700"
+              >
+                {t("attractions")}
+              </Link>
+            )}
             <Link
-              href="/"
+              href="/exploration-map"
+              onClick={closeMobileMenu}
               className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700"
             >
-              Home
+              {t("map")}
             </Link>
-
             <Link
-              href="/#attractions"
+              href="/profiles"
+              onClick={closeMobileMenu}
               className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700"
             >
-              Attractions
+              {t("travellers")}
             </Link>
-
-            <span
-              className="block cursor-not-allowed rounded-lg px-4 py-3 text-sm font-semibold text-gray-400"
-              aria-disabled="true"
+            <Link
+              href="/community"
+              onClick={closeMobileMenu}
+              className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700"
             >
-              Map
-            </span>
-
-            <span
-              className="block cursor-not-allowed rounded-lg px-4 py-3 text-sm font-semibold text-gray-400"
-              aria-disabled="true"
-            >
-              Community
-            </span>
-
+              {t("community")}
+            </Link>
             <div className="my-2 border-t border-gray-200" />
 
-            <button
-              type="button"
-              disabled
-              className="w-full cursor-not-allowed rounded-lg bg-gray-100 px-4 py-3 text-left text-sm font-semibold text-gray-400"
-            >
-              Sign in with Google
-            </button>
+            {isLoggedIn ? (
+              <>
+                <Link
+                  href="/profile"
+                  onClick={closeMobileMenu}
+                  className="block rounded-lg px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700"
+                >
+                  👤 {t("myProfile")}
+                </Link>
+                <button
+                  onClick={() => {
+                    closeMobileMenu();
+                    signOut({ redirectTo: "/login" });
+                  }}
+                  className="w-full rounded-lg px-4 py-3 text-left text-sm font-semibold text-red-600 hover:bg-gray-50"
+                >
+                  🚪 {t("logout")}
+                </button>
+              </>
+            ) : (
+              <Link
+                href="/login"
+                onClick={closeMobileMenu}
+                className="block rounded-lg bg-emerald-600 px-4 py-3 text-center text-sm font-semibold text-white hover:bg-emerald-700"
+              >
+                {t("signIn")}
+              </Link>
+            )}
           </nav>
         </details>
       </div>

@@ -1,12 +1,23 @@
 import { NextResponse } from "next/server";
+import mongoose from "mongoose";
 import { connectToDatabase } from "@/infrastructure/database/mongodb";
 import { getAttractionById } from "@/business/services/attractionService";
 
 export async function GET(request, { params }) {
   try {
-    await connectToDatabase();
-
+    // Validate ID first
     const { id } = await params;
+    if (!id) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Attraction ID is required.",
+        },
+        { status: 400 }
+      );
+    }
+
+    await connectToDatabase();
     const attraction = await getAttractionById(id);
 
     if (!attraction) {
@@ -26,8 +37,6 @@ export async function GET(request, { params }) {
   } catch (error) {
     console.error("Failed to retrieve attraction:", error);
 
-    // TODO: Return more specific public error messages after
-    // the final API error-handling strategy is confirmed.
     return NextResponse.json(
       {
         success: false,
