@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import {
@@ -16,11 +17,13 @@ export default function AttractionCard({ attraction }) {
   const [isInWishlist, setIsInWishlist] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [toast, setToast] = useState(null);
+  const [mounted, setMounted] = useState(false);
 
   const coverPhoto = attraction.photos?.[0];
   const combinedRating = attraction.combinedRating ?? attraction.rating ?? 0;
   const chatlasReviewCount = attraction.chatlasReviewCount ?? 0;
-  const googleReviewCount = attraction.googleReviewCount ?? attraction.totalReviews ?? 0;
+  const googleReviewCount =
+    attraction.googleReviewCount ?? attraction.totalReviews ?? 0;
 
   const showToast = (message, type = "success") => {
     setToast({ message, type });
@@ -28,13 +31,17 @@ export default function AttractionCard({ attraction }) {
   };
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
     if (session && attraction._id) {
       fetch(`/api/collection/wishlist?attractionId=${attraction._id}`)
-        .then(res => res.json())
-        .then(data => {
+        .then((res) => res.json())
+        .then((data) => {
           setIsInWishlist(data.inWishlist || false);
         })
-        .catch(err => {
+        .catch((err) => {
           console.error("Error checking wishlist:", err);
         });
     }
@@ -44,16 +51,17 @@ export default function AttractionCard({ attraction }) {
     const handleWishlistUpdate = () => {
       if (session && attraction._id) {
         fetch(`/api/collection/wishlist?attractionId=${attraction._id}`)
-          .then(res => res.json())
-          .then(data => {
+          .then((res) => res.json())
+          .then((data) => {
             setIsInWishlist(data.inWishlist || false);
           })
           .catch(() => {});
       }
     };
 
-    window.addEventListener('wishlistUpdated', handleWishlistUpdate);
-    return () => window.removeEventListener('wishlistUpdated', handleWishlistUpdate);
+    window.addEventListener("wishlistUpdated", handleWishlistUpdate);
+    return () =>
+      window.removeEventListener("wishlistUpdated", handleWishlistUpdate);
   }, [session, attraction._id]);
 
   const handleWishlistToggle = async (e) => {
@@ -71,22 +79,23 @@ export default function AttractionCard({ attraction }) {
         await removeFromWishlist(attraction._id);
         setIsInWishlist(false);
         showToast(t("wishlistRemoved"), "info");
-        window.dispatchEvent(new CustomEvent('wishlistUpdated'));
+        window.dispatchEvent(new CustomEvent("wishlistUpdated"));
       } else {
         await addToWishlist(attraction._id);
         setIsInWishlist(true);
         showToast(t("wishlistAdded"), "success");
-        window.dispatchEvent(new CustomEvent('wishlistUpdated'));
+        window.dispatchEvent(new CustomEvent("wishlistUpdated"));
       }
     } catch (error) {
       console.error("Error toggling wishlist:", error);
       fetch(`/api/collection/wishlist?attractionId=${attraction._id}`)
-        .then(res => res.json())
-        .then(data => {
+        .then((res) => res.json())
+        .then((data) => {
           setIsInWishlist(data.inWishlist || false);
         })
         .catch(() => {});
-      const errorMsg = error.response?.data?.message || t("wishlistUpdateFailed");
+      const errorMsg =
+        error.response?.data?.message || t("wishlistUpdateFailed");
       showToast(errorMsg, "error");
     } finally {
       setIsLoading(false);
@@ -95,10 +104,7 @@ export default function AttractionCard({ attraction }) {
 
   return (
     <div className="relative block overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-lg">
-      <Link
-        href={`/attractions/${attraction._id}`}
-        className="block"
-      >
+      <Link href={`/attractions/${attraction._id}`} className="block">
         {coverPhoto ? (
           <div className="relative h-44 w-full">
             <Image
@@ -172,15 +178,22 @@ export default function AttractionCard({ attraction }) {
         </svg>
       </button>
 
-      {toast && (
-        <div className={`fixed bottom-6 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg z-50 transition-all duration-300 ${
-          toast.type === "success" ? "bg-[#16845B] text-white" :
-          toast.type === "error" ? "bg-[#C2413B] text-white" :
-          "bg-[#2F6DA1] text-white"
-        }`}>
-          {toast.message}
-        </div>
-      )}
+      {mounted &&
+        toast &&
+        createPortal(
+          <div
+            className={`fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-lg px-6 py-3 shadow-lg transition-all duration-300 ${
+              toast.type === "success"
+                ? "bg-[#16845B] text-white"
+                : toast.type === "error"
+                  ? "bg-[#C2413B] text-white"
+                  : "bg-[#2F6DA1] text-white"
+            }`}
+          >
+            {toast.message}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
