@@ -46,6 +46,7 @@ export function createPublicProfileOverviewService({
         explorationProgress: hasExplorationSummary
           ? explorationSummary.progressPercentage
           : null,
+        rank: hasExplorationSummary ? explorationSummary.rank : null,
         status: hasExplorationSummary ? "success" : "partial",
       },
     };

@@ -1,5 +1,3 @@
-// TODO: Replace favicon.ico with final branded PWA icons (192x192 and 512x512
-// PNG) once the real Chatlas logo is ready.
 export default function manifest() {
   return {
     name: "Chatlas",
@@ -11,9 +9,16 @@ export default function manifest() {
     theme_color: "#0F5A43",
     icons: [
       {
-        src: "/favicon.ico",
-        sizes: "any",
-        type: "image/x-icon",
+        src: "/branding/chatlas-icon-192.png",
+        sizes: "192x192",
+        type: "image/png",
+        purpose: "any",
+      },
+      {
+        src: "/branding/chatlas-icon-512.png",
+        sizes: "512x512",
+        type: "image/png",
+        purpose: "any",
       },
     ],
   };

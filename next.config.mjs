@@ -4,6 +4,7 @@ const nextConfig = {
 
   allowedDevOrigins: [
     "festivity-harmonics-overspend.ngrok-free.dev",
+    "192.168.100.17",
   ],
   images: {
     remotePatterns: [

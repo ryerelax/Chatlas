@@ -106,6 +106,26 @@ test("social profile service normalizes paging and exposes public fields only", 
     },
     findPublicUserById: async () => null,
     findUserByIdentity: async () => null,
+    getPublicExplorationSummaries: async (userIds) => {
+      observed.summaryUserIds = userIds;
+      return new Map([
+        [
+          "507f1f77bcf86cd799439011",
+          {
+            status: "success",
+            visitedCount: 82,
+            progressPercentage: 35.2,
+            rank: {
+              id: "silver",
+              nextRankId: "gold",
+              normalizedPercentage: 35.2,
+              percentageToNext: 29.8,
+              isComplete: false,
+            },
+          },
+        ],
+      ]);
+    },
     isValidObjectId: () => true,
   });
 
@@ -121,6 +141,7 @@ test("social profile service normalizes paging and exposes public fields only", 
     page: 1,
     limit: 12,
   });
+  assert.deepEqual(observed.summaryUserIds, ["507f1f77bcf86cd799439011"]);
   assert.equal(result.totalPages, 2);
   assert.deepEqual(result.items[0], {
     id: "507f1f77bcf86cd799439011",
@@ -131,9 +152,16 @@ test("social profile service normalizes paging and exposes public fields only", 
     joinedAt: "2026-01-02T00:00:00.000Z",
     activitySummary: {
       reviewsWritten: null,
-      visitedAttractions: null,
-      explorationProgress: null,
-      status: "unavailable",
+      visitedAttractions: 82,
+      explorationProgress: 35.2,
+      rank: {
+        id: "silver",
+        nextRankId: "gold",
+        normalizedPercentage: 35.2,
+        percentageToNext: 29.8,
+        isComplete: false,
+      },
+      status: "success",
     },
   });
   assert.equal("email" in result.items[0], false);
@@ -534,6 +562,7 @@ test("public profile overview combines reviews and verified-visit progress", asy
     reviewsWritten: 4,
     visitedAttractions: 13,
     explorationProgress: 5.6,
+    rank: explorationSummary.rank,
     status: "success",
   });
 });
