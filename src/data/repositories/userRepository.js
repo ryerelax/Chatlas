@@ -10,6 +10,7 @@ export function createPublicUserRepository({ UserModel }) {
       excludedGoogleId = "",
       page = 1,
       limit = 12,
+      paginate = true,
     } = {}) {
       const query = {};
 
@@ -26,13 +27,16 @@ export function createPublicUserRepository({ UserModel }) {
       }
 
       const skip = (page - 1) * limit;
+      const itemQuery = UserModel.find(query)
+        .select(PUBLIC_PROFILE_FIELDS)
+        .sort({ displayName: 1, name: 1, _id: 1 });
+
+      if (paginate) {
+        itemQuery.skip(skip).limit(limit);
+      }
+
       const [items, total] = await Promise.all([
-        UserModel.find(query)
-          .select(PUBLIC_PROFILE_FIELDS)
-          .sort({ displayName: 1, name: 1, _id: 1 })
-          .skip(skip)
-          .limit(limit)
-          .lean(),
+        itemQuery.lean(),
         UserModel.countDocuments(query),
       ]);
 

@@ -13,6 +13,11 @@ export function createProfilesHandler({
       const result = await getPublicProfiles({
         search: searchParams.get("search") || "",
         page: searchParams.get("page") || 1,
+        rank: searchParams.get("rank") || "all",
+        sort: searchParams.get("sort") || "name",
+        hasReviews: searchParams.get("hasReviews") || false,
+        hasProfileDetails:
+          searchParams.get("hasProfileDetails") || false,
         excludedGoogleId:
           session?.user?.googleId || session?.user?.id || "",
       });

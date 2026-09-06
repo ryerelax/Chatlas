@@ -4,6 +4,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import ExplorerRankBadge from "@/presentation/components/ExplorerRankBadge";
 import { useReviews } from "@/presentation/contexts/ReviewsContext";
 import { useLanguage } from "@/presentation/contexts/LanguageContext";
 import { loadVisitedAttractionIds } from "@/presentation/lib/visitedAttractionsAdapter";
@@ -22,6 +23,7 @@ export default function ProfilePage() {
   const router = useRouter();
   const { reviews, isLoading, loadReviews, refreshReviews } = useReviews();
   const { t, translateState, lang } = useLanguage();
+  const currentUserId = session?.user?.id;
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [statsLoading, setStatsLoading] = useState(true);
@@ -56,11 +58,26 @@ export default function ProfilePage() {
     if (status === "authenticated") {
       async function fetchUserData() {
         try {
-          const response = await fetch("/api/user");
+          const profileSummaryRequest = currentUserId
+            ? fetch(`/api/profiles/${encodeURIComponent(currentUserId)}`).catch(
+                () => null
+              )
+            : Promise.resolve(null);
+          const [response, profileSummaryResponse] = await Promise.all([
+            fetch("/api/user"),
+            profileSummaryRequest,
+          ]);
           const result = await response.json();
+          const profileSummary = profileSummaryResponse?.ok
+            ? await profileSummaryResponse.json().catch(() => null)
+            : null;
 
           if (!cancelled && result.success) {
-            setUserData(result.data);
+            setUserData({
+              ...result.data,
+              explorerRank:
+                profileSummary?.data?.activitySummary?.rank || null,
+            });
           }
         } catch (error) {
           console.error("Error fetching user data:", error);
@@ -80,7 +97,7 @@ export default function ProfilePage() {
     return () => {
       cancelled = true;
     };
-  }, [status, router, loadReviews, fetchVisitedCount]);
+  }, [status, currentUserId, router, loadReviews, fetchVisitedCount]);
 
   useEffect(() => {
     if (status !== "authenticated") return;
@@ -238,9 +255,12 @@ export default function ProfilePage() {
               }}
             />
             <div className="flex-1">
-              <h1 className="text-2xl font-bold text-[#10213B]">
-                {displayName}
-              </h1>
+              <div className="flex flex-wrap items-center gap-3">
+                <h1 className="text-2xl font-bold text-[#10213B]">
+                  {displayName}
+                </h1>
+                <ExplorerRankBadge rank={userData?.explorerRank} />
+              </div>
               <p className="text-[#65748A]">{email}</p>
               {location && (
                 <p className="text-sm text-[#65748A]">

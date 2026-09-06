@@ -15,7 +15,9 @@ import { useLanguage } from "@/presentation/contexts/LanguageContext";
 import { formatLocaleDate } from "@/presentation/lib/formatLocaleDate";
 
 const TAB_IDS = ["overview", "reviews", "exploration", "compare"];
+const PUBLIC_REVIEWS_PAGE_SIZE = 5;
 const VERIFIED_LOCATIONS_PAGE_SIZE = 12;
+const COMPARISON_LOCATIONS_PAGE_SIZE = 8;
 
 export default function PublicSocialProfile() {
   const { id } = useParams();
@@ -228,7 +230,13 @@ export default function PublicSocialProfile() {
             <OverviewSection profile={profile} t={t} />
           )}
           {activeTab === "reviews" && (
-            <ReviewsSection state={sectionState} t={t} lang={lang} />
+            <ReviewsSection
+              key={profile.id}
+              state={sectionState}
+              t={t}
+              lang={lang}
+              travellerName={profile.displayName}
+            />
           )}
           {activeTab === "exploration" && (
             <ExplorationProgressSection
@@ -293,7 +301,56 @@ function SummaryCard({ label, value, suffix = "" }) {
   );
 }
 
-function ReviewsSection({ state, t, lang }) {
+function ReviewsSection({ state, t, lang, travellerName }) {
+  const [sort, setSort] = useState("newest");
+  const [page, setPage] = useState(1);
+  const reviews = Array.isArray(state.data) ? state.data : [];
+  const sortedReviews = [...reviews].sort((firstReview, secondReview) => {
+    const firstDate = getReviewTimestamp(firstReview.createdAt);
+    const secondDate = getReviewTimestamp(secondReview.createdAt);
+    const firstRating = Number(firstReview.rating) || 0;
+    const secondRating = Number(secondReview.rating) || 0;
+
+    if (sort === "oldest") return firstDate - secondDate;
+    if (sort === "highest-rating") {
+      return secondRating - firstRating || secondDate - firstDate;
+    }
+    if (sort === "lowest-rating") {
+      return firstRating - secondRating || secondDate - firstDate;
+    }
+    return secondDate - firstDate;
+  });
+  const totalPages = Math.max(
+    1,
+    Math.ceil(sortedReviews.length / PUBLIC_REVIEWS_PAGE_SIZE)
+  );
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * PUBLIC_REVIEWS_PAGE_SIZE;
+  const visibleReviews = sortedReviews.slice(
+    pageStart,
+    pageStart + PUBLIC_REVIEWS_PAGE_SIZE
+  );
+
+  const sortOptions = [
+    { value: "newest", label: t("publicReviewSortNewest") },
+    { value: "oldest", label: t("publicReviewSortOldest") },
+    { value: "highest-rating", label: t("publicReviewSortHighestRating") },
+    { value: "lowest-rating", label: t("publicReviewSortLowestRating") },
+  ];
+  const reviewsTitle = t("reviewsByTraveller", { name: travellerName });
+
+  function handleSortChange(event) {
+    setSort(event.target.value);
+    setPage(1);
+  }
+
+  function changePage(nextPage) {
+    setPage(nextPage);
+    document
+      .getElementById("public-reviews-heading")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   if (state.status === "loading") {
     return <SectionSkeleton label={t("loading")} />;
   }
@@ -312,7 +369,6 @@ function ReviewsSection({ state, t, lang }) {
     );
   }
 
-  const reviews = Array.isArray(state.data) ? state.data : [];
   if (reviews.length === 0) {
     return (
       <SocialProfileStatus
@@ -325,11 +381,36 @@ function ReviewsSection({ state, t, lang }) {
 
   return (
     <div>
-      <h2 className="text-xl font-bold text-attraction-ink">
-        {t("publicReviews")}
-      </h2>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <h2
+          id="public-reviews-heading"
+          className="min-w-0 flex-1 text-2xl font-bold text-attraction-ink [overflow-wrap:anywhere]"
+        >
+          {reviewsTitle}
+        </h2>
+        <div className="w-full sm:w-auto">
+          <label
+            htmlFor="public-review-sort"
+            className="mb-1.5 block text-sm font-semibold text-attraction-ink"
+          >
+            {t("sortBy")}
+          </label>
+          <select
+            id="public-review-sort"
+            value={sort}
+            onChange={handleSortChange}
+            className="min-h-11 w-full rounded-[10px] border border-attraction-border-strong bg-white px-3 text-sm font-medium text-attraction-body focus:border-attraction-primary focus:outline-none focus:ring-2 focus:ring-attraction-primary/30 sm:min-w-48"
+          >
+            {sortOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
       <div className="mt-3 divide-y divide-attraction-divider">
-        {reviews.map((review) => (
+        {visibleReviews.map((review) => (
           <article key={review.id} className="py-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <StarRating rating={Number(review.rating) || 0} />
@@ -369,8 +450,24 @@ function ReviewsSection({ state, t, lang }) {
           </article>
         ))}
       </div>
+      <Pagination
+        page={currentPage}
+        totalPages={totalPages}
+        onPageChange={changePage}
+        ariaLabel={reviewsTitle}
+        getPageAriaLabel={(pageNumber) =>
+          t("publicReviewsGoToPage", { page: pageNumber })
+        }
+        previousLabel={t("previous")}
+        nextLabel={t("next")}
+      />
     </div>
   );
+}
+
+function getReviewTimestamp(value) {
+  const timestamp = Date.parse(value || "");
+  return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
 function ExplorationProgressSection({ authStatus, state, t }) {
@@ -449,8 +546,8 @@ function ExplorationProgressSection({ authStatus, state, t }) {
   return (
     <div>
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-bold text-attraction-ink">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-2xl font-bold text-attraction-ink [overflow-wrap:anywhere]">
             {t("verifiedExplorationMap")}
           </h2>
           <p className="mt-1 text-sm text-attraction-muted">
@@ -463,7 +560,10 @@ function ExplorationProgressSection({ authStatus, state, t }) {
           suffix="%"
         />
       </div>
-      <SocialExplorationMap attractions={attractions} />
+      <SocialExplorationMap
+        attractions={attractions}
+        appearance="comparison"
+      />
       <p className="mt-4 rounded-[10px] bg-[#EAF3FA] px-4 py-3 text-sm leading-relaxed text-attraction-body">
         {t("onlyVerifiedShown")}
       </p>
@@ -571,20 +671,26 @@ function ComparisonSection({ authStatus, profile, state, t }) {
         </div>
       </section>
       <div className="mt-8 space-y-7">
-        <ExploredAttractionList
+        <PaginatedExploredAttractionList
+          key={`common-${profile.id}`}
           title={t("exploredByBoth")}
           attractions={comparison.common || []}
           t={t}
+          headingId="comparison-common-locations-heading"
         />
-        <ExploredAttractionList
+        <PaginatedExploredAttractionList
+          key={`viewer-${profile.id}`}
           title={t("onlyExploredByYou")}
           attractions={comparison.viewerOnly || []}
           t={t}
+          headingId="comparison-viewer-locations-heading"
         />
-        <ExploredAttractionList
+        <PaginatedExploredAttractionList
+          key={`target-${profile.id}`}
           title={t("onlyExploredByThem", { name: profile.displayName })}
           attractions={comparison.targetOnly || []}
           t={t}
+          headingId="comparison-target-locations-heading"
         />
       </div>
     </div>
@@ -624,20 +730,71 @@ function CoverageComparisonCard({ user, label, t }) {
 function ComparisonMap({ label, attractions, t }) {
   return (
     <article className="rounded-[16px] border border-attraction-border bg-attraction-surface-soft p-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h4 className="font-bold text-attraction-ink">{label}</h4>
-        <span className="text-xs font-semibold text-attraction-muted">
+      <div className="mb-3 grid min-h-12 grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+        <h4
+          className="line-clamp-2 min-w-0 font-bold leading-6 text-attraction-ink [overflow-wrap:anywhere]"
+          title={label}
+        >
+          {label}
+        </h4>
+        <span className="shrink-0 whitespace-nowrap pt-0.5 text-right text-xs font-semibold text-attraction-muted">
           {t("exploredCount", { count: attractions.length })}
         </span>
       </div>
-      {attractions.length > 0 ? (
-        <SocialExplorationMap attractions={attractions} ariaLabel={label} />
-      ) : (
-        <div className="flex min-h-80 items-center justify-center rounded-[18px] border border-attraction-border bg-white px-6 text-center">
-          <p className="text-sm text-attraction-muted">{t("noVerifiedOnMap")}</p>
-        </div>
-      )}
+      <SocialExplorationMap
+        attractions={attractions}
+        ariaLabel={label}
+        appearance="comparison"
+      />
     </article>
+  );
+}
+
+function PaginatedExploredAttractionList({
+  title,
+  attractions,
+  t,
+  headingId,
+}) {
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(
+    1,
+    Math.ceil(attractions.length / COMPARISON_LOCATIONS_PAGE_SIZE)
+  );
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * COMPARISON_LOCATIONS_PAGE_SIZE;
+  const visibleAttractions = attractions.slice(
+    pageStart,
+    pageStart + COMPARISON_LOCATIONS_PAGE_SIZE
+  );
+
+  function changePage(nextPage) {
+    setPage(nextPage);
+    document
+      .getElementById(headingId)
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  return (
+    <div>
+      <ExploredAttractionList
+        title={title}
+        attractions={visibleAttractions}
+        t={t}
+        headingId={headingId}
+      />
+      <Pagination
+        page={currentPage}
+        totalPages={totalPages}
+        onPageChange={changePage}
+        ariaLabel={title}
+        getPageAriaLabel={(pageNumber) =>
+          t("comparisonLocationsGoToPage", { page: pageNumber })
+        }
+        previousLabel={t("previous")}
+        nextLabel={t("next")}
+      />
+    </div>
   );
 }
 

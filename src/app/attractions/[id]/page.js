@@ -110,6 +110,15 @@ export default function AttractionDetailsPage() {
     }
   };
 
+  function handleBack() {
+    if (window.history.length > 1) {
+      router.back();
+      return;
+    }
+
+    router.push("/attractions");
+  }
+
   if (isLoading) {
     return (
       <main className="min-h-screen bg-attraction-page-bg px-6 py-16">
@@ -142,13 +151,14 @@ export default function AttractionDetailsPage() {
   return (
     <main className="min-h-screen bg-attraction-page-bg">
       <div className="mx-auto max-w-[1120px] px-4 py-8 pb-16 md:px-6 lg:px-[38px]">
-        <Link
-          href="/"
+        <button
+          type="button"
+          onClick={handleBack}
           className="mb-7 inline-flex h-10 items-center gap-2 rounded-full border border-attraction-border bg-white py-0 pl-3 pr-4 text-sm font-semibold text-attraction-body transition hover:border-attraction-border-strong hover:bg-attraction-surface-soft"
         >
           <BackArrowIcon />
           {t("back")}
-        </Link>
+        </button>
 
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_340px]">
           <div>

@@ -40,6 +40,27 @@ export function createPublicReviewRepository({ ReviewModel }) {
     async countPublicReviewsByUserId(userId) {
       return ReviewModel.countDocuments({ userId });
     },
+
+    async countPublicReviewsByUserIds(userIds = []) {
+      const objectIds = [...new Set(userIds.map(String))]
+        .filter((userId) => mongoose.Types.ObjectId.isValid(userId))
+        .map((userId) => new mongoose.Types.ObjectId(userId));
+
+      if (objectIds.length === 0) return [];
+
+      const counts = await ReviewModel.aggregate([
+        { $match: { userId: { $in: objectIds } } },
+        { $group: { _id: "$userId", reviewsWritten: { $sum: 1 } } },
+      ]);
+
+      return counts.map((record) => ({
+        userId: String(record._id),
+        reviewsWritten: Math.max(
+          0,
+          Math.trunc(Number(record.reviewsWritten) || 0)
+        ),
+      }));
+    },
   };
 }
 
@@ -57,6 +78,10 @@ export async function findReviewedAttractionIdsByUserId(userId) {
 
 export async function countPublicReviewsByUserId(userId) {
   return publicReviewRepository.countPublicReviewsByUserId(userId);
+}
+
+export async function countPublicReviewsByUserIds(userIds) {
+  return publicReviewRepository.countPublicReviewsByUserIds(userIds);
 }
 
 /**

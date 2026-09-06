@@ -126,6 +126,15 @@ test("social profile service normalizes paging and exposes public fields only", 
         ],
       ]);
     },
+    countPublicReviewsByUserIds: async (userIds) => {
+      observed.reviewUserIds = userIds;
+      return [
+        {
+          userId: "507f1f77bcf86cd799439011",
+          reviewsWritten: 3,
+        },
+      ];
+    },
     isValidObjectId: () => true,
   });
 
@@ -138,11 +147,11 @@ test("social profile service normalizes paging and exposes public fields only", 
   assert.deepEqual(observed.options, {
     searchPattern: "museum\\.\\*",
     excludedGoogleId: "viewer-id",
-    page: 1,
-    limit: 12,
+    paginate: false,
   });
   assert.deepEqual(observed.summaryUserIds, ["507f1f77bcf86cd799439011"]);
-  assert.equal(result.totalPages, 2);
+  assert.deepEqual(observed.reviewUserIds, ["507f1f77bcf86cd799439011"]);
+  assert.equal(result.totalPages, 1);
   assert.deepEqual(result.items[0], {
     id: "507f1f77bcf86cd799439011",
     displayName: "Melaka Traveller",
@@ -151,7 +160,7 @@ test("social profile service normalizes paging and exposes public fields only", 
     location: "Melaka",
     joinedAt: "2026-01-02T00:00:00.000Z",
     activitySummary: {
-      reviewsWritten: null,
+      reviewsWritten: 3,
       visitedAttractions: 82,
       explorationProgress: 35.2,
       rank: {
@@ -166,6 +175,114 @@ test("social profile service normalizes paging and exposes public fields only", 
   });
   assert.equal("email" in result.items[0], false);
   assert.equal("googleId" in result.items[0], false);
+});
+
+test("social profile directory filters derived activity and sorts all candidates before paging", async () => {
+  const users = [
+    {
+      _id: "507f1f77bcf86cd799439011",
+      displayName: "Alice",
+      bio: "Museum traveller",
+      joinedAt: new Date("2026-01-01T00:00:00.000Z"),
+    },
+    {
+      _id: "507f1f77bcf86cd799439012",
+      displayName: "Bob",
+      location: "Pahang",
+      joinedAt: new Date("2026-04-01T00:00:00.000Z"),
+    },
+    {
+      _id: "507f1f77bcf86cd799439013",
+      displayName: "Cara",
+      joinedAt: new Date("2026-03-01T00:00:00.000Z"),
+    },
+    {
+      _id: "507f1f77bcf86cd799439014",
+      displayName: "Dave",
+      bio: "New traveller",
+      joinedAt: new Date("2026-02-01T00:00:00.000Z"),
+    },
+  ];
+  const summaries = new Map([
+    [
+      "507f1f77bcf86cd799439011",
+      {
+        status: "success",
+        visitedCount: 35,
+        progressPercentage: 35,
+        rank: { id: "silver" },
+      },
+    ],
+    [
+      "507f1f77bcf86cd799439012",
+      {
+        status: "success",
+        visitedCount: 50,
+        progressPercentage: 50,
+        rank: { id: "silver" },
+      },
+    ],
+    [
+      "507f1f77bcf86cd799439013",
+      {
+        status: "success",
+        visitedCount: 80,
+        progressPercentage: 80,
+        rank: { id: "gold" },
+      },
+    ],
+    [
+      "507f1f77bcf86cd799439014",
+      {
+        status: "success",
+        visitedCount: 0,
+        progressPercentage: 0,
+        rank: { id: "new" },
+      },
+    ],
+  ]);
+  const service = createSocialProfileUserService({
+    findPublicUsers: async () => ({ items: users, total: users.length }),
+    findPublicUserById: async () => null,
+    findUserByIdentity: async () => null,
+    getPublicExplorationSummaries: async () => summaries,
+    countPublicReviewsByUserIds: async () => [
+      { userId: "507f1f77bcf86cd799439011", reviewsWritten: 5 },
+      { userId: "507f1f77bcf86cd799439012", reviewsWritten: 2 },
+      { userId: "507f1f77bcf86cd799439013", reviewsWritten: 10 },
+    ],
+  });
+
+  const filtered = await service.getPublicProfiles({
+    rank: "silver",
+    sort: "most-explored",
+    hasReviews: "true",
+    hasProfileDetails: "true",
+  });
+  assert.deepEqual(
+    filtered.items.map((profile) => profile.displayName),
+    ["Bob", "Alice"]
+  );
+
+  const mostReviews = await service.getPublicProfiles({ sort: "most-reviews" });
+  assert.deepEqual(
+    mostReviews.items.map((profile) => profile.displayName),
+    ["Cara", "Alice", "Bob", "Dave"]
+  );
+
+  const newestMembers = await service.getPublicProfiles({
+    sort: "newest-members",
+  });
+  assert.deepEqual(
+    newestMembers.items.map((profile) => profile.displayName),
+    ["Bob", "Cara", "Dave", "Alice"]
+  );
+
+  const nameOrder = await service.getPublicProfiles({ sort: "name" });
+  assert.deepEqual(
+    nameOrder.items.map((profile) => profile.displayName),
+    ["Alice", "Bob", "Cara", "Dave"]
+  );
 });
 
 test("social profile service rejects invalid profile ids before querying", async () => {
@@ -238,7 +355,9 @@ test("profiles API returns the public directory contract", async () => {
   });
 
   const response = await handler(
-    new Request("http://localhost/api/profiles?search=Melaka&page=2")
+    new Request(
+      "http://localhost/api/profiles?search=Melaka&page=2&rank=silver&sort=most-explored&hasReviews=true&hasProfileDetails=true"
+    )
   );
 
   assert.equal(connected, true);
@@ -246,6 +365,10 @@ test("profiles API returns the public directory contract", async () => {
   assert.deepEqual(observed.options, {
     search: "Melaka",
     page: "2",
+    rank: "silver",
+    sort: "most-explored",
+    hasReviews: "true",
+    hasProfileDetails: "true",
     excludedGoogleId: "viewer-google-id",
   });
   assert.deepEqual(await response.json(), {
@@ -440,6 +563,39 @@ test("public review repository counts one user's published reviews", async () =>
   assert.equal(count, 4);
   assert.deepEqual(observed.query, {
     userId: "507f1f77bcf86cd799439011",
+  });
+});
+
+test("public review repository batches review counts for directory profiles", async () => {
+  const observed = {};
+  const repository = createPublicReviewRepository({
+    ReviewModel: {
+      aggregate(pipeline) {
+        observed.pipeline = pipeline;
+        return [
+          {
+            _id: { toString: () => "507f1f77bcf86cd799439011" },
+            reviewsWritten: 4,
+          },
+        ];
+      },
+    },
+  });
+
+  const counts = await repository.countPublicReviewsByUserIds([
+    "507f1f77bcf86cd799439011",
+    "507f1f77bcf86cd799439012",
+  ]);
+
+  assert.deepEqual(counts, [
+    { userId: "507f1f77bcf86cd799439011", reviewsWritten: 4 },
+  ]);
+  assert.deepEqual(
+    observed.pipeline[0].$match.userId.$in.map(String),
+    ["507f1f77bcf86cd799439011", "507f1f77bcf86cd799439012"]
+  );
+  assert.deepEqual(observed.pipeline[1], {
+    $group: { _id: "$userId", reviewsWritten: { $sum: 1 } },
   });
 });
 

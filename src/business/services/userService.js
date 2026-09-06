@@ -5,12 +5,73 @@ import {
   findPublicUsers,
   findUserByIdentity,
 } from "@/data/repositories/userRepository";
+import { countPublicReviewsByUserIds } from "@/data/repositories/reviewRepository";
 
 const PUBLIC_PROFILE_PAGE_SIZE = 12;
 const MAX_SEARCH_LENGTH = 80;
+const DIRECTORY_RANK_FILTERS = new Set([
+  "all",
+  "new",
+  "bronze",
+  "silver",
+  "gold",
+  "master",
+]);
+const DIRECTORY_SORTS = new Set([
+  "name",
+  "most-explored",
+  "most-reviews",
+  "newest-members",
+]);
 
 function escapeRegularExpression(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function normalizeBooleanFilter(value) {
+  return value === true || value === "true" || value === "1";
+}
+
+function compareProfileNames(firstProfile, secondProfile) {
+  return (
+    firstProfile.displayName.localeCompare(secondProfile.displayName, "en", {
+      sensitivity: "base",
+    }) || firstProfile.id.localeCompare(secondProfile.id)
+  );
+}
+
+function getJoinedTimestamp(profile) {
+  const timestamp = Date.parse(profile.joinedAt || "");
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+function sortPublicProfiles(profiles, sort) {
+  return [...profiles].sort((firstProfile, secondProfile) => {
+    if (sort === "most-explored") {
+      return (
+        (secondProfile.activitySummary.visitedAttractions || 0) -
+          (firstProfile.activitySummary.visitedAttractions || 0) ||
+        compareProfileNames(firstProfile, secondProfile)
+      );
+    }
+
+    if (sort === "most-reviews") {
+      return (
+        secondProfile.activitySummary.reviewsWritten -
+          firstProfile.activitySummary.reviewsWritten ||
+        compareProfileNames(firstProfile, secondProfile)
+      );
+    }
+
+    if (sort === "newest-members") {
+      return (
+        getJoinedTimestamp(secondProfile) - getJoinedTimestamp(firstProfile) ||
+        compareProfileNames(firstProfile, secondProfile)
+      );
+    }
+
+    return compareProfileNames(firstProfile, secondProfile);
+  });
 }
 
 function serializePublicProfile(user) {
@@ -49,6 +110,7 @@ export function createSocialProfileUserService({
   findPublicUserById: findProfileById,
   findUserByIdentity: findProfileByIdentity,
   getPublicExplorationSummaries: getExplorationSummaries = async () => new Map(),
+  countPublicReviewsByUserIds: countReviewsByUserIds = async () => [],
   isValidObjectId = mongoose.Types.ObjectId.isValid,
 }) {
   return {
@@ -56,52 +118,99 @@ export function createSocialProfileUserService({
       search = "",
       page = 1,
       excludedGoogleId = "",
+      rank = "all",
+      sort = "name",
+      hasReviews = false,
+      hasProfileDetails = false,
     } = {}) {
       const normalizedSearch = String(search)
         .trim()
         .slice(0, MAX_SEARCH_LENGTH);
       const normalizedPage = Math.max(1, Math.trunc(Number(page) || 1));
+      const normalizedRank = DIRECTORY_RANK_FILTERS.has(String(rank))
+        ? String(rank)
+        : "all";
+      const normalizedSort = DIRECTORY_SORTS.has(String(sort))
+        ? String(sort)
+        : "name";
+      const requireReviews = normalizeBooleanFilter(hasReviews);
+      const requireProfileDetails = normalizeBooleanFilter(hasProfileDetails);
       const searchPattern = normalizedSearch
         ? escapeRegularExpression(normalizedSearch)
         : "";
 
-      const { items, total } = await findProfiles({
+      const { items } = await findProfiles({
         searchPattern,
         excludedGoogleId,
-        page: normalizedPage,
-        limit: PUBLIC_PROFILE_PAGE_SIZE,
+        paginate: false,
       });
 
       const serializedItems = items.map(serializePublicProfile);
-      const explorationSummaries = await getExplorationSummaries(
-        serializedItems.map((profile) => profile.id)
+      const profileIds = serializedItems.map((profile) => profile.id);
+      const [explorationSummaries, reviewCountRecords] = await Promise.all([
+        getExplorationSummaries(profileIds),
+        countReviewsByUserIds(profileIds),
+      ]);
+      const reviewCountByUserId = new Map(
+        reviewCountRecords.map((record) => [
+          String(record.userId),
+          Math.max(0, Math.trunc(Number(record.reviewsWritten) || 0)),
+        ])
       );
+      const enrichedProfiles = serializedItems.map((profile) => {
+        const summary = explorationSummaries.get(profile.id);
+        const hasSummary = summary?.status === "success";
+
+        return {
+          ...profile,
+          activitySummary: {
+            ...profile.activitySummary,
+            reviewsWritten: reviewCountByUserId.get(profile.id) || 0,
+            visitedAttractions: hasSummary ? summary.visitedCount : null,
+            explorationProgress: hasSummary
+              ? summary.progressPercentage
+              : null,
+            rank: hasSummary ? summary.rank : null,
+            status: hasSummary ? "success" : "unavailable",
+          },
+        };
+      });
+      const filteredProfiles = enrichedProfiles.filter((profile) => {
+        if (
+          normalizedRank !== "all" &&
+          profile.activitySummary.rank?.id !== normalizedRank
+        ) {
+          return false;
+        }
+        if (requireReviews && profile.activitySummary.reviewsWritten === 0) {
+          return false;
+        }
+        if (requireProfileDetails && !profile.bio && !profile.location) {
+          return false;
+        }
+        return true;
+      });
+      const sortedProfiles = sortPublicProfiles(
+        filteredProfiles,
+        normalizedSort
+      );
+      const total = sortedProfiles.length;
+      const totalPages = Math.max(
+        1,
+        Math.ceil(total / PUBLIC_PROFILE_PAGE_SIZE)
+      );
+      const resolvedPage = Math.min(normalizedPage, totalPages);
+      const pageStart = (resolvedPage - 1) * PUBLIC_PROFILE_PAGE_SIZE;
 
       return {
-        items: serializedItems.map((profile) => {
-          const summary = explorationSummaries.get(profile.id);
-          const hasSummary = summary?.status === "success";
-
-          return {
-            ...profile,
-            activitySummary: {
-              ...profile.activitySummary,
-              visitedAttractions: hasSummary ? summary.visitedCount : null,
-              explorationProgress: hasSummary
-                ? summary.progressPercentage
-                : null,
-              rank: hasSummary ? summary.rank : null,
-              status: hasSummary ? "success" : "unavailable",
-            },
-          };
-        }),
-        total,
-        page: normalizedPage,
-        limit: PUBLIC_PROFILE_PAGE_SIZE,
-        totalPages: Math.max(
-          1,
-          Math.ceil(total / PUBLIC_PROFILE_PAGE_SIZE)
+        items: sortedProfiles.slice(
+          pageStart,
+          pageStart + PUBLIC_PROFILE_PAGE_SIZE
         ),
+        total,
+        page: resolvedPage,
+        limit: PUBLIC_PROFILE_PAGE_SIZE,
+        totalPages,
       };
     },
 
@@ -125,6 +234,7 @@ const socialProfileUserService = createSocialProfileUserService({
   findPublicUserById,
   findUserByIdentity,
   getPublicExplorationSummaries,
+  countPublicReviewsByUserIds,
 });
 
 export async function getPublicProfiles(options) {

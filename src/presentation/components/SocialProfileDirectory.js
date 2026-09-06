@@ -14,7 +14,18 @@ export default function SocialProfileDirectory() {
   const [profiles, setProfiles] = useState([]);
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
+  const [rankFilter, setRankFilter] = useState("all");
+  const [appliedRankFilter, setAppliedRankFilter] = useState("all");
+  const [sort, setSort] = useState("name");
+  const [appliedSort, setAppliedSort] = useState("name");
+  const [hasReviews, setHasReviews] = useState(false);
+  const [appliedHasReviews, setAppliedHasReviews] = useState(false);
+  const [hasProfileDetails, setHasProfileDetails] = useState(false);
+  const [appliedHasProfileDetails, setAppliedHasProfileDetails] =
+    useState(false);
   const [page, setPage] = useState(1);
+  const [searchRequestId, setSearchRequestId] = useState(0);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
@@ -24,6 +35,12 @@ export default function SocialProfileDirectory() {
     const controller = new AbortController();
     const query = new URLSearchParams({ page: String(page) });
     if (appliedSearch) query.set("search", appliedSearch);
+    if (appliedRankFilter !== "all") query.set("rank", appliedRankFilter);
+    if (appliedSort !== "name") query.set("sort", appliedSort);
+    if (appliedHasReviews) query.set("hasReviews", "true");
+    if (appliedHasProfileDetails) {
+      query.set("hasProfileDetails", "true");
+    }
 
     async function loadProfiles() {
       try {
@@ -51,20 +68,51 @@ export default function SocialProfileDirectory() {
 
     loadProfiles();
     return () => controller.abort();
-  }, [appliedSearch, genericErrorMessage, page]);
+  }, [
+    appliedHasProfileDetails,
+    appliedHasReviews,
+    appliedRankFilter,
+    appliedSearch,
+    appliedSort,
+    genericErrorMessage,
+    page,
+    searchRequestId,
+  ]);
 
   function handleSearch(event) {
     event.preventDefault();
     setIsLoading(true);
     setAppliedSearch(search.trim());
+    setAppliedRankFilter(rankFilter);
+    setAppliedSort(sort);
+    setAppliedHasReviews(hasReviews);
+    setAppliedHasProfileDetails(hasProfileDetails);
     setPage(1);
+    setSearchRequestId((current) => current + 1);
   }
 
-  function clearSearch() {
+  function handleReset() {
+    const shouldReload =
+      Boolean(appliedSearch) ||
+      appliedRankFilter !== "all" ||
+      appliedSort !== "name" ||
+      appliedHasReviews ||
+      appliedHasProfileDetails ||
+      page !== 1;
+
     setSearch("");
     setAppliedSearch("");
+    setRankFilter("all");
+    setAppliedRankFilter("all");
+    setSort("name");
+    setAppliedSort("name");
+    setHasReviews(false);
+    setAppliedHasReviews(false);
+    setHasProfileDetails(false);
+    setAppliedHasProfileDetails(false);
+    setShowMoreFilters(false);
     setPage(1);
-    setIsLoading(true);
+    if (shouldReload) setIsLoading(true);
   }
 
   function changePage(nextPage) {
@@ -86,14 +134,22 @@ export default function SocialProfileDirectory() {
           <p className="mt-5 max-w-3xl text-lg leading-relaxed text-white/80">
             {t("travellersHeroDescription")}
           </p>
+        </div>
+      </section>
 
-          <form
-            onSubmit={handleSearch}
-            className="mt-7 flex max-w-2xl flex-col gap-2 sm:flex-row"
+      <section className="mx-auto max-w-[1120px] px-4 py-10 md:px-6 lg:px-[38px]">
+        <form
+          onSubmit={handleSearch}
+          className="relative z-10 -mt-16 mb-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-lg"
+        >
+          <label
+            htmlFor="profile-search"
+            className="mb-2 block font-semibold text-gray-900"
           >
-            <label htmlFor="profile-search" className="sr-only">
-              {t("searchTravellers")}
-            </label>
+            {t("searchTravellers")}
+          </label>
+
+          <div className="grid gap-3 lg:grid-cols-[2fr_auto_auto_auto]">
             <input
               id="profile-search"
               type="search"
@@ -101,19 +157,119 @@ export default function SocialProfileDirectory() {
               onChange={(event) => setSearch(event.target.value)}
               placeholder={t("searchTravellers")}
               maxLength={80}
-              className="min-h-[50px] w-full rounded-[14px] border border-white/40 bg-white px-4 text-attraction-ink outline-none focus:ring-2 focus:ring-white sm:flex-1"
+              className="rounded-lg border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-emerald-500"
             />
+
+            <button
+              type="button"
+              onClick={() => setShowMoreFilters((current) => !current)}
+              aria-expanded={showMoreFilters}
+              aria-controls="traveller-filters"
+              className="rounded-lg border border-gray-300 bg-white px-5 py-3 font-semibold text-gray-700 transition hover:border-emerald-600 hover:text-emerald-700"
+            >
+              {showMoreFilters ? t("hideFilters") : t("moreFilters")}
+            </button>
+
             <button
               type="submit"
-              className="min-h-[50px] rounded-[10px] bg-[#FFAB00] px-6 font-semibold text-[#142033] transition hover:bg-[#E89B00]"
+              className="rounded-lg bg-amber-400 px-6 py-3 font-semibold text-gray-900 transition hover:bg-amber-500"
             >
               {t("search")}
             </button>
-          </form>
-        </div>
-      </section>
 
-      <section className="mx-auto max-w-[1120px] px-4 py-10 md:px-6 lg:px-[38px]">
+            <button
+              type="button"
+              onClick={handleReset}
+              className="rounded-lg border border-gray-300 px-6 py-3 font-semibold text-gray-700 transition hover:bg-gray-100"
+            >
+              {t("reset")}
+            </button>
+          </div>
+
+          {showMoreFilters && (
+            <div
+              id="traveller-filters"
+              className="mt-5 grid gap-5 border-t border-gray-200 pt-5 sm:grid-cols-2 lg:grid-cols-3"
+            >
+              <div>
+                <label
+                  htmlFor="explorer-rank-filter"
+                  className="mb-2 block text-sm font-semibold text-gray-800"
+                >
+                  {t("explorerRankFilter")}
+                </label>
+                <select
+                  id="explorer-rank-filter"
+                  value={rankFilter}
+                  onChange={(event) => setRankFilter(event.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-emerald-500"
+                >
+                  <option value="all">{t("allExplorerRanks")}</option>
+                  <option value="new">{t("rankNewExplorer")}</option>
+                  <option value="bronze">{t("rankBronzeExplorer")}</option>
+                  <option value="silver">{t("rankSilverExplorer")}</option>
+                  <option value="gold">{t("rankGoldExplorer")}</option>
+                  <option value="master">{t("rankMelakaMaster")}</option>
+                </select>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="traveller-sort"
+                  className="mb-2 block text-sm font-semibold text-gray-800"
+                >
+                  {t("sortBy")}
+                </label>
+                <select
+                  id="traveller-sort"
+                  value={sort}
+                  onChange={(event) => setSort(event.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-emerald-500"
+                >
+                  <option value="name">{t("travellerSortName")}</option>
+                  <option value="most-explored">
+                    {t("travellerSortMostExplored")}
+                  </option>
+                  <option value="most-reviews">
+                    {t("travellerSortMostReviews")}
+                  </option>
+                  <option value="newest-members">
+                    {t("travellerSortNewestMembers")}
+                  </option>
+                </select>
+              </div>
+
+              <fieldset>
+                <legend className="mb-2 text-sm font-semibold text-gray-800">
+                  {t("quickFilters")}
+                </legend>
+                <div className="space-y-3 rounded-lg border border-gray-200 px-4 py-3">
+                  <label className="flex min-h-6 cursor-pointer items-center gap-3 text-sm font-medium text-gray-800">
+                    <input
+                      type="checkbox"
+                      checked={hasReviews}
+                      onChange={(event) => setHasReviews(event.target.checked)}
+                      className="h-4 w-4 accent-emerald-700"
+                    />
+                    {t("hasReviews")}
+                  </label>
+                  <label className="flex min-h-6 cursor-pointer items-center gap-3 text-sm font-medium text-gray-800">
+                    <input
+                      type="checkbox"
+                      checked={hasProfileDetails}
+                      onChange={(event) =>
+                        setHasProfileDetails(event.target.checked)
+                      }
+                      className="h-4 w-4 accent-emerald-700"
+                    />
+                    {t("hasProfileDetails")}
+                  </label>
+                </div>
+              </fieldset>
+            </div>
+          )}
+        </form>
+
         <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-2xl font-bold text-attraction-ink">
@@ -126,15 +282,6 @@ export default function SocialProfileDirectory() {
               </p>
             )}
           </div>
-          {appliedSearch && (
-            <button
-              type="button"
-              onClick={clearSearch}
-              className="min-h-11 rounded-[10px] border border-attraction-border-strong bg-white px-4 text-sm font-semibold text-attraction-primary-dark transition hover:bg-attraction-primary-soft"
-            >
-              {t("clearSearchAndFilters")}
-            </button>
-          )}
         </div>
 
         {isLoading && <DirectorySkeleton t={t} />}
