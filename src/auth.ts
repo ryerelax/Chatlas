@@ -11,6 +11,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   secret: process.env.AUTH_SECRET,
   session: {
     strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60,
   },
   callbacks: {
     async signIn({ user, account, profile }) {
@@ -112,10 +113,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
     async session({ session, token }) {
       if (session.user) {
-        session.user.id = token.userId || token.googleId || token.sub;
-        session.user.googleId = token.googleId || token.sub;
+        session.user.id = token.userId || token.googleId || token.sub || "";
+        session.user.googleId = token.googleId || token.sub || "";
         session.user.name = token.name || session.user.name;
-        session.user.displayName = token.name || session.user.name;
+        session.user.displayName = token.name || session.user.name || "";
         session.user.image = token.picture || session.user.image || "";
         session.user.bio = token.bio || "";
         session.user.location = token.location || "";
