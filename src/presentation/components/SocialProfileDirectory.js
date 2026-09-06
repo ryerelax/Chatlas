@@ -2,12 +2,15 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import ExplorerRankBadge from "@/presentation/components/ExplorerRankBadge";
+import Pagination from "@/presentation/components/Pagination";
 import ProfileAvatar from "@/presentation/components/ProfileAvatar";
 import SocialProfileStatus from "@/presentation/components/SocialProfileStatus";
 import { useLanguage } from "@/presentation/contexts/LanguageContext";
 
 export default function SocialProfileDirectory() {
   const { t, translateState } = useLanguage();
+  const genericErrorMessage = t("errorGeneric");
   const [profiles, setProfiles] = useState([]);
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
@@ -30,7 +33,7 @@ export default function SocialProfileDirectory() {
         const result = await response.json();
 
         if (!response.ok) {
-          throw new Error(result.message || t("errorGeneric"));
+          throw new Error(result.message || genericErrorMessage);
         }
 
         setProfiles(result.data || []);
@@ -48,7 +51,7 @@ export default function SocialProfileDirectory() {
 
     loadProfiles();
     return () => controller.abort();
-  }, [appliedSearch, page, t]);
+  }, [appliedSearch, genericErrorMessage, page]);
 
   function handleSearch(event) {
     event.preventDefault();
@@ -72,14 +75,16 @@ export default function SocialProfileDirectory() {
 
   return (
     <main className="min-h-screen bg-attraction-page-bg">
-      <section className="bg-attraction-primary text-white">
+      <section className="bg-[#0F5A43] text-white">
         <div className="mx-auto max-w-[1120px] px-4 py-11 md:px-6 lg:px-[38px] lg:py-14">
-          <p className="font-semibold text-white/80">{t("community")}</p>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl">
-            {t("travellersTitle")}
+          <p className="mb-4 font-semibold text-white/85">
+            {t("travellersHeroEyebrow")}
+          </p>
+          <h1 className="max-w-3xl text-3xl font-bold leading-tight text-white md:text-5xl">
+            {t("travellersHeroTitle")}
           </h1>
-          <p className="mt-3 max-w-2xl text-base leading-relaxed text-white/80">
-            {t("searchTravellers")}
+          <p className="mt-5 max-w-3xl text-lg leading-relaxed text-white/80">
+            {t("travellersHeroDescription")}
           </p>
 
           <form
@@ -152,7 +157,7 @@ export default function SocialProfileDirectory() {
         )}
 
         {!isLoading && !error && profiles.length > 0 && (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {profiles.map((profile) => (
               <ProfileCard
                 key={profile.id}
@@ -164,31 +169,18 @@ export default function SocialProfileDirectory() {
           </div>
         )}
 
-        {!isLoading && !error && totalPages > 1 && (
-          <nav
-            className="mt-8 flex items-center justify-center gap-3"
-            aria-label={t("travellersTitle")}
-          >
-            <button
-              type="button"
-              onClick={() => changePage(Math.max(1, page - 1))}
-              disabled={page === 1}
-              className="min-h-11 rounded-[10px] border border-attraction-border-strong bg-white px-4 text-sm font-semibold text-attraction-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {t("previous")}
-            </button>
-            <span className="text-sm text-attraction-muted">
-              {t("pageOf", { page, total: totalPages })}
-            </span>
-            <button
-              type="button"
-              onClick={() => changePage(Math.min(totalPages, page + 1))}
-              disabled={page === totalPages}
-              className="min-h-11 rounded-[10px] border border-attraction-border-strong bg-white px-4 text-sm font-semibold text-attraction-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {t("next")}
-            </button>
-          </nav>
+        {!isLoading && !error && (
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            onPageChange={changePage}
+            ariaLabel={t("travellersTitle")}
+            getPageAriaLabel={(pageNumber) =>
+              t("travellersGoToPage", { page: pageNumber })
+            }
+            previousLabel={t("previous")}
+            nextLabel={t("next")}
+          />
         )}
       </section>
     </main>
@@ -196,31 +188,44 @@ export default function SocialProfileDirectory() {
 }
 
 function ProfileCard({ profile, t, translateState }) {
-  const locationLabel = profile.location
+  const hasLocation = Boolean(profile.location?.trim());
+  const hasBio = Boolean(profile.bio?.trim());
+  const locationLabel = hasLocation
     ? translateState
       ? translateState(profile.location)
       : profile.location
-    : "—";
+    : "";
+  const bioLabel = hasBio
+    ? profile.bio
+    : hasLocation
+      ? t("noBioAddedYet")
+      : t("noProfileDetailsYet");
 
   return (
-    <article className="flex h-full flex-col rounded-[14px] border border-attraction-border bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <article className="flex h-full min-w-0 max-w-full flex-col rounded-[14px] border border-attraction-border bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
       <div className="flex items-center gap-4">
         <ProfileAvatar
           name={profile.displayName}
           src={profile.profilePicture}
           size="medium"
         />
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h3 className="truncate text-base font-bold text-attraction-ink">
             {profile.displayName}
           </h3>
-          <p className="mt-0.5 truncate text-sm text-attraction-muted">
+          <div className="mt-1 flex">
+            <ExplorerRankBadge rank={profile.activitySummary?.rank} />
+          </div>
+          <p
+            className="mt-1 min-h-5 truncate text-sm text-attraction-muted"
+            aria-hidden={hasLocation ? undefined : "true"}
+          >
             {locationLabel}
           </p>
         </div>
       </div>
-      <p className="mt-4 line-clamp-3 flex-1 text-sm leading-relaxed text-attraction-body">
-        {profile.bio || "—"}
+      <p className="mt-4 line-clamp-3 flex-1 break-words text-sm leading-relaxed text-attraction-body">
+        {bioLabel}
       </p>
       <Link
         href={`/profiles/${profile.id}`}
@@ -235,13 +240,13 @@ function ProfileCard({ profile, t, translateState }) {
 function DirectorySkeleton({ t }) {
   return (
     <div
-      className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+      className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
       aria-label={t("loading")}
     >
       {[1, 2, 3, 4, 5, 6].map((item) => (
         <div
           key={item}
-          className="h-52 animate-pulse rounded-[14px] border border-attraction-border bg-white p-5"
+          className="h-52 min-w-0 max-w-full animate-pulse rounded-[14px] border border-attraction-border bg-white p-5"
         >
           <div className="flex gap-4">
             <div className="h-14 w-14 rounded-full bg-gray-200" />

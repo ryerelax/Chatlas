@@ -8,16 +8,16 @@ export default function ExplorationMapPage() {
 
   return (
     <main className="min-h-screen bg-[#F7F9FB]">
-      <section className="bg-[#006C56] text-white">
+      <section className="bg-[#0F5A43] text-white">
         <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-14 lg:px-9">
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#CDF5E5]">
-            {t("mapTitle")}
+          <p className="mb-4 font-semibold text-white/85">
+            {t("mapHeroEyebrow")}
           </p>
-          <h1 className="mt-3 max-w-3xl text-4xl font-bold tracking-tight sm:text-5xl">
-            {t("mapTitle")}
+          <h1 className="max-w-3xl text-3xl font-bold leading-tight text-white md:text-5xl">
+            {t("mapHeroTitle")}
           </h1>
-          <p className="mt-4 max-w-2xl text-base leading-7 text-[#E6F7F0] sm:text-lg">
-            {t("signInForMapFeatures")}
+          <p className="mt-5 max-w-3xl text-lg leading-relaxed text-white/80">
+            {t("mapHeroDescription")}
           </p>
         </div>
       </section>

@@ -1,4 +1,5 @@
 "use client";
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
@@ -37,9 +38,14 @@ export default function Header() {
       <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-3" aria-label="Chatlas home">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-xl text-white">
-            📍
-          </div>
+          <Image
+            src="/branding/chatlas-mark.png"
+            alt=""
+            width={40}
+            height={40}
+            className="h-10 w-10 object-contain"
+            priority
+          />
           <div>
             <p className="text-xl font-bold tracking-tight text-gray-900">Chatlas</p>
             <p className="text-xs text-gray-500">Discover Melaka</p>

@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
+import ExplorerRankBadge from "@/presentation/components/ExplorerRankBadge";
+import Pagination from "@/presentation/components/Pagination";
 import ProfileAvatar from "@/presentation/components/ProfileAvatar";
 import SocialExplorationMap from "@/presentation/components/SocialExplorationMap";
 import SocialProfileStatus from "@/presentation/components/SocialProfileStatus";
@@ -13,6 +15,7 @@ import { useLanguage } from "@/presentation/contexts/LanguageContext";
 import { formatLocaleDate } from "@/presentation/lib/formatLocaleDate";
 
 const TAB_IDS = ["overview", "reviews", "exploration", "compare"];
+const VERIFIED_LOCATIONS_PAGE_SIZE = 12;
 
 export default function PublicSocialProfile() {
   const { id } = useParams();
@@ -180,9 +183,12 @@ export default function PublicSocialProfile() {
               <p className="text-sm font-semibold text-attraction-primary">
                 {t("publicTravellerProfile")}
               </p>
-              <h1 className="mt-1 text-3xl font-bold tracking-tight text-attraction-ink">
-                {profile.displayName}
-              </h1>
+              <div className="mt-1 flex flex-wrap items-center gap-3">
+                <h1 className="min-w-0 text-3xl font-bold tracking-tight text-attraction-ink">
+                  {profile.displayName}
+                </h1>
+                <ExplorerRankBadge rank={profile.activitySummary?.rank} />
+              </div>
               <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-attraction-muted">
                 <span>{locationLabel}</span>
                 <span>{joinedLabel}</span>
@@ -226,6 +232,7 @@ export default function PublicSocialProfile() {
           )}
           {activeTab === "exploration" && (
             <ExplorationProgressSection
+              key={profile.id}
               authStatus={status}
               state={sectionState}
               t={t}
@@ -248,18 +255,13 @@ export default function PublicSocialProfile() {
 function OverviewSection({ profile, t }) {
   return (
     <div>
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <p className="text-sm font-semibold text-attraction-primary">
-            {t("travelActivity")}
-          </p>
-          <h2 className="mt-1 text-xl font-bold text-attraction-ink">
-            {t("publicActivitySummary")}
-          </h2>
-        </div>
-        <span className="rounded-full bg-attraction-surface-soft px-3 py-1 text-xs font-semibold text-attraction-muted">
-          {t("seeActivityTabs")}
-        </span>
+      <div>
+        <p className="text-sm font-semibold text-attraction-primary">
+          {t("travelActivity")}
+        </p>
+        <h2 className="mt-1 text-xl font-bold text-attraction-ink">
+          {t("publicActivitySummary")}
+        </h2>
       </div>
       <div className="mt-5 grid gap-4 sm:grid-cols-3">
         <SummaryCard
@@ -276,9 +278,6 @@ function OverviewSection({ profile, t }) {
           suffix="%"
         />
       </div>
-      <p className="mt-5 rounded-[10px] bg-[#EAF3FA] px-4 py-3 text-sm leading-relaxed text-attraction-body">
-        {t("visitsBasedOnVerified")}
-      </p>
     </div>
   );
 }
@@ -375,6 +374,26 @@ function ReviewsSection({ state, t, lang }) {
 }
 
 function ExplorationProgressSection({ authStatus, state, t }) {
+  const [page, setPage] = useState(1);
+  const attractions = state.data?.visitedAttractions || [];
+  const totalPages = Math.max(
+    1,
+    Math.ceil(attractions.length / VERIFIED_LOCATIONS_PAGE_SIZE)
+  );
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * VERIFIED_LOCATIONS_PAGE_SIZE;
+  const visibleAttractions = attractions.slice(
+    pageStart,
+    pageStart + VERIFIED_LOCATIONS_PAGE_SIZE
+  );
+
+  function changePage(nextPage) {
+    setPage(nextPage);
+    document
+      .getElementById("verified-locations-heading")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   if (authStatus === "loading") {
     return <SectionSkeleton label={t("checkingAccess")} />;
   }
@@ -408,7 +427,6 @@ function ExplorationProgressSection({ authStatus, state, t }) {
     );
   }
 
-  const attractions = state.data?.visitedAttractions || [];
   if (attractions.length === 0) {
     return (
       <div>
@@ -451,8 +469,20 @@ function ExplorationProgressSection({ authStatus, state, t }) {
       </p>
       <ExploredAttractionList
         title={t("verifiedLocations")}
-        attractions={attractions}
+        attractions={visibleAttractions}
         t={t}
+        headingId="verified-locations-heading"
+      />
+      <Pagination
+        page={currentPage}
+        totalPages={totalPages}
+        onPageChange={changePage}
+        ariaLabel={t("verifiedLocations")}
+        getPageAriaLabel={(pageNumber) =>
+          t("verifiedLocationsGoToPage", { page: pageNumber })
+        }
+        previousLabel={t("previous")}
+        nextLabel={t("next")}
       />
     </div>
   );
@@ -611,10 +641,12 @@ function ComparisonMap({ label, attractions, t }) {
   );
 }
 
-function ExploredAttractionList({ title, attractions, t }) {
+function ExploredAttractionList({ title, attractions, t, headingId }) {
   return (
     <section className="mt-6">
-      <h3 className="text-base font-bold text-attraction-ink">{title}</h3>
+      <h3 id={headingId} className="text-base font-bold text-attraction-ink">
+        {title}
+      </h3>
       {attractions.length === 0 ? (
         <p className="mt-2 rounded-[10px] bg-attraction-surface-soft px-4 py-3 text-sm text-attraction-muted">
           {t("noAttractionsInGroup")}

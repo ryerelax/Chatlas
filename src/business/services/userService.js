@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { getPublicExplorationSummaries } from "@/business/services/publicExplorationSummaryService";
 import {
   findPublicUserById,
   findPublicUsers,
@@ -47,6 +48,7 @@ export function createSocialProfileUserService({
   findPublicUsers: findProfiles,
   findPublicUserById: findProfileById,
   findUserByIdentity: findProfileByIdentity,
+  getPublicExplorationSummaries: getExplorationSummaries = async () => new Map(),
   isValidObjectId = mongoose.Types.ObjectId.isValid,
 }) {
   return {
@@ -70,8 +72,29 @@ export function createSocialProfileUserService({
         limit: PUBLIC_PROFILE_PAGE_SIZE,
       });
 
+      const serializedItems = items.map(serializePublicProfile);
+      const explorationSummaries = await getExplorationSummaries(
+        serializedItems.map((profile) => profile.id)
+      );
+
       return {
-        items: items.map(serializePublicProfile),
+        items: serializedItems.map((profile) => {
+          const summary = explorationSummaries.get(profile.id);
+          const hasSummary = summary?.status === "success";
+
+          return {
+            ...profile,
+            activitySummary: {
+              ...profile.activitySummary,
+              visitedAttractions: hasSummary ? summary.visitedCount : null,
+              explorationProgress: hasSummary
+                ? summary.progressPercentage
+                : null,
+              rank: hasSummary ? summary.rank : null,
+              status: hasSummary ? "success" : "unavailable",
+            },
+          };
+        }),
         total,
         page: normalizedPage,
         limit: PUBLIC_PROFILE_PAGE_SIZE,
@@ -101,6 +124,7 @@ const socialProfileUserService = createSocialProfileUserService({
   findPublicUsers,
   findPublicUserById,
   findUserByIdentity,
+  getPublicExplorationSummaries,
 });
 
 export async function getPublicProfiles(options) {

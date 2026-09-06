@@ -229,6 +229,10 @@ const translations = {
     noPublicBio: "This traveller has not added a public bio yet.",
 
     // ——— Community / reviews ———
+    communityHeroEyebrow: "Explore Melaka with the community",
+    communityHeroTitle: "Share and discover traveller experiences",
+    communityHeroDescription:
+      "Read the latest reviews, browse travel photos and join conversations about attractions across Melaka.",
     communityTitle: "Community",
     allReviews: "All reviews",
     latestReviews: "Latest reviews",
@@ -285,6 +289,10 @@ const translations = {
     stars: "stars",
 
     // ——— Map ———
+    mapHeroEyebrow: "Explore Melaka with the community",
+    mapHeroTitle: "Map your Melaka journey",
+    mapHeroDescription:
+      "Discover attractions across Melaka and keep track of the places you’ve explored.",
     mapTitle: "Exploration Map",
     mapLoading: "Loading map...",
     mapFailed: "Failed to load map",
@@ -297,6 +305,13 @@ const translations = {
     zoomOut: "Zoom out",
 
     // ——— Travellers / social ———
+    travellersHeroEyebrow: "Explore Melaka with the community",
+    travellersHeroTitle: "Discover fellow travellers",
+    travellersHeroDescription:
+      "Browse public profiles, read traveller experiences and see how others are exploring Melaka.",
+    noBioAddedYet: "No bio added yet.",
+    noProfileDetailsYet: "No profile details yet.",
+    travellersGoToPage: "Go to traveller page {page}",
     travellersTitle: "Travellers",
     searchTravellers: "Search travellers",
     publicProfile: "Public profile",
@@ -405,8 +420,6 @@ const translations = {
     exploreProgressTab: "Explore progress",
     compare: "Compare",
     publicActivitySummary: "Public activity summary",
-    seeActivityTabs: "See activity tabs",
-    visitsBasedOnVerified: "Visits and progress are based on verified visits.",
 
     selectCategory: "Select a category",
     attractionDescriptionPlaceholder: "Short introduction shown on the public listing",
@@ -425,10 +438,8 @@ const translations = {
     compare: "Compare",
     travelActivity: "Travel activity",
     publicActivitySummary: "Public activity summary",
-    seeActivityTabs: "See activity tabs",
     reviewsWritten: "Reviews written",
     attractionsVisited: "Attractions visited",
-    visitsBasedOnVerified: "Visits and progress are based on verified visits.",
     profileNotFound: "User profile not found",
     profileDoesNotExist: "This public profile does not exist.",
     browseTravellers: "Browse traveller profiles",
@@ -448,6 +459,7 @@ const translations = {
     verifiedExplorationMap: "Verified exploration map",
     verifiedAttractionsCount: "{count} verified attraction(s)",
     verifiedLocations: "Verified locations",
+    verifiedLocationsGoToPage: "Go to verified locations page {page}",
     onlyVerifiedShown: "Only verified visits are shown. Precise verification coordinates and photo evidence remain private.",
     loginToCompare: "Log in to compare explored places",
     loginToCompareHint: "Log in with Google to compare your verified exploration with {name}.",
@@ -727,6 +739,10 @@ const translations = {
     travelActivityComingSoon: "更多旅行动态将在后续更新中显示。",
     noPublicBio: "这位旅人尚未添加公开简介。",
 
+    communityHeroEyebrow: "与社群一起探索马六甲",
+    communityHeroTitle: "分享并发现旅人体验",
+    communityHeroDescription:
+      "阅读最新评价、浏览旅行照片，并参与关于马六甲景点的讨论。",
     communityTitle: "社区",
     allReviews: "全部评价",
     latestReviews: "最新评价",
@@ -782,6 +798,9 @@ const translations = {
     noCommunityReviews: "还没有评价，来当第一个分享的人吧。",
     stars: "星",
 
+    mapHeroEyebrow: "与社群一起探索马六甲",
+    mapHeroTitle: "在地图上记录你的马六甲旅程",
+    mapHeroDescription: "发现马六甲各地的景点，并记录你探索过的地方。",
     mapTitle: "探索地图",
     mapLoading: "地图加载中...",
     mapFailed: "地图加载失败",
@@ -793,6 +812,13 @@ const translations = {
     zoomIn: "放大",
     zoomOut: "缩小",
 
+    travellersHeroEyebrow: "与社群一起探索马六甲",
+    travellersHeroTitle: "发现同行旅人",
+    travellersHeroDescription:
+      "浏览公开个人资料、阅读旅人体验，并了解其他人如何探索马六甲。",
+    noBioAddedYet: "尚未添加个人简介。",
+    noProfileDetailsYet: "暂无个人资料。",
+    travellersGoToPage: "前往旅人列表第 {page} 页",
     travellersTitle: "旅人",
     searchTravellers: "搜索旅人",
     publicProfile: "公开资料",
@@ -902,10 +928,8 @@ const translations = {
     compare: "对比",
     travelActivity: "旅行动态",
     publicActivitySummary: "公开活动摘要",
-    seeActivityTabs: "查看活动标签",
     reviewsWritten: "已写评价",
     attractionsVisited: "已访景点",
-    visitsBasedOnVerified: "访问与进度基于已验证的到访。",
     profileNotFound: "未找到用户资料",
     profileDoesNotExist: "此公开资料不存在。",
     browseTravellers: "浏览旅人资料",
@@ -925,6 +949,7 @@ const translations = {
     verifiedExplorationMap: "已验证探索地图",
     verifiedAttractionsCount: "{count} 个已验证景点",
     verifiedLocations: "已验证地点",
+    verifiedLocationsGoToPage: "前往已验证地点第 {page} 页",
     onlyVerifiedShown: "仅显示已验证到访。精确验证坐标与照片证据保持私密。",
     loginToCompare: "登录后对比探索地点",
     loginToCompareHint: "使用 Google 登录，与 {name} 对比已验证的探索。",
@@ -1215,6 +1240,10 @@ const translations = {
       "Lebih banyak aktiviti perjalanan akan dipaparkan kemudian.",
     noPublicBio: "Pengembara ini belum menambah bio awam.",
 
+    communityHeroEyebrow: "Terokai Melaka bersama komuniti",
+    communityHeroTitle: "Kongsi dan temui pengalaman pengembara",
+    communityHeroDescription:
+      "Baca ulasan terkini, lihat foto perjalanan dan sertai perbualan tentang tarikan di seluruh Melaka.",
     communityTitle: "Komuniti",
     allReviews: "Semua ulasan",
     latestReviews: "Ulasan terkini",
@@ -1270,6 +1299,10 @@ const translations = {
     noCommunityReviews: "Tiada ulasan lagi. Jadilah yang pertama.",
     stars: "bintang",
 
+    mapHeroEyebrow: "Terokai Melaka bersama komuniti",
+    mapHeroTitle: "Petakan perjalanan anda di Melaka",
+    mapHeroDescription:
+      "Temui tarikan di seluruh Melaka dan rekod tempat yang telah anda terokai.",
     mapTitle: "Peta Penerokaan",
     mapLoading: "Memuatkan peta...",
     mapFailed: "Gagal memuatkan peta",
@@ -1281,6 +1314,13 @@ const translations = {
     zoomIn: "Zum masuk",
     zoomOut: "Zum keluar",
 
+    travellersHeroEyebrow: "Terokai Melaka bersama komuniti",
+    travellersHeroTitle: "Temui rakan pengembara",
+    travellersHeroDescription:
+      "Layari profil awam, baca pengalaman pengembara dan lihat cara orang lain menerokai Melaka.",
+    noBioAddedYet: "Belum ada bio.",
+    noProfileDetailsYet: "Belum ada butiran profil.",
+    travellersGoToPage: "Pergi ke halaman pengembara {page}",
     travellersTitle: "Pengembara",
     searchTravellers: "Cari pengembara",
     publicProfile: "Profil awam",
@@ -1398,10 +1438,8 @@ const translations = {
     compare: "Banding",
     travelActivity: "Aktiviti perjalanan",
     publicActivitySummary: "Ringkasan aktiviti awam",
-    seeActivityTabs: "Lihat tab aktiviti",
     reviewsWritten: "Ulasan ditulis",
     attractionsVisited: "Tarikan dilawati",
-    visitsBasedOnVerified: "Lawatan dan kemajuan berdasarkan lawatan disahkan.",
     profileNotFound: "Profil pengguna tidak dijumpai",
     profileDoesNotExist: "Profil awam ini tidak wujud.",
     browseTravellers: "Semak profil pengembara",
@@ -1421,6 +1459,7 @@ const translations = {
     verifiedExplorationMap: "Peta penerokaan disahkan",
     verifiedAttractionsCount: "{count} tarikan disahkan",
     verifiedLocations: "Lokasi disahkan",
+    verifiedLocationsGoToPage: "Pergi ke halaman lokasi disahkan {page}",
     onlyVerifiedShown: "Hanya lawatan disahkan dipaparkan. Koordinat pengesahan dan bukti foto kekal peribadi.",
     loginToCompare: "Log masuk untuk banding tempat diterokai",
     loginToCompareHint: "Log masuk dengan Google untuk banding penerokaan disahkan anda dengan {name}.",
