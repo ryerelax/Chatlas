@@ -1515,8 +1515,8 @@ test("public photos are flattened and globally sorted newest-first by capturedAt
         user: { displayName: "Older group", profilePicture: "" },
         canDelete: false,
         photos: [
-          { _id: PHOTO_ID, photoUrl: "https://example.test/oldest.jpg", capturedAt: "2026-08-15T08:00:00.000Z" },
-          { _id: "64b000000000000000000006", photoUrl: "https://example.test/newest.jpg", capturedAt: "2026-08-15T12:00:00.000Z" },
+          { _id: PHOTO_ID, photoUrl: "https://res.cloudinary.com/chatlas/image/upload/oldest.jpg", capturedAt: "2026-08-15T08:00:00.000Z" },
+          { _id: "64b000000000000000000006", photoUrl: "https://res.cloudinary.com/chatlas/image/upload/newest.jpg", capturedAt: "2026-08-15T12:00:00.000Z" },
         ],
       },
       {
@@ -1524,7 +1524,7 @@ test("public photos are flattened and globally sorted newest-first by capturedAt
         user: { displayName: "Newer group", profilePicture: "" },
         canDelete: false,
         photos: [
-          { _id: "64b000000000000000000008", photoUrl: "https://example.test/middle.jpg", capturedAt: "2026-08-15T10:00:00.000Z" },
+          { _id: "64b000000000000000000008", photoUrl: "https://res.cloudinary.com/chatlas/image/upload/middle.jpg", capturedAt: "2026-08-15T10:00:00.000Z" },
         ],
       },
     ],
@@ -1532,9 +1532,9 @@ test("public photos are flattened and globally sorted newest-first by capturedAt
 
   const result = await service.getPublicVerifiedPhotos(ATTRACTION_ID);
   assert.deepEqual(result.map((card) => card.photoUrl), [
-    "https://example.test/newest.jpg",
-    "https://example.test/middle.jpg",
-    "https://example.test/oldest.jpg",
+    "https://res.cloudinary.com/chatlas/image/upload/newest.jpg",
+    "https://res.cloudinary.com/chatlas/image/upload/middle.jpg",
+    "https://res.cloudinary.com/chatlas/image/upload/oldest.jpg",
   ]);
 });
 

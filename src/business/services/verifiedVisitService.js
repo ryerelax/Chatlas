@@ -218,23 +218,60 @@ function replayMatchesUploadedBatch(visit, uploadedAssets) {
   ));
 }
 
+function normalisePublicCloudinaryPhotoUrl(value) {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return "";
+  }
+
+  try {
+    const url = new URL(value.trim());
+
+    if (
+      url.protocol !== "https:"
+      || url.username
+      || url.password
+      || url.hostname !== "res.cloudinary.com"
+      || url.port
+      || url.pathname === "/"
+    ) {
+      return "";
+    }
+
+    return url.toString();
+  } catch {
+    return "";
+  }
+}
+
 function toSafePublicCards(visits, attractionId) {
   return visits
-    .flatMap((visit) => (visit.photos || []).map((photo) => ({
-      visitId: safeString(visit._id),
-      photoId: safeString(photo._id),
-      attractionId: safeString(attractionId),
-      photoUrl: photo.photoUrl,
-      capturedDate: toIsoString(photo.capturedAt),
-      user: {
-        displayName: visit.user?.displayName || visit.user?.name || "Chatlas user",
-        avatarUrl: visit.user?.profilePicture || "",
-      },
-      verified: true,
-      canDelete: Boolean(visit.canDelete),
-    })))
+    .flatMap((visit) => (visit.photos || []).flatMap((photo) => {
+      const photoUrl = normalisePublicCloudinaryPhotoUrl(photo?.photoUrl);
+
+      if (!photoUrl) {
+        return [];
+      }
+
+      return [{
+        visitId: safeString(visit._id),
+        photoId: safeString(photo._id),
+        attractionId: safeString(attractionId),
+        photoUrl,
+        capturedDate: toIsoString(photo.capturedAt),
+        user: {
+          displayName:
+            visit.user?.displayName
+            || visit.user?.name
+            || "Chatlas user",
+          avatarUrl: visit.user?.profilePicture || "",
+        },
+        verified: true,
+        canDelete: Boolean(visit.canDelete),
+      }];
+    }))
     .sort((first, second) => (
-      new Date(second.capturedDate).getTime() - new Date(first.capturedDate).getTime()
+      new Date(second.capturedDate).getTime()
+      - new Date(first.capturedDate).getTime()
     ));
 }
 
