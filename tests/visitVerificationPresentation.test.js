@@ -15,10 +15,10 @@ import {
   selectSafeApiMessage,
   stopMediaStream,
 } from "../src/presentation/lib/visitVerificationPresentation.js";
+import { readFile } from "node:fs/promises";
 
 const METRES_PER_RADIAN = 6371000;
-const DAILY_LIMIT_MESSAGE =
-  "You have already verified this attraction today. You can add a new photo on another Malaysia date.";
+const DAILY_LIMIT_MESSAGE = "verifiedVisitLimitReached";
 const latitudeOffset = (metres) =>
   (metres / METRES_PER_RADIAN) * (180 / Math.PI);
 
@@ -799,31 +799,69 @@ test("no-nearby copy preserves a just-outside decimal distance", () => {
   );
 });
 
-test("geolocation browser errors map to actionable public messages", () => {
-  assert.match(getGeolocationErrorMessage({ code: 1 }), /denied/i);
-  assert.match(getGeolocationErrorMessage({ code: 2 }), /unavailable/i);
-  assert.match(getGeolocationErrorMessage({ code: 3 }), /timed out/i);
-  assert.match(getGeolocationErrorMessage({ code: 99 }), /current location/i);
+test("geolocation browser errors map to actionable localization keys", () => {
+  assert.equal(
+    getGeolocationErrorMessage({ code: 1 }),
+    "locationAccessDenied"
+  );
+  assert.equal(
+    getGeolocationErrorMessage({ code: 2 }),
+    "locationUnavailable"
+  );
+  assert.equal(
+    getGeolocationErrorMessage({ code: 3 }),
+    "locationTimeout"
+  );
+  assert.equal(
+    getGeolocationErrorMessage({ code: 99 }),
+    "locationConfirmFailed"
+  );
+
   assert.doesNotMatch(
-    getGeolocationErrorMessage({ code: 99, message: "private browser detail" }),
-    /private browser detail/i
+    getGeolocationErrorMessage({
+      code: 99,
+      message: "private location details",
+    }),
+    /private location details/i
   );
 });
 
-test("camera browser errors map by safe error name without exposing details", () => {
-  assert.match(getCameraErrorMessage({ name: "NotAllowedError" }), /denied/i);
-  assert.match(getCameraErrorMessage({ name: "SecurityError" }), /denied/i);
-  assert.match(getCameraErrorMessage({ name: "NotFoundError" }), /not found/i);
-  assert.match(getCameraErrorMessage({ name: "OverconstrainedError" }), /not found/i);
-  assert.match(getCameraErrorMessage({ name: "NotReadableError" }), /unavailable|in use/i);
-  assert.match(getCameraErrorMessage({ name: "AbortError" }), /unavailable|in use/i);
-  assert.match(getCameraErrorMessage({ name: "UnknownError" }), /camera/i);
+test("camera browser errors map by safe error name to localization keys", () => {
+  assert.equal(
+    getCameraErrorMessage({ name: "NotAllowedError" }),
+    "cameraAccessDenied"
+  );
+  assert.equal(
+    getCameraErrorMessage({ name: "SecurityError" }),
+    "cameraAccessDenied"
+  );
+  assert.equal(
+    getCameraErrorMessage({ name: "NotFoundError" }),
+    "cameraNotFound"
+  );
+  assert.equal(
+    getCameraErrorMessage({ name: "OverconstrainedError" }),
+    "cameraNotFound"
+  );
+  assert.equal(
+    getCameraErrorMessage({ name: "NotReadableError" }),
+    "cameraInUse"
+  );
+  assert.equal(
+    getCameraErrorMessage({ name: "AbortError" }),
+    "cameraInUse"
+  );
+  assert.equal(
+    getCameraErrorMessage({ name: "UnknownError" }),
+    "cameraOpenFailed"
+  );
+
   assert.doesNotMatch(
     getCameraErrorMessage({
       name: "UnknownError",
-      message: "private device identifier",
+      message: "private camera details",
     }),
-    /private device identifier/i
+    /private camera details/i
   );
 });
 
@@ -937,10 +975,10 @@ test("capacity is claimed once and zero slots never permit a camera claim", () =
   assert.equal(controller.claimCamera(operationToken), false);
 });
 
-test("the full-capacity message directs the user to another Malaysia date", () => {
+test("the full-capacity helper returns its localization key", () => {
   assert.equal(
     visitVerificationPresentation.getVerifiedVisitLimitReachedMessage(),
-    "You have already verified this attraction today. You can add a new photo on another Malaysia date."
+    "verifiedVisitLimitReached"
   );
 });
 
@@ -1043,14 +1081,14 @@ test("the controller owns one current capture and replacing it revokes the old p
   assert.deepEqual(resources.revoked, ["blob:first"]);
 });
 
-test("the single-photo upload label is exact", () => {
+test("the single-photo upload label key is exact", () => {
   assert.equal(
     typeof visitVerificationPresentation.getVerifiedVisitUploadLabel,
     "function"
   );
   assert.equal(
     visitVerificationPresentation.getVerifiedVisitUploadLabel(),
-    "Upload Photo"
+    "uploadPhoto"
   );
 });
 
@@ -1439,4 +1477,53 @@ test("object URL cleanup revokes only usable object URLs", () => {
   revokeObjectUrl(null, urlApi);
 
   assert.deepEqual(revoked, ["blob:verified-photo"]);
+});
+
+test("visit verification consumers translate semantic keys at the UI boundary", async () => {
+  const [flowSource, languageSource] = await Promise.all([
+    readFile(
+      new URL(
+        "../src/presentation/components/VisitVerificationFlow.js",
+        import.meta.url
+      ),
+      "utf8"
+    ),
+    readFile(
+      new URL(
+        "../src/presentation/contexts/LanguageContext.js",
+        import.meta.url
+      ),
+      "utf8"
+    ),
+  ]);
+
+  assert.match(
+    flowSource,
+    /t\(getVerifiedVisitUploadLabel\(\)\)/
+  );
+  assert.match(
+    flowSource,
+    /t\(getVerifiedVisitLimitReachedMessage\(\)\)/
+  );
+  assert.match(
+    flowSource,
+    /\?\s*t\(errorMessage\)/
+  );
+
+  assert.match(
+    languageSource,
+    /locationTimeout:\s*"Finding your current location timed out\./
+  );
+  assert.match(
+    languageSource,
+    /cameraNotFound:\s*"A usable camera was not found on this device\."/
+  );
+  assert.match(
+    languageSource,
+    /verifiedVisitLimitReached:\s*"You have already verified this attraction today\./
+  );
+  assert.match(
+    languageSource,
+    /uploadPhoto:\s*"Upload Photo"/
+  );
 });
