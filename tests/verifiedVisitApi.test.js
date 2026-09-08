@@ -815,6 +815,7 @@ test("public GET returns only the safe service result", async () => {
 
 test("public GET exposes exact safe card keys in newest-first order", async () => {
   const attractionId = "507f1f77bcf86cd799439011";
+
   const service = createVerifiedVisitService({
     isValidObjectId: (value) => value === attractionId,
     findPublicVerifiedPhotos: async () => [
@@ -829,7 +830,8 @@ test("public GET exposes exact safe card keys in newest-first order", async () =
         canDelete: false,
         photos: [{
           _id: "photo-older",
-          photoUrl: "https://images.example/older.jpg",
+          photoUrl:
+            "https://res.cloudinary.com/chatlas/image/upload/older.jpg",
           capturedAt: "2026-08-15T08:00:00.000Z",
           latitude: 2.1944,
           cloudinaryPublicId: "private/older",
@@ -844,7 +846,8 @@ test("public GET exposes exact safe card keys in newest-first order", async () =
         canDelete: true,
         photos: [{
           _id: "photo-newer",
-          photoUrl: "https://images.example/newer.jpg",
+          photoUrl:
+            "https://res.cloudinary.com/chatlas/image/upload/newer.jpg",
           capturedAt: "2026-08-15T12:00:00.000Z",
           distanceMeters: 12,
           accuracyMeters: 8,
@@ -852,15 +855,22 @@ test("public GET exposes exact safe card keys in newest-first order", async () =
       },
     ],
   });
+
   const GET = createPublicHandler({
     getPublicVerifiedPhotos: service.getPublicVerifiedPhotos,
   });
 
-  const response = await GET(null, { params: Promise.resolve({ id: attractionId }) });
+  const response = await GET(null, {
+    params: Promise.resolve({ id: attractionId }),
+  });
   const body = await response.json();
 
   assert.equal(response.status, 200);
-  assert.deepEqual(body.data.map((card) => card.photoId), ["photo-newer", "photo-older"]);
+  assert.deepEqual(
+    body.data.map((card) => card.photoId),
+    ["photo-newer", "photo-older"]
+  );
+
   for (const card of body.data) {
     assert.deepEqual(Object.keys(card).sort(), [
       "attractionId",
@@ -872,13 +882,80 @@ test("public GET exposes exact safe card keys in newest-first order", async () =
       "verified",
       "visitId",
     ]);
-    assert.deepEqual(Object.keys(card.user).sort(), ["avatarUrl", "displayName"]);
+    assert.deepEqual(
+      Object.keys(card.user).sort(),
+      ["avatarUrl", "displayName"]
+    );
   }
-  assert.equal(JSON.stringify(body).includes("cloudinaryPublicId"), false);
+
+  assert.equal(
+    JSON.stringify(body).includes("cloudinaryPublicId"),
+    false
+  );
   assert.equal(JSON.stringify(body).includes("latitude"), false);
   assert.equal(JSON.stringify(body).includes("accuracyMeters"), false);
   assert.equal(JSON.stringify(body).includes("distanceMeters"), false);
   assert.equal(JSON.stringify(body).includes("email"), false);
+});
+
+test("public GET omits incompatible photo URLs and keeps valid Cloudinary photos", async () => {
+  const attractionId = "507f1f77bcf86cd799439011";
+
+  const service = createVerifiedVisitService({
+    isValidObjectId: (value) => value === attractionId,
+    findPublicVerifiedPhotos: async () => [
+      {
+        _id: "visit-mixed",
+        user: {
+          displayName: "Verified visitor",
+          profilePicture: "https://profiles.example.test/avatar.jpg",
+        },
+        canDelete: false,
+        photos: [
+          {
+            _id: "photo-placeholder",
+            photoUrl: "/branding/chatlas-mark.png",
+            cloudinaryPublicId: "demo/chatlas-mark",
+            capturedAt: "2026-09-05T14:25:12.107Z",
+            latitude: 2.1944,
+            longitude: 102.2621,
+            accuracyMeters: 1,
+            distanceMeters: 0,
+          },
+          {
+            _id: "photo-real",
+            photoUrl:
+              "https://res.cloudinary.com/chatlas/image/upload/verified.jpg",
+            cloudinaryPublicId: "chatlas/verified-visits/verified",
+            capturedAt: "2026-09-05T14:20:12.107Z",
+            latitude: 2.1944,
+            longitude: 102.2621,
+            accuracyMeters: 8,
+            distanceMeters: 12,
+          },
+        ],
+      },
+    ],
+  });
+
+  const GET = createPublicHandler({
+    getPublicVerifiedPhotos: service.getPublicVerifiedPhotos,
+  });
+
+  const response = await GET(null, {
+    params: Promise.resolve({ id: attractionId }),
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(
+    body.data.map((card) => card.photoId),
+    ["photo-real"]
+  );
+  assert.equal(
+    body.data[0].photoUrl,
+    "https://res.cloudinary.com/chatlas/image/upload/verified.jpg"
+  );
 });
 
 test("public photo presentation normalises API cards and builds the owner delete URL", async () => {
