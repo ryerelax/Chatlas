@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
+import { useSession } from "next-auth/react";
 import { useReviews } from "@/presentation/contexts/ReviewsContext";
 import { useLanguage } from "@/presentation/contexts/LanguageContext";
 
@@ -10,61 +11,192 @@ const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024;
 const MAX_REVIEW_PHOTOS = 3;
 
+// Leave page longer than this → drop draft.
+// Language remount cancels the timer → keep draft on same page.
+const CLEAR_AFTER_UNMOUNT_MS = 800;
+
+const reviewFormDraftByAttraction = new Map();
+const clearTimersByAttraction = new Map();
+
+function getDraft(attractionId) {
+  return reviewFormDraftByAttraction.get(attractionId) || null;
+}
+
+function setDraft(attractionId, draft) {
+  reviewFormDraftByAttraction.set(attractionId, { ...draft });
+}
+
+function clearDraft(attractionId) {
+  reviewFormDraftByAttraction.delete(attractionId);
+}
+
+function clearAllDrafts() {
+  reviewFormDraftByAttraction.clear();
+}
+
+function cancelScheduledClear(attractionId) {
+  const timer = clearTimersByAttraction.get(attractionId);
+  if (timer) {
+    clearTimeout(timer);
+    clearTimersByAttraction.delete(attractionId);
+  }
+}
+
+function scheduleClear(attractionId) {
+  cancelScheduledClear(attractionId);
+  const timer = setTimeout(() => {
+    clearDraft(attractionId);
+    clearTimersByAttraction.delete(attractionId);
+  }, CLEAR_AFTER_UNMOUNT_MS);
+  clearTimersByAttraction.set(attractionId, timer);
+}
+
+function emptyState() {
+  return {
+    rating: 0,
+    reviewText: "",
+    errors: {},
+    statusMessageKey: "",
+    statusRawMessage: "",
+    statusType: "",
+    selectedPhotos: [],
+    nextPhotoId: 0,
+  };
+}
+
+function buildInitialState(attractionId) {
+  const existing = getDraft(attractionId);
+  if (!existing) {
+    return emptyState();
+  }
+
+  // Same-page remount (language switch): restore everything including errors.
+  return {
+    rating: existing.rating ?? 0,
+    reviewText: existing.reviewText ?? "",
+    errors: existing.errors ?? {},
+    statusMessageKey: existing.statusMessageKey ?? "",
+    statusRawMessage: existing.statusRawMessage ?? "",
+    statusType: existing.statusType ?? "",
+    selectedPhotos: existing.selectedPhotos ?? [],
+    nextPhotoId: existing.nextPhotoId ?? 0,
+  };
+}
+
 export default function ReviewForm({ attractionId, onReviewSubmitted }) {
   const { addReview } = useReviews();
   const { t } = useLanguage();
-  const [rating, setRating] = useState(0);
-  const [reviewText, setReviewText] = useState("");
-  const [errors, setErrors] = useState({});
-  const [statusMessage, setStatusMessage] = useState("");
-  const [statusType, setStatusType] = useState("");
+  const { status: sessionStatus } = useSession();
+
+  const initial = buildInitialState(attractionId);
+
+  const [rating, setRating] = useState(initial.rating);
+  const [reviewText, setReviewText] = useState(initial.reviewText);
+  const [errors, setErrors] = useState(initial.errors);
+  const [statusMessageKey, setStatusMessageKey] = useState(
+    initial.statusMessageKey
+  );
+  const [statusRawMessage, setStatusRawMessage] = useState(
+    initial.statusRawMessage
+  );
+  const [statusType, setStatusType] = useState(initial.statusType);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedPhotos, setSelectedPhotos] = useState([]);
-  const selectedPhotosRef = useRef([]);
+  const [selectedPhotos, setSelectedPhotos] = useState(initial.selectedPhotos);
+  const selectedPhotosRef = useRef(selectedPhotos);
   const photoInputRef = useRef(null);
-  const nextPhotoIdRef = useRef(0);
+  const nextPhotoIdRef = useRef(initial.nextPhotoId);
+
+  // Logout → clear drafts (privacy)
+  useEffect(() => {
+    if (sessionStatus === "unauthenticated") {
+      clearAllDrafts();
+      cancelScheduledClear(attractionId);
+      setRating(0);
+      setReviewText("");
+      setErrors({});
+      setStatusMessageKey("");
+      setStatusRawMessage("");
+      setStatusType("");
+      setSelectedPhotos([]);
+      nextPhotoIdRef.current = 0;
+    }
+  }, [sessionStatus, attractionId]);
+
+  // Cancel delayed clear on mount; schedule clear on unmount (leave page).
+  useEffect(() => {
+    cancelScheduledClear(attractionId);
+    return () => {
+      scheduleClear(attractionId);
+    };
+  }, [attractionId]);
+
+  // Persist draft only while still on this page instance
+  useEffect(() => {
+    if (sessionStatus === "unauthenticated") return;
+
+    setDraft(attractionId, {
+      rating,
+      reviewText,
+      errors,
+      statusMessageKey,
+      statusRawMessage,
+      statusType,
+      selectedPhotos,
+      nextPhotoId: nextPhotoIdRef.current,
+    });
+  }, [
+    attractionId,
+    rating,
+    reviewText,
+    errors,
+    statusMessageKey,
+    statusRawMessage,
+    statusType,
+    selectedPhotos,
+    sessionStatus,
+  ]);
 
   useEffect(() => {
     selectedPhotosRef.current = selectedPhotos;
   }, [selectedPhotos]);
 
-  useEffect(() => {
-    return () => {
-      selectedPhotosRef.current.forEach((photo) => {
-        URL.revokeObjectURL(photo.previewUrl);
-      });
-    };
-  }, []);
+  function saveErrors(nextErrors) {
+    setErrors(nextErrors);
+  }
+
+  function clearStatus() {
+    setStatusMessageKey("");
+    setStatusRawMessage("");
+    setStatusType("");
+  }
 
   function handleRatingChange(value) {
     setRating(value);
-    setStatusMessage("");
-    setStatusType("");
-    setErrors((current) => ({ ...current, rating: "" }));
+    clearStatus();
+    const next = { ...errors };
+    delete next.rating;
+    saveErrors(next);
   }
 
   function handleReviewTextChange(event) {
     setReviewText(event.target.value);
-    setStatusMessage("");
-    setStatusType("");
-    setErrors((current) => ({ ...current, reviewText: "" }));
+    clearStatus();
+    const next = { ...errors };
+    delete next.reviewText;
+    saveErrors(next);
   }
 
   function handlePhotoSelection(event) {
     const files = Array.from(event.target.files || []);
     event.target.value = "";
-    setStatusMessage("");
-    setStatusType("");
+    clearStatus();
 
     if (files.length === 0) {
       return;
     }
 
     if (selectedPhotos.length + files.length > MAX_REVIEW_PHOTOS) {
-      setErrors((current) => ({
-        ...current,
-        photos: t("uploadHint"),
-      }));
+      saveErrors({ ...errors, photos: "uploadHint" });
       return;
     }
 
@@ -73,10 +205,7 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
     );
 
     if (invalidType) {
-      setErrors((current) => ({
-        ...current,
-        photos: t("unsupportedFormat"),
-      }));
+      saveErrors({ ...errors, photos: "unsupportedFormat" });
       return;
     }
 
@@ -85,18 +214,12 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
     );
 
     if (oversizedPhoto) {
-      setErrors((current) => ({
-        ...current,
-        photos: t("fileTooLarge"),
-      }));
+      saveErrors({ ...errors, photos: "fileTooLarge" });
       return;
     }
 
     if (files.some((file) => file.size <= 0)) {
-      setErrors((current) => ({
-        ...current,
-        photos: t("errorGeneric"),
-      }));
+      saveErrors({ ...errors, photos: "errorGeneric" });
       return;
     }
 
@@ -107,7 +230,9 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
     }));
 
     setSelectedPhotos((current) => [...current, ...newPhotos]);
-    setErrors((current) => ({ ...current, photos: "" }));
+    const next = { ...errors };
+    delete next.photos;
+    saveErrors(next);
   }
 
   function handleRemovePhoto(photoId) {
@@ -120,9 +245,10 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
 
       return current.filter((photo) => photo.id !== photoId);
     });
-    setStatusMessage("");
-    setStatusType("");
-    setErrors((current) => ({ ...current, photos: "" }));
+    clearStatus();
+    const next = { ...errors };
+    delete next.photos;
+    saveErrors(next);
   }
 
   async function handleSubmit(event) {
@@ -131,43 +257,41 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
     const nextErrors = {};
 
     if (rating < 1 || rating > 5) {
-      nextErrors.rating = t("yourRating");
+      nextErrors.rating = "yourRating";
     }
 
     if (!reviewText.trim()) {
-      nextErrors.reviewText = t("reviewPlaceholder");
+      nextErrors.reviewText = "reviewPlaceholder";
     } else if (reviewText.trim().length > 1000) {
-      nextErrors.reviewText = t("errorGeneric");
+      nextErrors.reviewText = "errorGeneric";
     }
 
     if (selectedPhotos.length > MAX_REVIEW_PHOTOS) {
-      nextErrors.photos = t("uploadHint");
+      nextErrors.photos = "uploadHint";
     } else if (
       selectedPhotos.some(
         ({ file }) => !ALLOWED_PHOTO_TYPES.includes(file.type)
       )
     ) {
-      nextErrors.photos = t("unsupportedFormat");
+      nextErrors.photos = "unsupportedFormat";
     } else if (
       selectedPhotos.some(({ file }) => file.size > MAX_PHOTO_SIZE_BYTES)
     ) {
-      nextErrors.photos = t("fileTooLarge");
+      nextErrors.photos = "fileTooLarge";
     } else if (selectedPhotos.some(({ file }) => file.size <= 0)) {
-      nextErrors.photos = t("errorGeneric");
+      nextErrors.photos = "errorGeneric";
     }
 
-    setErrors(nextErrors);
+    saveErrors(nextErrors);
 
     if (Object.keys(nextErrors).length > 0) {
-      setStatusMessage("");
-      setStatusType("");
+      clearStatus();
       return;
     }
 
     try {
       setIsSubmitting(true);
-      setStatusMessage("");
-      setStatusType("");
+      clearStatus();
 
       let response;
 
@@ -206,31 +330,49 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
           /sign in|signed in|log in|unauthorized/i.test(apiMsg);
 
         throw new Error(
-          isAuthError ? t("mustSignInToReview") : apiMsg || t("errorGeneric")
+          isAuthError ? "mustSignInToReview" : apiMsg || "errorGeneric"
         );
       }
 
-      setRating(0);
-      setReviewText("");
-      setErrors({});
       selectedPhotos.forEach((photo) => {
         URL.revokeObjectURL(photo.previewUrl);
       });
+      setRating(0);
+      setReviewText("");
+      saveErrors({});
       setSelectedPhotos([]);
+      nextPhotoIdRef.current = 0;
+      clearDraft(attractionId);
+      cancelScheduledClear(attractionId);
       if (photoInputRef.current) {
         photoInputRef.current.value = "";
       }
       setStatusType("success");
-      setStatusMessage(t("profileUpdated"));
+      setStatusMessageKey("profileUpdated");
+      setStatusRawMessage("");
       addReview(result.data);
       onReviewSubmitted?.(result.data);
     } catch (error) {
+      const msg = error?.message || "errorGeneric";
       setStatusType("error");
-      setStatusMessage(error.message || t("errorGeneric"));
+      if (
+        msg === "mustSignInToReview" ||
+        msg === "errorGeneric" ||
+        msg === "uploadHint"
+      ) {
+        setStatusMessageKey(msg);
+        setStatusRawMessage("");
+      } else {
+        setStatusMessageKey("errorGeneric");
+        setStatusRawMessage(msg);
+      }
     } finally {
       setIsSubmitting(false);
     }
   }
+
+  const statusText =
+    statusRawMessage || (statusMessageKey ? t(statusMessageKey) : "");
 
   return (
     <form
@@ -293,9 +435,7 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
             className="mt-2 text-[13px] font-medium text-attraction-body"
             aria-live="polite"
           >
-            {rating
-              ? `${rating} / 5 ${t("stars")}`
-              : t("yourRating")}
+            {rating ? `${rating} / 5 ${t("stars")}` : t("yourRating")}
           </p>
 
           {errors.rating && (
@@ -304,7 +444,7 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
               role="alert"
               className="mt-2 text-sm text-attraction-error"
             >
-              {errors.rating}
+              {t(errors.rating)}
             </p>
           )}
         </fieldset>
@@ -345,7 +485,7 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
             role="alert"
             className="mt-2 text-sm text-attraction-error"
           >
-            {errors.reviewText}
+            {t(errors.reviewText)}
           </p>
         )}
       </div>
@@ -369,7 +509,7 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
               className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3"
               aria-label={t("photos")}
             >
-              {selectedPhotos.map((photo, index) => (
+              {selectedPhotos.map((photo) => (
                 <li key={photo.id} className="min-w-0">
                   <div className="relative aspect-[4/3] overflow-hidden rounded-[10px] bg-attraction-primary-soft-strong">
                     <Image
@@ -440,13 +580,13 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
               role="alert"
               className="mt-2 text-sm text-attraction-error"
             >
-              {errors.photos}
+              {t(errors.photos)}
             </p>
           )}
         </div>
       </div>
 
-      {statusMessage && (
+      {statusText && (
         <div
           role={statusType === "error" ? "alert" : "status"}
           className={`mt-6 rounded-[10px] px-4 py-3 text-sm leading-relaxed ${
@@ -455,7 +595,7 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
               : "bg-[#E8F7EF] text-attraction-body"
           }`}
         >
-          {statusMessage}
+          {statusText}
         </div>
       )}
 

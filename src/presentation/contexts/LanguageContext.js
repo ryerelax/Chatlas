@@ -283,7 +283,7 @@ const translations = {
     postReview: "Post review",
     editReview: "Edit review",
     deleteReview: "Delete review",
-    confirmDeleteReview: "Delete?",
+    confirmDeletePhoto: "Delete this photo?",
     reviewPosted: "Review posted",
     noCommunityReviews: "No reviews yet. Be the first to share.",
     stars: "stars",
@@ -365,7 +365,7 @@ const translations = {
 
     editedAt: "Edited {date}",
     readyToEdit: "Ready to edit",
-    daysUntilEdit: "Editable in {count} day(s)",
+    daysUntilEdit: "Editable after {count} day(s)",
 
     verifiedVisitBadge: "Verified visit",
     checkingSignIn: "Checking sign-in...",
@@ -551,6 +551,10 @@ const translations = {
     wishlistAdded: "Added to wishlist! ❤️",
     wishlistUpdateFailed: "Unable to update wishlist.",
     reviewCountsLine: "{chatlas} on Chatlas, {google} on Google Maps",
+    currentProfilePicture: "Current profile picture",
+    reviewRatingRequired: "Your rating",
+    reviewContentRequired: "Share your experience...",
+    confirmDeleteReview: "Confirm delete this review?"
   },
 
   zh: {
@@ -814,7 +818,7 @@ const translations = {
     postReview: "发布评价",
     editReview: "编辑评价",
     deleteReview: "删除评价",
-    confirmDeleteReview: "确定删除？",
+    confirmDeletePhoto: "确定删除这张照片？",
     reviewPosted: "评价已发布",
     noCommunityReviews: "还没有评价，来当第一个分享的人吧。",
     stars: "星",
@@ -1062,6 +1066,10 @@ const translations = {
     wishlistAdded: "已加入心愿单！❤️",
     wishlistUpdateFailed: "无法更新心愿单。",
     reviewCountsLine: "Chatlas {chatlas} 条，Google Maps {google} 条",
+    currentProfilePicture: "当前头像",
+    reviewRatingRequired: "请选择评分",
+    reviewContentRequired: "请分享你的体验...",
+    confirmDeleteReview: "确认删除这条评价?"
   },
 
   ms: {
@@ -1336,7 +1344,7 @@ const translations = {
     postReview: "Siarkan ulasan",
     editReview: "Edit ulasan",
     deleteReview: "Padam ulasan",
-    confirmDeleteReview: "Padam ini?",
+    confirmDeletePhoto: "Padamkan gambar ini?",
     reviewPosted: "Ulasan disiar",
     noCommunityReviews: "Tiada ulasan lagi. Jadilah yang pertama.",
     stars: "bintang",
@@ -1414,7 +1422,7 @@ const translations = {
 
     editedAt: "Diedit {date}",
     readyToEdit: "Boleh diedit",
-    daysUntilEdit: "Boleh diedit dalam {count} hari",
+    daysUntilEdit: "Boleh diedit selepas {count} hari",
 
     verifiedVisitBadge: "Lawatan disahkan",
     checkingSignIn: "Menyemak log masuk...",
@@ -1593,6 +1601,10 @@ const translations = {
     wishlistAdded: "Ditambah ke senarai hajat! ❤️",
     wishlistUpdateFailed: "Tidak dapat mengemas kini senarai hajat.",
     reviewCountsLine: "{chatlas} di Chatlas, {google} di Google Maps",
+    currentProfilePicture: "Gambar profil semasa",
+    reviewRatingRequired: "Sila pilih penilaian",
+    reviewContentRequired: "Kongsi pengalaman anda...",
+    confirmDeleteReview: "Sahkan pemadaman ulasan ini?"
   },
 };
 

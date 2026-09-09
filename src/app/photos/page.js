@@ -6,11 +6,12 @@ import Image from "next/image";
 import { useSession } from "next-auth/react";
 import { useReviews } from "@/presentation/contexts/ReviewsContext";
 import { useLanguage } from "@/presentation/contexts/LanguageContext";
+import { formatLocaleDate } from "@/presentation/lib/formatLocaleDate";
 
 export default function MyPhotosPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const {
     reviews,
     isLoading: reviewsLoading,
@@ -28,8 +29,8 @@ export default function MyPhotosPage() {
   const currentProfilePicture =
     profilePictureOverride ?? session?.user?.profilePicture ?? "";
   const photos = useMemo(
-    () => buildReviewPhotos(reviews, currentProfilePicture),
-    [reviews, currentProfilePicture]
+    () => buildReviewPhotos(reviews, currentProfilePicture, lang),
+    [reviews, currentProfilePicture, lang]
   );
 
   useEffect(() => {
@@ -84,8 +85,9 @@ export default function MyPhotosPage() {
     };
   }, [refreshReviews]);
 
-  const showToast = (message, type = "success") => {
-    setToast({ message, type });
+  // Store translation key (and optional API raw message) so language switch updates toast text
+  const showToast = (messageKey, type = "success", rawMessage = null) => {
+    setToast({ messageKey, type, rawMessage });
     setTimeout(() => setToast(null), 3500);
   };
 
@@ -95,7 +97,7 @@ export default function MyPhotosPage() {
     try {
       const photo = photos.find((p) => p.id === photoId);
       if (!photo) {
-        showToast(t("errorGeneric"), "error");
+        showToast("errorGeneric", "error");
         return;
       }
 
@@ -115,17 +117,17 @@ export default function MyPhotosPage() {
       if (data.success) {
         setProfilePictureOverride(photo.url);
         localStorage.setItem("profileUpdated", "true");
-        showToast(t("profileUpdated"), "success");
+        showToast("profileUpdated", "success");
 
         setTimeout(() => {
           router.refresh();
         }, 1000);
       } else {
-        showToast(data.message || t("errorGeneric"), "error");
+        showToast("errorGeneric", "error", data.message || null);
       }
     } catch (error) {
       console.error("Error setting profile picture:", error);
-      showToast(t("errorGeneric"), "error");
+      showToast("errorGeneric", "error");
     } finally {
       setIsSettingProfile(false);
     }
@@ -151,7 +153,7 @@ export default function MyPhotosPage() {
         const data = await response.json();
 
         if (!data.success) {
-          showToast(data.message || t("errorGeneric"), "error");
+          showToast("errorGeneric", "error", data.message || null);
           setIsDeleting(false);
           return;
         }
@@ -176,7 +178,7 @@ export default function MyPhotosPage() {
 
       setDeleteTarget(null);
       localStorage.setItem("photoDeleted", "true");
-      showToast(t("profileUpdated"), "success");
+      showToast("profileUpdated", "success");
 
       await refreshReviews();
 
@@ -185,7 +187,7 @@ export default function MyPhotosPage() {
       }, 500);
     } catch (error) {
       console.error("Error deleting photo:", error);
-      showToast(t("errorGeneric"), "error");
+      showToast("errorGeneric", "error");
     } finally {
       setIsDeleting(false);
     }
@@ -249,7 +251,9 @@ export default function MyPhotosPage() {
                 </svg>
               </div>
             )}
-            <span className="flex-1 text-base font-medium">{toast.message}</span>
+            <span className="flex-1 text-base font-medium">
+              {toast.rawMessage || t(toast.messageKey)}
+            </span>
             <button
               onClick={() => setToast(null)}
               className="flex-shrink-0 text-[#65748A] transition-colors hover:text-[#10213B]"
@@ -297,7 +301,7 @@ export default function MyPhotosPage() {
               {t("delete")}?
             </h3>
             <p className="mt-2 text-center text-[#65748A]">
-              {t("confirmDeleteReview")}
+              {t("confirmDeletePhoto")}
             </p>
             <div className="mt-6 flex justify-end gap-3">
               <button
@@ -517,7 +521,7 @@ export default function MyPhotosPage() {
   );
 }
 
-function buildReviewPhotos(reviews, currentProfilePicture) {
+function buildReviewPhotos(reviews, currentProfilePicture, lang = "en") {
   const photoList = [];
   const seenUrls = new Set();
 
@@ -545,11 +549,7 @@ function buildReviewPhotos(reviews, currentProfilePicture) {
         publicId: photo.publicId,
         attractionName: review.attractionId?.name || "Unknown attraction",
         attractionId: review.attractionId?._id || review.attractionId,
-        uploadedAt: new Date(review.createdAt).toLocaleDateString("en-US", {
-          day: "numeric",
-          month: "long",
-          year: "numeric",
-        }),
+        uploadedAt: formatLocaleDate(review.createdAt, lang, "long") || "",
         isProfilePicture: photo.url === currentProfilePicture,
       });
       seenUrls.add(photo.url);

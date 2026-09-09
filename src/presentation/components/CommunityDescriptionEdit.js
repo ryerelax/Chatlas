@@ -1,11 +1,55 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { isMelakaBasedUser } from "@/business/services/locationGate";
 import { useLanguage } from "@/presentation/contexts/LanguageContext";
 
 const MAX_DESCRIPTION_LENGTH = 2000;
+const CLEAR_AFTER_UNMOUNT_MS = 800;
+const LEGACY_EDIT_KEY_PREFIX = "chatlas-community-desc-edit:";
+
+const editDraftByAttraction = new Map();
+const clearTimersByAttraction = new Map();
+
+function clearLegacySessionEdit(attractionId) {
+  try {
+    sessionStorage.removeItem(
+      `${LEGACY_EDIT_KEY_PREFIX}${attractionId || "unknown"}`
+    );
+  } catch {
+    // ignore
+  }
+}
+
+function getEditDraft(attractionId) {
+  return editDraftByAttraction.get(attractionId) || null;
+}
+
+function setEditDraft(attractionId, data) {
+  editDraftByAttraction.set(attractionId, { ...data });
+}
+
+function clearEditDraft(attractionId) {
+  editDraftByAttraction.delete(attractionId);
+}
+
+function cancelScheduledClear(attractionId) {
+  const timer = clearTimersByAttraction.get(attractionId);
+  if (timer) {
+    clearTimeout(timer);
+    clearTimersByAttraction.delete(attractionId);
+  }
+}
+
+function scheduleClear(attractionId) {
+  cancelScheduledClear(attractionId);
+  const timer = setTimeout(() => {
+    clearEditDraft(attractionId);
+    clearTimersByAttraction.delete(attractionId);
+  }, CLEAR_AFTER_UNMOUNT_MS);
+  clearTimersByAttraction.set(attractionId, timer);
+}
 
 // Wiki-style "About this attraction" editor — any Melaka-based logged-in
 // user can edit any existing attraction's description, direct and
@@ -34,16 +78,62 @@ export default function CommunityDescriptionEdit({
   const showWikidataCaption =
     descriptionSource === "wikidata" && !descriptionLastEditedBy;
 
+  useEffect(() => {
+    clearLegacySessionEdit(attractionId);
+    cancelScheduledClear(attractionId);
+
+    const draft = getEditDraft(attractionId);
+    if (draft?.isEditing) {
+      setIsEditing(true);
+      setDraftText(
+        typeof draft.draftText === "string"
+          ? draft.draftText
+          : description || ""
+      );
+    } else {
+      setIsEditing(false);
+      setDraftText(description || "");
+      setError("");
+    }
+
+    return () => {
+      scheduleClear(attractionId);
+    };
+  }, [attractionId, description]);
+
+  function persistEditState(editing, text) {
+    if (!editing) {
+      clearEditDraft(attractionId);
+      cancelScheduledClear(attractionId);
+      return;
+    }
+    setEditDraft(attractionId, {
+      isEditing: true,
+      draftText: text ?? "",
+    });
+  }
+
   function handleStartEditing() {
-    setDraftText(description || "");
+    const next = description || "";
+    setDraftText(next);
     setError("");
     setIsEditing(true);
+    persistEditState(true, next);
   }
 
   function handleCancel() {
     setDraftText(description || "");
     setError("");
     setIsEditing(false);
+    persistEditState(false, "");
+  }
+
+  function handleDraftChange(event) {
+    const next = event.target.value;
+    setDraftText(next);
+    if (isEditing) {
+      persistEditState(true, next);
+    }
   }
 
   async function handleSave() {
@@ -77,6 +167,7 @@ export default function CommunityDescriptionEdit({
         descriptionLastEditedBy: result.data.descriptionLastEditedBy,
       });
       setIsEditing(false);
+      persistEditState(false, "");
     } catch (err) {
       console.error("Failed to update attraction description:", err);
       setError(err.message);
@@ -116,7 +207,7 @@ export default function CommunityDescriptionEdit({
         <div>
           <textarea
             value={draftText}
-            onChange={(event) => setDraftText(event.target.value)}
+            onChange={handleDraftChange}
             rows={5}
             maxLength={MAX_DESCRIPTION_LENGTH}
             placeholder={t("descriptionPlaceholder")}
