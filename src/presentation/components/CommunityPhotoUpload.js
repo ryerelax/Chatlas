@@ -1,12 +1,60 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { isMelakaBasedUser } from "@/business/services/locationGate";
 import { useLanguage } from "@/presentation/contexts/LanguageContext";
 
 const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024;
+
+// After unmount, wait this long before dropping draft.
+// Language remount cancels the timer → keep expanded on same page.
+const CLEAR_AFTER_UNMOUNT_MS = 800;
+
+const LEGACY_EXPANDED_KEY_PREFIX = "chatlas-community-photo-expanded:";
+
+const pendingPhotoByAttraction = new Map();
+const clearTimersByAttraction = new Map();
+
+function clearLegacySessionExpanded(attractionId) {
+  try {
+    sessionStorage.removeItem(
+      `${LEGACY_EXPANDED_KEY_PREFIX}${attractionId || "unknown"}`
+    );
+  } catch {
+    // ignore
+  }
+}
+
+function getPending(attractionId) {
+  return pendingPhotoByAttraction.get(attractionId) || null;
+}
+
+function setPending(attractionId, data) {
+  pendingPhotoByAttraction.set(attractionId, { ...data });
+}
+
+function clearPending(attractionId) {
+  pendingPhotoByAttraction.delete(attractionId);
+}
+
+function cancelScheduledClear(attractionId) {
+  const timer = clearTimersByAttraction.get(attractionId);
+  if (timer) {
+    clearTimeout(timer);
+    clearTimersByAttraction.delete(attractionId);
+  }
+}
+
+function scheduleClear(attractionId) {
+  cancelScheduledClear(attractionId);
+  const timer = setTimeout(() => {
+    clearPending(attractionId);
+    clearTimersByAttraction.delete(attractionId);
+  }, CLEAR_AFTER_UNMOUNT_MS);
+  clearTimersByAttraction.set(attractionId, timer);
+}
 
 // Community "Add a photo" contribution — separate from the Reviews module,
 // doesn't touch or depend on its components/schema. Any Melaka-based
@@ -24,6 +72,52 @@ export default function CommunityPhotoUpload({ attractionId, onPhotoAdded }) {
   const [isUploading, setIsUploading] = useState(false);
   const [justAdded, setJustAdded] = useState(false);
 
+  // Same page (incl. any number of language switches): restore.
+  // Leave page long enough / refresh: collapsed.
+  useEffect(() => {
+    clearLegacySessionExpanded(attractionId);
+    cancelScheduledClear(attractionId);
+
+    const pending = getPending(attractionId);
+    if (pending?.expanded) {
+      setIsExpanded(true);
+      if (pending.file && pending.previewUrl) {
+        setPhotoFile(pending.file);
+        setPreviewUrl(pending.previewUrl);
+      }
+    }
+
+    return () => {
+      scheduleClear(attractionId);
+    };
+  }, [attractionId]);
+
+  function persistPending(partial) {
+    const current = getPending(attractionId) || {};
+    setPending(attractionId, {
+      expanded: partial.expanded ?? current.expanded ?? false,
+      file: partial.file !== undefined ? partial.file : current.file ?? null,
+      previewUrl:
+        partial.previewUrl !== undefined
+          ? partial.previewUrl
+          : current.previewUrl ?? "",
+    });
+  }
+
+  function setExpanded(next) {
+    setIsExpanded(next);
+    if (!next) {
+      clearPending(attractionId);
+      cancelScheduledClear(attractionId);
+    } else {
+      persistPending({
+        expanded: true,
+        file: photoFile,
+        previewUrl,
+      });
+    }
+  }
+
   function handleFileChange(event) {
     const file = event.target.files?.[0];
     setError("");
@@ -35,6 +129,7 @@ export default function CommunityPhotoUpload({ attractionId, onPhotoAdded }) {
     if (!file) {
       setPhotoFile(null);
       setPreviewUrl("");
+      persistPending({ expanded: true, file: null, previewUrl: "" });
       return;
     }
 
@@ -42,6 +137,7 @@ export default function CommunityPhotoUpload({ attractionId, onPhotoAdded }) {
       setError(t("unsupportedFormat"));
       setPhotoFile(null);
       setPreviewUrl("");
+      persistPending({ expanded: true, file: null, previewUrl: "" });
       event.target.value = "";
       return;
     }
@@ -50,12 +146,15 @@ export default function CommunityPhotoUpload({ attractionId, onPhotoAdded }) {
       setError(t("fileTooLarge"));
       setPhotoFile(null);
       setPreviewUrl("");
+      persistPending({ expanded: true, file: null, previewUrl: "" });
       event.target.value = "";
       return;
     }
 
+    const url = URL.createObjectURL(file);
     setPhotoFile(file);
-    setPreviewUrl(URL.createObjectURL(file));
+    setPreviewUrl(url);
+    persistPending({ expanded: true, file, previewUrl: url });
   }
 
   function handleCancel() {
@@ -65,6 +164,8 @@ export default function CommunityPhotoUpload({ attractionId, onPhotoAdded }) {
     setPhotoFile(null);
     setPreviewUrl("");
     setError("");
+    clearPending(attractionId);
+    cancelScheduledClear(attractionId);
     setIsExpanded(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -101,6 +202,8 @@ export default function CommunityPhotoUpload({ attractionId, onPhotoAdded }) {
       }
       setPhotoFile(null);
       setPreviewUrl("");
+      clearPending(attractionId);
+      cancelScheduledClear(attractionId);
       setIsExpanded(false);
       setJustAdded(true);
       setTimeout(() => setJustAdded(false), 4000);
@@ -142,7 +245,7 @@ export default function CommunityPhotoUpload({ attractionId, onPhotoAdded }) {
       {!isExpanded ? (
         <button
           type="button"
-          onClick={() => setIsExpanded(true)}
+          onClick={() => setExpanded(true)}
           className="rounded-[10px] border border-attraction-border-strong bg-white px-4 py-2 text-sm font-semibold text-attraction-primary-dark transition hover:bg-attraction-primary-soft"
         >
           + {t("addPhoto")}
@@ -170,6 +273,11 @@ export default function CommunityPhotoUpload({ attractionId, onPhotoAdded }) {
                   URL.revokeObjectURL(previewUrl);
                   setPhotoFile(null);
                   setPreviewUrl("");
+                  persistPending({
+                    expanded: true,
+                    file: null,
+                    previewUrl: "",
+                  });
                   if (fileInputRef.current) {
                     fileInputRef.current.value = "";
                   }
