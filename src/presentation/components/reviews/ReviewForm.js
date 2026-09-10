@@ -105,10 +105,14 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
   const selectedPhotosRef = useRef(selectedPhotos);
   const photoInputRef = useRef(null);
   const nextPhotoIdRef = useRef(initial.nextPhotoId);
+  const prevSessionStatusRef = useRef(sessionStatus);
 
   // Logout → clear drafts (privacy)
   useEffect(() => {
-    if (sessionStatus === "unauthenticated") {
+    const prev = prevSessionStatusRef.current;
+    prevSessionStatusRef.current = sessionStatus;
+
+    if (prev === "authenticated" && sessionStatus === "unauthenticated") {
       clearAllDrafts();
       cancelScheduledClear(attractionId);
       setRating(0);
@@ -132,7 +136,6 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
 
   // Persist draft only while still on this page instance
   useEffect(() => {
-    if (sessionStatus === "unauthenticated") return;
 
     setDraft(attractionId, {
       rating,
@@ -153,7 +156,6 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
     statusRawMessage,
     statusType,
     selectedPhotos,
-    sessionStatus,
   ]);
 
   useEffect(() => {

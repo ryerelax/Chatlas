@@ -99,6 +99,7 @@ export default function VisitVerificationFlow({
     useState(false);
   const [sessionAuthenticationRequired, setSessionAuthenticationRequired] =
     useState(false);
+  const [userInitiatedVerify, setUserInitiatedVerify] = useState(false);
 
   const transitionToFlowState = useCallback((nextFlowState) => {
     flowStateRef.current = nextFlowState;
@@ -307,6 +308,7 @@ export default function VisitVerificationFlow({
   );
 
   const startVerification = useCallback(() => {
+    setUserInitiatedVerify(true);
     setAuthenticationPromptVisible(false);
     setAuthenticationUnavailableVisible(false);
 
@@ -381,6 +383,7 @@ export default function VisitVerificationFlow({
     setCandidates([]);
     setSelectedAttractionId("");
     setErrorMessage("");
+    setUserInitiatedVerify(false);
     setAuthenticationPromptVisible(false);
     setAuthenticationUnavailableVisible(false);
     setSessionAuthenticationRequired(false);
@@ -750,7 +753,9 @@ export default function VisitVerificationFlow({
         )}
       </div>
 
-      {authenticationPromptVisible && effectiveAuthenticationRequired && (
+        {userInitiatedVerify &&
+        authenticationPromptVisible &&
+        effectiveAuthenticationRequired && (
         <div
           className="border-t border-[#B7E5D2] bg-white px-5 py-4 sm:px-6"
           role="status"
