@@ -8,12 +8,24 @@ import ReviewComments from "@/presentation/components/reviews/ReviewComments";
 import { useLanguage } from "@/presentation/contexts/LanguageContext";
 import { formatLocaleDate } from "@/presentation/lib/formatLocaleDate";
 
+// Language remount is usually < 800ms → keep expanded.
+// View attraction / leave and come back is usually > 800ms → collapse.
+const EXPAND_RESTORE_WINDOW_MS = 800;
+
+/** @type {Map<string, { expanded: boolean, savedAt: number }>} */
+const commentsExpandedByReviewId = new Map();
+
+function expandStorageKey(scope, reviewId) {
+  return `${scope}:${reviewId}`;
+}
+
 export default function ReviewCard({
   review = {},
   onLikeUpdated,
   showAttractionCta = false,
   attractionCtaLabel = "",
   enableComments = false,
+  persistCommentsUi = false,
 }) {
   const { status: sessionStatus } = useSession();
   const { t, lang } = useLanguage();
@@ -42,7 +54,48 @@ export default function ReviewCard({
   const [commentCount, setCommentCount] = useState(() =>
     normalizeCommentCount(review.commentCount)
   );
-  const [commentsExpanded, setCommentsExpanded] = useState(false);
+  const expandKey =
+    persistCommentsUi && reviewId
+      ? expandStorageKey("community", reviewId)
+      : "";
+
+  const [commentsExpanded, setCommentsExpanded] = useState(() => {
+    if (!expandKey) return false;
+    const entry = commentsExpandedByReviewId.get(expandKey);
+    if (!entry?.expanded) return false;
+    if (Date.now() - entry.savedAt > EXPAND_RESTORE_WINDOW_MS) {
+      commentsExpandedByReviewId.delete(expandKey);
+      return false;
+    }
+    return true;
+  });
+
+  // Keep expand + timestamp (language remount vs leave-and-return)
+  useEffect(() => {
+    if (!expandKey) return;
+    if (commentsExpanded) {
+      commentsExpandedByReviewId.set(expandKey, {
+        expanded: true,
+        savedAt: Date.now(),
+      });
+    } else {
+      commentsExpandedByReviewId.delete(expandKey);
+    }
+  }, [expandKey, commentsExpanded]);
+
+  // On unmount, refresh savedAt so "come back later" collapses
+  useEffect(() => {
+    return () => {
+      if (!expandKey) return;
+      const entry = commentsExpandedByReviewId.get(expandKey);
+      if (entry?.expanded) {
+        commentsExpandedByReviewId.set(expandKey, {
+          expanded: true,
+          savedAt: Date.now(),
+        });
+      }
+    };
+  }, [expandKey]);
   const [activePhotoIndex, setActivePhotoIndex] = useState(null);
   const dialogRef = useRef(null);
   const closeButtonRef = useRef(null);

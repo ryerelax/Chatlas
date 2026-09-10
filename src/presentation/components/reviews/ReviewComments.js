@@ -7,6 +7,28 @@ import { useLanguage } from "@/presentation/contexts/LanguageContext";
 
 const MAX_COMMENT_LENGTH = 500;
 
+const CLEAR_AFTER_UNMOUNT_MS = 800;
+
+const commentDraftByReviewId = new Map();
+const clearTimersByReviewId = new Map();
+
+function cancelScheduledClear(reviewId) {
+  const timer = clearTimersByReviewId.get(reviewId);
+  if (timer) {
+    clearTimeout(timer);
+    clearTimersByReviewId.delete(reviewId);
+  }
+}
+
+function scheduleClear(reviewId) {
+  cancelScheduledClear(reviewId);
+  const timer = setTimeout(() => {
+    commentDraftByReviewId.delete(reviewId);
+    clearTimersByReviewId.delete(reviewId);
+  }, CLEAR_AFTER_UNMOUNT_MS);
+  clearTimersByReviewId.set(reviewId, timer);
+}
+
 export default function ReviewComments({
   reviewId,
   sectionId,
@@ -20,7 +42,38 @@ export default function ReviewComments({
     totalComments: 0,
     hasNextPage: false,
   });
-  const [commentText, setCommentText] = useState("");
+  const [commentText, setCommentText] = useState(() =>
+    reviewId ? commentDraftByReviewId.get(reviewId) || "" : ""
+  );
+
+  // Cancel delayed clear on mount; schedule clear on unmount (leave page).
+  useEffect(() => {
+    if (!reviewId) return undefined;
+    cancelScheduledClear(reviewId);
+    return () => {
+      scheduleClear(reviewId);
+    };
+  }, [reviewId]);
+
+  // Keep comment draft across language remount
+  useEffect(() => {
+    if (!reviewId) return;
+    if (commentText) {
+      commentDraftByReviewId.set(reviewId, commentText);
+    } else {
+      commentDraftByReviewId.delete(reviewId);
+    }
+  }, [reviewId, commentText]);
+
+  // Keep comment draft across language remount
+  useEffect(() => {
+    if (!reviewId) return;
+    if (commentText) {
+      commentDraftByReviewId.set(reviewId, commentText);
+    } else {
+      commentDraftByReviewId.delete(reviewId);
+    }
+  }, [reviewId, commentText]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
@@ -128,6 +181,8 @@ export default function ReviewComments({
       }));
       onCommentCountChange?.(Number(result.commentCount) || 0);
       setCommentText("");
+      commentDraftByReviewId.delete(reviewId);
+      cancelScheduledClear(reviewId);
     } catch (error) {
       setFormMessage(error.message || t("reviewCommentPostFailed"));
     } finally {

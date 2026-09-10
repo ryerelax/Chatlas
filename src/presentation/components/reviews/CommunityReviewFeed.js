@@ -281,11 +281,12 @@ export default function CommunityReviewFeed() {
             </p>
 
             <div className="space-y-4">
-              {reviews.map((review) => (
+            {reviews.map((review) => (
                 <ReviewCard
                   key={review._id}
                   review={review}
                   enableComments
+                  persistCommentsUi
                   showAttractionCta
                   attractionCtaLabel={t("communityViewAttraction")}
                   onLikeUpdated={
