@@ -126,6 +126,9 @@ export default function PublicSocialProfile() {
   }, [activeTab, id, status, t]);
 
   function selectTab(tabId) {
+    // Reselecting the active tab does not rerun the loading effect.
+    if (tabId === activeTab) return;
+
     setActiveTab(tabId);
     setSectionState({
       status: tabId === "overview" ? "idle" : "loading",
