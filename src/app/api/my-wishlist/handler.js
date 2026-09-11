@@ -1,0 +1,50 @@
+const AUTH_REQUIRED_MESSAGE = "Please sign in to view your wishlist.";
+const LOAD_ERROR_MESSAGE = "Unable to load wishlist.";
+
+export function createMyWishlistHandler({
+  authenticate,
+  connectToDatabase,
+  getMyWishlist,
+  ServiceError,
+  reportError = console.error,
+}) {
+  return async function GET(request) {
+    try {
+      const session = await authenticate();
+      const userId = session?.user?.id || "";
+      if (!userId) {
+        return Response.json(
+          { success: false, message: AUTH_REQUIRED_MESSAGE },
+          { status: 401 }
+        );
+      }
+
+      const { searchParams } = new URL(request.url);
+      await connectToDatabase();
+      const result = await getMyWishlist({
+        userId,
+        page: searchParams.get("page") || 1,
+      });
+
+      return Response.json({
+        success: true,
+        count: result.pagination.total,
+        data: result.items,
+        pagination: result.pagination,
+      });
+    } catch (error) {
+      if (ServiceError && error instanceof ServiceError) {
+        return Response.json(
+          { success: false, message: error.message },
+          { status: error.statusCode }
+        );
+      }
+
+      reportError("Failed to retrieve the authenticated user's wishlist:", error);
+      return Response.json(
+        { success: false, message: LOAD_ERROR_MESSAGE },
+        { status: 500 }
+      );
+    }
+  };
+}

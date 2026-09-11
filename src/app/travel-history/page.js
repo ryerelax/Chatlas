@@ -4,270 +4,120 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useSession } from "next-auth/react";
-import { useReviews } from "@/presentation/contexts/ReviewsContext";
 import { useLanguage } from "@/presentation/contexts/LanguageContext";
 import ExplorationMap from "@/presentation/components/ExplorationMap";
-import { loadVisitedAttractionIds } from "@/presentation/lib/visitedAttractionsAdapter";
+import Pagination from "@/presentation/components/Pagination";
 import { formatLocaleDate } from "@/presentation/lib/formatLocaleDate";
 
 export default function TravelHistoryPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const { t, translateCategory, lang } = useLanguage();
-  const { reviews, loadReviews } = useReviews();
   const [activities, setActivities] = useState([]);
-  const [filteredActivities, setFilteredActivities] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isPageLoading, setIsPageLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortNewest, setSortNewest] = useState(true);
   const [expandedId, setExpandedId] = useState(null);
-  const [visitedCount, setVisitedCount] = useState(0);
-  const [visitedAttractionIds, setVisitedAttractionIds] = useState([]);
-  const [latestVerifiedAtByAttractionId, setLatestVerifiedAtByAttractionId] =
-    useState({});
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [stats, setStats] = useState({
+    placesVisited: 0,
+    reviewsWritten: 0,
+    photosUploaded: 0,
+  });
 
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/login?redirect=/travel-history");
       return;
     }
-
-    if (status === "authenticated") {
-      loadReviews(true);
-    }
-  }, [status, router, loadReviews]);
+  }, [status, router]);
 
   useEffect(() => {
     if (status !== "authenticated") return;
 
     const controller = new AbortController();
 
-    async function loadVisitedCount() {
+    async function loadTravelHistory() {
       try {
-        const result = await loadVisitedAttractionIds({
-          signal: controller.signal,
+        const params = new URLSearchParams({
+          page: String(page),
+          search: searchQuery,
+          sort: sortNewest ? "newest" : "oldest",
         });
-        if (!controller.signal.aborted && result.status === "success") {
-          setVisitedCount(result.data.length);
-          setVisitedAttractionIds(result.data);
-          setLatestVerifiedAtByAttractionId(
-            result.latestVerifiedAtByAttractionId || {}
-          );
+        const response = await fetch(`/api/travel-history?${params}`, {
+          signal: controller.signal,
+          cache: "no-store",
+        });
+        const result = await response.json();
+
+        if (!response.ok || result.success === false) {
+          throw new Error(result.message || t("travelHistoryUnavailable"));
+        }
+
+        if (!controller.signal.aborted) {
+          setActivities(Array.isArray(result.data) ? result.data : []);
+          setStats({
+            placesVisited: Number(result.stats?.placesVisited) || 0,
+            reviewsWritten: Number(result.stats?.reviewsWritten) || 0,
+            photosUploaded: Number(result.stats?.photosUploaded) || 0,
+          });
+          setTotalPages(Math.max(1, Number(result.pagination?.totalPages) || 1));
+          if (Number(result.pagination?.page) !== page) {
+            setPage(Number(result.pagination?.page) || 1);
+          }
+          setLoadError("");
         }
       } catch (error) {
         if (error?.name !== "AbortError") {
-          console.error("Failed to load visited attraction count:", error);
+          setActivities([]);
+          setLoadError(t("travelHistoryUnavailable"));
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsLoading(false);
+          setIsPageLoading(false);
         }
       }
     }
 
-    loadVisitedCount();
+    loadTravelHistory();
     return () => controller.abort();
-  }, [status]);
+  }, [page, searchQuery, sortNewest, status, t]);
 
-  useEffect(() => {
-    buildActivities();
-  }, [reviews, visitedAttractionIds, latestVerifiedAtByAttractionId]);
+  function changeSearchQuery(nextSearchQuery) {
+    setSearchQuery(nextSearchQuery);
+    setPage(1);
+    setExpandedId(null);
+    setIsPageLoading(true);
+  }
 
-  useEffect(() => {
-    applyFilters();
-  }, [activities, searchQuery, sortNewest]);
+  function changeSort(nextSort) {
+    setSortNewest(nextSort === "newest");
+    setPage(1);
+    setExpandedId(null);
+    setIsPageLoading(true);
+  }
 
-  const buildActivities = async () => {
-    setIsLoading(true);
-    try {
-      const activityMap = new Map();
-
-      const reviewItems = Array.isArray(reviews) ? reviews : [];
-
-      const attractionIds = new Set(visitedAttractionIds);
-      reviewItems.forEach((review) => {
-        const id = review.attractionId?._id || review.attractionId;
-        if (id) attractionIds.add(String(id));
-      });
-
-      const attractionDetails = {};
-      for (const id of attractionIds) {
-        try {
-          const response = await fetch(`/api/attractions/${id}`);
-          const data = await response.json();
-          if (data.success) {
-            attractionDetails[id] = data.data;
-          }
-        } catch (err) {
-          console.error(`Failed to fetch attraction ${id}:`, err);
-        }
-      }
-
-      reviewItems.forEach((review) => {
-        if (!review) return;
-
-        const rawAttractionId = review.attractionId?._id || review.attractionId;
-        if (!rawAttractionId) return;
-
-        const attractionId = String(rawAttractionId);
-        const attractionData =
-          attractionDetails[attractionId] || review.attractionId || {};
-
-        const attractionName =
-          attractionData.name ||
-          review.attractionId?.name ||
-          "Unknown attraction";
-        const attractionCategory =
-          attractionData.category ||
-          review.attractionId?.category ||
-          "Uncategorized";
-        const attractionPhotos =
-          attractionData.photos || review.attractionId?.photos || [];
-        const attractionAddress =
-          attractionData.address || review.attractionId?.address || "";
-        const attractionRating =
-          attractionData.rating || review.attractionId?.rating || 0;
-        const attractionDescription =
-          attractionData.description ||
-          review.attractionId?.description ||
-          "";
-
-        if (!activityMap.has(attractionId)) {
-          activityMap.set(attractionId, {
-            id: attractionId,
-            name: attractionName,
-            category: attractionCategory,
-            photos: attractionPhotos,
-            address: attractionAddress,
-            rating: attractionRating,
-            description: attractionDescription,
-            reviews: [],
-            visitedDate: null,
-            firstReviewDate: null,
-            lastReviewDate: null,
-          });
-        }
-
-        const entry = activityMap.get(attractionId);
-
-        const reviewPhotos = [];
-        if (
-          review.photos &&
-          Array.isArray(review.photos) &&
-          review.photos.length > 0
-        ) {
-          review.photos.forEach((photo) => {
-            if (photo) {
-              reviewPhotos.push({
-                url: photo.url || "",
-                publicId: photo.publicId || "",
-              });
-            }
-          });
-        }
-
-        entry.reviews.push({
-          id: review._id,
-          rating: review.rating || 0,
-          text: review.reviewText || "",
-          date: review.createdAt || new Date(),
-          userName: review.userName || "Anonymous",
-          userAvatar: review.userAvatar || "",
-          photos: reviewPhotos,
-        });
-
-        const reviewDate = review.createdAt
-          ? new Date(review.createdAt)
-          : new Date();
-        if (
-          !entry.firstReviewDate ||
-          reviewDate < new Date(entry.firstReviewDate)
-        ) {
-          entry.firstReviewDate = review.createdAt || new Date();
-        }
-        if (
-          !entry.lastReviewDate ||
-          reviewDate > new Date(entry.lastReviewDate)
-        ) {
-          entry.lastReviewDate = review.createdAt || new Date();
-        }
-        if (!entry.visitedDate || reviewDate > new Date(entry.visitedDate)) {
-          entry.visitedDate = review.createdAt || new Date();
-        }
-      });
-
-      visitedAttractionIds.forEach((attractionId) => {
-        if (activityMap.has(attractionId)) return;
-
-        const attractionData = attractionDetails[attractionId];
-        if (!attractionData) return;
-
-        activityMap.set(attractionId, {
-          id: attractionId,
-          name: attractionData.name || "Unknown attraction",
-          category: attractionData.category || "Uncategorized",
-          photos: attractionData.photos || [],
-          address: attractionData.address || "",
-          rating: attractionData.rating || 0,
-          description: attractionData.description || "",
-          reviews: [],
-          visitedDate: latestVerifiedAtByAttractionId[attractionId] || null,
-          firstReviewDate: null,
-          lastReviewDate: null,
-        });
-      });
-
-      for (const entry of activityMap.values()) {
-        entry.reviews.sort((a, b) => {
-          const dateA = a.date ? new Date(a.date) : new Date(0);
-          const dateB = b.date ? new Date(b.date) : new Date(0);
-          return dateB - dateA;
-        });
-      }
-
-      const activityArray = Array.from(activityMap.values());
-
-      activityArray.sort((a, b) => {
-        const dateA =
-          latestVerifiedAtByAttractionId[a.id] || a.lastReviewDate;
-        const dateB =
-          latestVerifiedAtByAttractionId[b.id] || b.lastReviewDate;
-        const normalizedDateA = dateA ? new Date(dateA) : new Date(0);
-        const normalizedDateB = dateB ? new Date(dateB) : new Date(0);
-        return normalizedDateB - normalizedDateA;
-      });
-
-      setActivities(activityArray);
-    } catch (error) {
-      console.error("Error building activities:", error);
-      setActivities([]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const applyFilters = () => {
-    let filtered = [...activities];
-
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim();
-      filtered = filtered.filter(
-        (activity) =>
-          (activity.name || "").toLowerCase().includes(query) ||
-          (activity.category || "").toLowerCase().includes(query)
-      );
-    }
-
-    if (!sortNewest) {
-      filtered.reverse();
-    }
-
-    setFilteredActivities(filtered);
-  };
+  function changePage(nextPage) {
+    if (nextPage === page) return;
+    setPage(nextPage);
+    setExpandedId(null);
+    setIsPageLoading(true);
+    document
+      .getElementById("travel-history-results")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   const toggleExpand = (id) => {
     setExpandedId(expandedId === id ? null : id);
   };
 
   const formatDate = (dateString) => {
-  if (!dateString) return "N/A";
-  return formatLocaleDate(dateString, lang, "long") || "N/A";
+    if (!dateString) return "N/A";
+    return formatLocaleDate(dateString, lang, "long") || "N/A";
   };
 
   const getReviewCount = (reviewsList) => {
@@ -294,16 +144,9 @@ export default function TravelHistoryPage() {
     return null;
   }
 
-  const totalAttractions = visitedCount;
-  const totalReviews = activities
-    ? activities.reduce(
-        (sum, a) => sum + (a.reviews ? a.reviews.length : 0),
-        0
-      )
-    : 0;
-  const totalPhotos = activities
-    ? activities.reduce((sum, a) => sum + getTotalPhotos(a.reviews), 0)
-    : 0;
+  const totalAttractions = stats.placesVisited;
+  const totalReviews = stats.reviewsWritten;
+  const totalPhotos = stats.photosUploaded;
 
   return (
     <div className="min-h-screen bg-[#F7F9FB]">
@@ -368,12 +211,12 @@ export default function TravelHistoryPage() {
                 type="text"
                 placeholder={t("search")}
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => changeSearchQuery(e.target.value)}
                 className="w-full rounded-lg border border-[#D8E1E7] bg-white py-2 pl-10 pr-4 text-[#10213B] placeholder-[#98A2B3] transition-all focus:border-[#006C56] focus:outline-none focus:ring-2 focus:ring-[#006C56]/20"
               />
               {searchQuery && (
                 <button
-                  onClick={() => setSearchQuery("")}
+                  onClick={() => changeSearchQuery("")}
                   className="absolute right-3 top-1/2 -translate-y-1/2 transform text-[#98A2B3] hover:text-[#65748A]"
                 >
                   ✕
@@ -385,7 +228,7 @@ export default function TravelHistoryPage() {
             <span className="text-sm text-[#65748A]">{t("sortBy")}:</span>
             <select
               value={sortNewest ? "newest" : "oldest"}
-              onChange={(e) => setSortNewest(e.target.value === "newest")}
+              onChange={(e) => changeSort(e.target.value)}
               className="cursor-pointer rounded-lg border border-[#D8E1E7] bg-white px-3 py-2 text-sm text-[#10213B] outline-none focus:border-[#006C56]"
             >
               <option value="newest">{t("sortNewest")}</option>
@@ -394,26 +237,43 @@ export default function TravelHistoryPage() {
           </div>
         </div>
 
-        {!filteredActivities || filteredActivities.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <h3 className="text-xl font-semibold text-[#10213B]">
-              {searchQuery ? t("noAttractionsFound") : t("emptyHistory")}
-            </h3>
-            <p className="mt-2 text-[#65748A]">
-              {searchQuery ? t("tryChangingFilters") : t("emptyHistory")}
-            </p>
-            <button
-              onClick={() =>
-                searchQuery ? setSearchQuery("") : router.push("/")
-              }
-              className="mt-6 rounded-lg bg-[#FFAB00] px-6 py-2 font-semibold text-[#142033] transition-colors hover:bg-[#E89B00]"
+        <div
+          id="travel-history-results"
+          aria-busy={isPageLoading}
+          className={isPageLoading ? "pointer-events-none" : ""}
+        >
+          {loadError ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <h3 className="text-xl font-semibold text-[#10213B]">
+                {loadError}
+              </h3>
+            </div>
+          ) : !activities || activities.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <h3 className="text-xl font-semibold text-[#10213B]">
+                {searchQuery ? t("noAttractionsFound") : t("emptyHistory")}
+              </h3>
+              <p className="mt-2 text-[#65748A]">
+                {searchQuery ? t("tryChangingFilters") : t("emptyHistory")}
+              </p>
+              <button
+                onClick={() =>
+                  searchQuery ? changeSearchQuery("") : router.push("/")
+                }
+                className="mt-6 rounded-lg bg-[#FFAB00] px-6 py-2 font-semibold text-[#142033] transition-colors hover:bg-[#E89B00]"
+              >
+                {searchQuery
+                  ? t("clearSearchAndFilters")
+                  : t("browseAttractions")}
+              </button>
+            </div>
+          ) : (
+            <div
+              className={`space-y-4 transition-opacity ${
+                isPageLoading ? "opacity-60" : ""
+              }`}
             >
-              {searchQuery ? t("clearSearchAndFilters") : t("browseAttractions")}
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {filteredActivities.map((activity) => {
+            {activities.map((activity) => {
               const isExpanded = expandedId === activity.id;
               const coverPhoto =
                 activity.photos && activity.photos.length > 0
@@ -464,10 +324,8 @@ export default function TravelHistoryPage() {
                         </div>
                         <div className="text-right">
                           <p className="text-sm text-[#65748A]">
-                            {latestVerifiedAtByAttractionId[activity.id]
-                              ? formatDate(
-                                  latestVerifiedAtByAttractionId[activity.id]
-                                )
+                            {activity.latestVerifiedAt
+                              ? formatDate(activity.latestVerifiedAt)
                               : formatDate(activity.lastReviewDate)}
                           </p>
                         </div>
@@ -637,8 +495,22 @@ export default function TravelHistoryPage() {
                 </div>
               );
             })}
-          </div>
-        )}
+            </div>
+          )}
+          {!loadError && (
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              onPageChange={changePage}
+              ariaLabel={t("travelHistoryPagination")}
+              getPageAriaLabel={(pageNumber) =>
+                t("travelHistoryGoToPage", { page: pageNumber })
+              }
+              previousLabel={t("previous")}
+              nextLabel={t("next")}
+            />
+          )}
+        </div>
       </div>
     </div>
   );

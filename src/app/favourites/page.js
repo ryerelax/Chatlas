@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useSession } from "next-auth/react";
 import { useLanguage } from "@/presentation/contexts/LanguageContext";
+import Pagination from "@/presentation/components/Pagination";
 
 export default function FavouritesPage() {
   const { data: session, status } = useSession();
@@ -16,6 +17,59 @@ export default function FavouritesPage() {
   const [isRemoving, setIsRemoving] = useState(false);
   const [toast, setToast] = useState(null);
   const [removeTarget, setRemoveTarget] = useState(null);
+  const [page, setPage] = useState(1);
+  const [totalFavourites, setTotalFavourites] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isPageLoading, setIsPageLoading] = useState(false);
+  const requestSequenceRef = useRef(0);
+  const favouritesSectionRef = useRef(null);
+
+  const loadFavourites = useCallback(
+    async (requestedPage, signal) => {
+      const requestSequence = requestSequenceRef.current + 1;
+      requestSequenceRef.current = requestSequence;
+      setError(null);
+
+      try {
+        const response = await fetch(
+          `/api/my-favourites?page=${requestedPage}`,
+          { cache: "no-store", signal }
+        );
+        const data = await response.json();
+
+        if (!response.ok || data.success === false) {
+          throw new Error(data.message || t("favouritesUnavailable"));
+        }
+
+        if (requestSequence !== requestSequenceRef.current) return;
+
+        const resolvedPage = Math.max(
+          1,
+          Number(data.pagination?.page) || 1
+        );
+        setFavourites(Array.isArray(data.data) ? data.data : []);
+        setTotalFavourites(
+          Math.max(0, Number(data.pagination?.total) || 0)
+        );
+        setTotalPages(
+          Math.max(1, Number(data.pagination?.totalPages) || 1)
+        );
+        if (resolvedPage !== requestedPage) {
+          setPage(resolvedPage);
+        }
+      } catch (loadError) {
+        if (loadError?.name === "AbortError") return;
+        if (requestSequence !== requestSequenceRef.current) return;
+        setError(t("favouritesUnavailable"));
+      } finally {
+        if (requestSequence === requestSequenceRef.current) {
+          setIsLoading(false);
+          setIsPageLoading(false);
+        }
+      }
+    },
+    [t]
+  );
 
   const showToast = (message, type = "success") => {
     setToast({ message, type });
@@ -29,29 +83,26 @@ export default function FavouritesPage() {
   }, [status, router]);
 
   useEffect(() => {
-    if (session) {
-      loadFavourites();
-    }
-  }, [session]);
+    if (status !== "authenticated") return;
 
-  const loadFavourites = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const response = await fetch("/api/collection/favourites");
-      const data = await response.json();
+    const controller = new AbortController();
 
-      if (data.success) {
-        setFavourites(data.data || []);
-      } else {
-        setError(data.message || t("errorGeneric"));
-      }
-    } catch (err) {
-      setError(t("errorGeneric"));
-      console.error("Error loading favourites:", err);
-    } finally {
-      setIsLoading(false);
+    async function loadPage() {
+      await loadFavourites(page, controller.signal);
     }
+
+    loadPage();
+    return () => controller.abort();
+  }, [status, page, loadFavourites]);
+
+  const changePage = (nextPage) => {
+    if (nextPage === page) return;
+    setPage(nextPage);
+    setIsPageLoading(true);
+    favouritesSectionRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
   };
 
   const handleRemove = async (attractionId, attractionName) => {
@@ -67,9 +118,7 @@ export default function FavouritesPage() {
       const data = await response.json();
 
       if (data.success) {
-        setFavourites(
-          favourites.filter((item) => item.attractionId._id !== attractionId)
-        );
+        await loadFavourites(page);
         showToast(`${t("remove")}: ${attractionName || ""}`, "success");
       } else {
         showToast(data.message || t("errorGeneric"), "error");
@@ -99,7 +148,10 @@ export default function FavouritesPage() {
       <div className="flex min-h-screen flex-col items-center justify-center p-4">
         <p className="mb-4 text-red-500">{error}</p>
         <button
-          onClick={loadFavourites}
+          onClick={() => {
+            setIsLoading(true);
+            loadFavourites(page);
+          }}
           className="rounded-lg bg-amber-500 px-4 py-2 text-white hover:bg-amber-600"
         >
           {t("reset")}
@@ -172,14 +224,18 @@ export default function FavouritesPage() {
             {t("favouritesTitle")}
           </h1>
           <p className="mt-2 text-white/80">
-            {favourites.length === 0
+            {totalFavourites === 0
               ? t("emptyFavourites")
-              : t("attractionsAvailable", { count: favourites.length })}
+              : t("attractionsAvailable", { count: totalFavourites })}
           </p>
         </div>
       </div>
 
-      <div className="mx-auto max-w-6xl p-4 py-8">
+      <div
+        ref={favouritesSectionRef}
+        className="mx-auto max-w-6xl scroll-mt-4 p-4 py-8"
+        aria-busy={isPageLoading}
+      >
         {favourites.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <h3 className="text-xl font-semibold text-gray-800">
@@ -193,12 +249,17 @@ export default function FavouritesPage() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {favourites.map((item) => (
-              <div
-                key={item._id}
-                className="overflow-hidden rounded-lg bg-white shadow-md hover:shadow-lg"
-              >
+          <>
+            <div
+              className={`grid grid-cols-1 gap-6 transition-opacity md:grid-cols-2 lg:grid-cols-3 ${
+                isPageLoading ? "opacity-60" : "opacity-100"
+              }`}
+            >
+              {favourites.map((item) => (
+                <div
+                  key={item._id}
+                  className="overflow-hidden rounded-lg bg-white shadow-md hover:shadow-lg"
+                >
                 <div className="relative h-48 w-full bg-green-100">
                   {item.attractionId?.photos?.length > 0 ? (
                     <Image
@@ -247,9 +308,21 @@ export default function FavouritesPage() {
                     {t("remove")}
                   </button>
                 </div>
-              </div>
-            ))}
-          </div>
+                </div>
+              ))}
+            </div>
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              onPageChange={changePage}
+              ariaLabel={t("favouritesPagination")}
+              getPageAriaLabel={(pageNumber) =>
+                t("favouritesGoToPage", { page: pageNumber })
+              }
+              previousLabel={t("previous")}
+              nextLabel={t("next")}
+            />
+          </>
         )}
       </div>
     </div>

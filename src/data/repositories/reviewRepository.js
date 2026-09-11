@@ -337,6 +337,97 @@ export async function findReviewsByUserId(userId) {
     .lean();
 }
 
+export async function findPaginatedReviewsByUserId({
+  userId,
+  page,
+  limit,
+  searchPattern = "",
+}) {
+  const skip = (page - 1) * limit;
+  const pipeline = [
+    {
+      $match: {
+        userId:
+          userId instanceof mongoose.Types.ObjectId
+            ? userId
+            : new mongoose.Types.ObjectId(userId),
+      },
+    },
+    {
+      $lookup: {
+        from: Attraction.collection.name,
+        let: { attractionId: "$attractionId" },
+        pipeline: [
+          {
+            $match: {
+              $expr: { $eq: ["$_id", "$$attractionId"] },
+            },
+          },
+          {
+            $project: {
+              _id: 1,
+              name: 1,
+              category: 1,
+              address: 1,
+              rating: 1,
+              photos: 1,
+            },
+          },
+        ],
+        as: "_myReviewAttraction",
+      },
+    },
+    {
+      $unwind: {
+        path: "$_myReviewAttraction",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+  ];
+
+  if (searchPattern) {
+    pipeline.push({
+      $match: {
+        $or: [
+          { reviewText: { $regex: searchPattern, $options: "i" } },
+          {
+            "_myReviewAttraction.name": {
+              $regex: searchPattern,
+              $options: "i",
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  const [result] = await Review.aggregate([
+    ...pipeline,
+    { $sort: { createdAt: -1, _id: -1 } },
+    {
+      $facet: {
+        items: [
+          { $skip: skip },
+          { $limit: limit },
+          { $set: { attractionId: "$_myReviewAttraction" } },
+          { $project: { _myReviewAttraction: 0 } },
+        ],
+        metadata: [{ $count: "totalReviews" }],
+      },
+    },
+    {
+      $project: {
+        items: 1,
+        totalReviews: {
+          $ifNull: [{ $arrayElemAt: ["$metadata.totalReviews", 0] }, 0],
+        },
+      },
+    },
+  ]);
+
+  return result || { items: [], totalReviews: 0 };
+}
+
 export async function updateReviewById(reviewId, reviewData) {
   return Review.findByIdAndUpdate(
     reviewId,

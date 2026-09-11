@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useSession } from "next-auth/react";
 import { useLanguage } from "@/presentation/contexts/LanguageContext";
+import Pagination from "@/presentation/components/Pagination";
 
 export default function WishlistPage() {
   const { data: session, status } = useSession();
@@ -16,6 +17,54 @@ export default function WishlistPage() {
   const [isRemoving, setIsRemoving] = useState(false);
   const [toast, setToast] = useState(null);
   const [removeTarget, setRemoveTarget] = useState(null);
+  const [page, setPage] = useState(1);
+  const [totalWishlistItems, setTotalWishlistItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isPageLoading, setIsPageLoading] = useState(false);
+  const requestSequenceRef = useRef(0);
+  const wishlistSectionRef = useRef(null);
+
+  const loadWishlist = useCallback(
+    async (requestedPage, signal) => {
+      const requestSequence = requestSequenceRef.current + 1;
+      requestSequenceRef.current = requestSequence;
+      setError(null);
+
+      try {
+        const response = await fetch(`/api/my-wishlist?page=${requestedPage}`, {
+          cache: "no-store",
+          signal,
+        });
+        const data = await response.json();
+
+        if (!response.ok || data.success === false) {
+          throw new Error(data.message || t("wishlistUnavailable"));
+        }
+
+        if (requestSequence !== requestSequenceRef.current) return;
+
+        const resolvedPage = Math.max(1, Number(data.pagination?.page) || 1);
+        setWishlist(Array.isArray(data.data) ? data.data : []);
+        setTotalWishlistItems(
+          Math.max(0, Number(data.pagination?.total) || 0)
+        );
+        setTotalPages(Math.max(1, Number(data.pagination?.totalPages) || 1));
+        if (resolvedPage !== requestedPage) {
+          setPage(resolvedPage);
+        }
+      } catch (loadError) {
+        if (loadError?.name === "AbortError") return;
+        if (requestSequence !== requestSequenceRef.current) return;
+        setError(t("wishlistUnavailable"));
+      } finally {
+        if (requestSequence === requestSequenceRef.current) {
+          setIsLoading(false);
+          setIsPageLoading(false);
+        }
+      }
+    },
+    [t]
+  );
 
   const showToast = (message, type = "success") => {
     setToast({ message, type });
@@ -29,29 +78,26 @@ export default function WishlistPage() {
   }, [status, router]);
 
   useEffect(() => {
-    if (session) {
-      loadWishlist();
-    }
-  }, [session]);
+    if (status !== "authenticated") return;
 
-  const loadWishlist = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const response = await fetch("/api/collection/wishlist");
-      const data = await response.json();
+    const controller = new AbortController();
 
-      if (data.success) {
-        setWishlist(data.data || []);
-      } else {
-        setError(data.message || t("errorGeneric"));
-      }
-    } catch (err) {
-      setError(t("errorGeneric"));
-      console.error("Error loading wishlist:", err);
-    } finally {
-      setIsLoading(false);
+    async function loadPage() {
+      await loadWishlist(page, controller.signal);
     }
+
+    loadPage();
+    return () => controller.abort();
+  }, [status, page, loadWishlist]);
+
+  const changePage = (nextPage) => {
+    if (nextPage === page) return;
+    setPage(nextPage);
+    setIsPageLoading(true);
+    wishlistSectionRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
   };
 
   const handleRemove = async (attractionId, attractionName) => {
@@ -67,9 +113,7 @@ export default function WishlistPage() {
       const data = await response.json();
 
       if (data.success) {
-        setWishlist(
-          wishlist.filter((item) => item.attractionId._id !== attractionId)
-        );
+        await loadWishlist(page);
         window.dispatchEvent(new CustomEvent("wishlistUpdated"));
         showToast(
           `${t("remove")}: ${attractionName || ""}`,
@@ -103,7 +147,10 @@ export default function WishlistPage() {
       <div className="flex min-h-screen flex-col items-center justify-center p-4">
         <p className="mb-4 text-red-500">{error}</p>
         <button
-          onClick={loadWishlist}
+          onClick={() => {
+            setIsLoading(true);
+            loadWishlist(page);
+          }}
           className="rounded-lg bg-amber-500 px-4 py-2 text-white hover:bg-amber-600"
         >
           {t("reset")}
@@ -181,14 +228,18 @@ export default function WishlistPage() {
             {t("wishlistTitle")}
           </h1>
           <p className="mt-2 text-white/80">
-            {wishlist.length === 0
+            {totalWishlistItems === 0
               ? t("emptyWishlist")
-              : t("attractionsAvailable", { count: wishlist.length })}
+              : t("attractionsAvailable", { count: totalWishlistItems })}
           </p>
         </div>
       </div>
 
-      <div className="mx-auto max-w-6xl p-4 py-8">
+      <div
+        ref={wishlistSectionRef}
+        className="mx-auto max-w-6xl scroll-mt-4 p-4 py-8"
+        aria-busy={isPageLoading}
+      >
         {wishlist.length === 0 ? (
           <div className="flex flex-col items-center justify-center px-4 py-12 text-center">
             <h3 className="text-xl font-semibold text-gray-800">
@@ -202,8 +253,13 @@ export default function WishlistPage() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {wishlist.map((item) => (
+          <>
+            <div
+              className={`grid grid-cols-1 gap-6 transition-opacity md:grid-cols-2 lg:grid-cols-3 ${
+                isPageLoading ? "opacity-60" : "opacity-100"
+              }`}
+            >
+              {wishlist.map((item) => (
               <div
                 key={item._id}
                 className="overflow-hidden rounded-lg bg-white shadow-md transition-shadow hover:shadow-lg"
@@ -258,8 +314,20 @@ export default function WishlistPage() {
                   </button>
                 </div>
               </div>
-            ))}
-          </div>
+              ))}
+            </div>
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              onPageChange={changePage}
+              ariaLabel={t("wishlistPagination")}
+              getPageAriaLabel={(pageNumber) =>
+                t("wishlistGoToPage", { page: pageNumber })
+              }
+              previousLabel={t("previous")}
+              nextLabel={t("next")}
+            />
+          </>
         )}
       </div>
     </div>

@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useCallback, useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useReviews } from "@/presentation/contexts/ReviewsContext";
 import { useLanguage } from "@/presentation/contexts/LanguageContext";
 import Image from "next/image";
+import Pagination from "@/presentation/components/Pagination";
 import { formatLocaleDate } from "@/presentation/lib/formatLocaleDate";
 
 const STAR_OPTIONS = [1, 2, 3, 4, 5];
@@ -19,15 +20,18 @@ export default function MyReviewsPage() {
   const router = useRouter();
   const { t, translateCategory, lang } = useLanguage();
   const {
-    reviews,
-    isLoading,
-    loadReviews,
     deleteReview,
-    updateReview,
     refreshReviews,
     refreshAttractionReviews,
   } = useReviews();
+  const [reviews, setReviews] = useState([]);
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [totalReviews, setTotalReviews] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isInitialLoadPending, setIsInitialLoadPending] = useState(true);
+  const [isPageLoading, setIsPageLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
   const [editingReview, setEditingReview] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -42,6 +46,60 @@ export default function MyReviewsPage() {
   const [photosToDelete, setPhotosToDelete] = useState([]);
   const photoInputRef = useRef(null);
   const nextPhotoIdRef = useRef(0);
+  const requestSequenceRef = useRef(0);
+  const reviewsSectionRef = useRef(null);
+
+  const loadMyReviews = useCallback(
+    async (requestedPage, requestedSearch, signal) => {
+      const requestSequence = requestSequenceRef.current + 1;
+      requestSequenceRef.current = requestSequence;
+
+      try {
+        const params = new URLSearchParams({
+          page: String(requestedPage),
+          search: requestedSearch,
+        });
+        const response = await fetch(`/api/my-reviews?${params}`, {
+          cache: "no-store",
+          signal,
+        });
+        const result = await response.json();
+
+        if (!response.ok || result.success === false) {
+          throw new Error(result.message || t("myReviewsUnavailable"));
+        }
+
+        if (requestSequence !== requestSequenceRef.current) return;
+
+        const resolvedPage = Math.max(
+          1,
+          Number(result.pagination?.page) || 1
+        );
+        setReviews(Array.isArray(result.data) ? result.data : []);
+        setTotalReviews(Math.max(0, Number(result.pagination?.total) || 0));
+        setTotalPages(
+          Math.max(1, Number(result.pagination?.totalPages) || 1)
+        );
+        setLoadError("");
+        if (resolvedPage !== requestedPage) {
+          setPage(resolvedPage);
+        }
+      } catch (error) {
+        if (error?.name === "AbortError") return;
+        if (requestSequence !== requestSequenceRef.current) return;
+        setReviews([]);
+        setTotalReviews(0);
+        setTotalPages(1);
+        setLoadError(t("myReviewsUnavailable"));
+      } finally {
+        if (requestSequence === requestSequenceRef.current) {
+          setIsInitialLoadPending(false);
+          setIsPageLoading(false);
+        }
+      }
+    },
+    [t]
+  );
 
   const showToast = (message, type = "success") => {
     setToast({ message, type });
@@ -93,10 +151,17 @@ export default function MyReviewsPage() {
   }, [status, router]);
 
   useEffect(() => {
-    if (session) {
-      loadReviews();
+    if (status !== "authenticated") return;
+
+    const controller = new AbortController();
+
+    async function loadPage() {
+      await loadMyReviews(page, search, controller.signal);
     }
-  }, [session, loadReviews]);
+
+    loadPage();
+    return () => controller.abort();
+  }, [status, page, search, loadMyReviews]);
 
   useEffect(() => {
     return () => {
@@ -108,36 +173,54 @@ export default function MyReviewsPage() {
 
   useEffect(() => {
     const refreshIfNeeded = () => {
+      let needsRefresh = false;
       if (localStorage.getItem("reviewDeleted") === "true") {
         localStorage.removeItem("reviewDeleted");
-        console.log("Refreshing reviews page after delete...");
-        refreshReviews();
+        needsRefresh = true;
       }
       if (localStorage.getItem("reviewAdded") === "true") {
         localStorage.removeItem("reviewAdded");
-        console.log("Refreshing reviews page after add...");
-        refreshReviews();
+        needsRefresh = true;
+      }
+
+      if (needsRefresh) {
+        Promise.all([
+          refreshReviews(),
+          loadMyReviews(page, search),
+        ]);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        refreshIfNeeded();
       }
     };
 
     window.addEventListener("focus", refreshIfNeeded);
-    document.addEventListener("visibilitychange", () => {
-      if (!document.hidden) {
-        refreshIfNeeded();
-      }
-    });
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       window.removeEventListener("focus", refreshIfNeeded);
-      document.removeEventListener("visibilitychange", refreshIfNeeded);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [refreshReviews]);
+  }, [refreshReviews, loadMyReviews, page, search]);
 
-  const filtered = reviews.filter(
-    (r) =>
-      r.attractionId?.name?.toLowerCase().includes(search.toLowerCase()) ||
-      r.reviewText?.toLowerCase().includes(search.toLowerCase())
-  );
+  const changeSearch = (nextSearch) => {
+    setSearch(nextSearch);
+    setPage(1);
+    setIsPageLoading(true);
+  };
+
+  const changePage = (nextPage) => {
+    if (nextPage === page) return;
+    setPage(nextPage);
+    setIsPageLoading(true);
+    reviewsSectionRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  };
 
   const handleDelete = async () => {
     if (!deleteTarget || isDeleting) return;
@@ -157,7 +240,10 @@ export default function MyReviewsPage() {
 
       if (data.success) {
         setDeleteTarget(null);
-        await refreshReviews();
+        await Promise.all([
+          refreshReviews(),
+          loadMyReviews(page, search),
+        ]);
         if (deleteTarget.attractionId?._id || deleteTarget.attractionId) {
           const attractionId =
             deleteTarget.attractionId._id || deleteTarget.attractionId;
@@ -167,13 +253,19 @@ export default function MyReviewsPage() {
         showToast(t("profileUpdated"), "success");
       } else {
         showToast(data.message || t("errorGeneric"), "error");
-        await refreshReviews();
+        await Promise.all([
+          refreshReviews(),
+          loadMyReviews(page, search),
+        ]);
         setDeleteTarget(null);
       }
     } catch (err) {
       console.error("Error deleting review:", err);
       showToast(t("errorGeneric"), "error");
-      await refreshReviews();
+      await Promise.all([
+        refreshReviews(),
+        loadMyReviews(page, search),
+      ]);
       setDeleteTarget(null);
     } finally {
       setIsDeleting(false);
@@ -335,7 +427,10 @@ export default function MyReviewsPage() {
       const data = await response.json();
 
       if (data.success) {
-        await refreshReviews();
+        await Promise.all([
+          refreshReviews(),
+          loadMyReviews(page, search),
+        ]);
         showToast(t("profileUpdated"), "success");
         closeEditModal();
       } else {
@@ -349,7 +444,7 @@ export default function MyReviewsPage() {
     }
   };
 
-  if (status === "loading" || isLoading) {
+  if (status === "loading" || isInitialLoadPending) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <p className="text-[#65748A]">{t("loading")}</p>
@@ -728,9 +823,9 @@ export default function MyReviewsPage() {
           </button>
           <h1 className="text-3xl font-bold md:text-4xl">{t("myReviews")}</h1>
           <p className="mt-2 text-white/80">
-            {filtered.length === 0
+            {totalReviews === 0
               ? t("noReviewsYet")
-              : t("youHaveReviews", { count: filtered.length })}
+              : t("youHaveReviews", { count: totalReviews })}
           </p>
           <div className="mt-4 flex max-w-md items-center overflow-hidden rounded-lg bg-white">
             <div className="pl-4 text-[#98A2B3]">
@@ -752,15 +847,23 @@ export default function MyReviewsPage() {
               type="text"
               placeholder={t("search")}
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(event) => changeSearch(event.target.value)}
               className="flex-1 bg-transparent px-3 py-2 text-[#10213B] outline-none"
             />
           </div>
         </div>
       </div>
 
-      <div className="mx-auto max-w-[1200px] px-4 py-8">
-        {reviews.length === 0 ? (
+      <div
+        ref={reviewsSectionRef}
+        className="mx-auto max-w-[1200px] scroll-mt-4 px-4 py-8"
+        aria-busy={isPageLoading}
+      >
+        {loadError ? (
+          <div className="rounded-[14px] border border-[#F3B7B3] bg-[#FDECEC] px-5 py-4 text-center text-[#7A1A1A]">
+            {loadError}
+          </div>
+        ) : reviews.length === 0 && !search.trim() ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <h3 className="text-xl font-semibold text-[#10213B]">
               {t("noReviewsYet")}
@@ -772,15 +875,19 @@ export default function MyReviewsPage() {
               {t("browseAttractions")}
             </button>
           </div>
-        ) : filtered.length === 0 ? (
+        ) : reviews.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <h3 className="text-xl font-semibold text-[#10213B]">
               {t("noAttractionsFound")}
             </h3>
           </div>
         ) : (
-          <div className="space-y-6">
-            {filtered.map((review) => {
+          <div
+            className={`space-y-6 transition-opacity ${
+              isPageLoading ? "opacity-60" : "opacity-100"
+            }`}
+          >
+            {reviews.map((review) => {
               const isEditable = canEditReview(review);
               const daysUntilEdit = getDaysUntilNextEdit(review);
               const nextDate = formatNextEditDate(review);
@@ -923,6 +1030,17 @@ export default function MyReviewsPage() {
                 </div>
               );
             })}
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              onPageChange={changePage}
+              ariaLabel={t("myReviewsPagination")}
+              getPageAriaLabel={(pageNumber) =>
+                t("myReviewsGoToPage", { page: pageNumber })
+              }
+              previousLabel={t("previous")}
+              nextLabel={t("next")}
+            />
           </div>
         )}
       </div>

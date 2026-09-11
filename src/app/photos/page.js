@@ -1,49 +1,103 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useSession } from "next-auth/react";
 import { useReviews } from "@/presentation/contexts/ReviewsContext";
 import { useLanguage } from "@/presentation/contexts/LanguageContext";
+import Pagination from "@/presentation/components/Pagination";
 import { formatLocaleDate } from "@/presentation/lib/formatLocaleDate";
 
 export default function MyPhotosPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const { t, lang } = useLanguage();
-  const {
-    reviews,
-    isLoading: reviewsLoading,
-    loadReviews,
-    refreshReviews,
-  } = useReviews();
+  const { refreshReviews } = useReviews();
+  const [photos, setPhotos] = useState([]);
+  const [profilePhoto, setProfilePhoto] = useState(null);
   const [lightboxPhoto, setLightboxPhoto] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [toast, setToast] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSettingProfile, setIsSettingProfile] = useState(false);
   const [isInitialLoadPending, setIsInitialLoadPending] = useState(true);
-  const [profilePictureOverride, setProfilePictureOverride] = useState(null);
-  const hasRequestedReviewsRef = useRef(false);
-  const currentProfilePicture =
-    profilePictureOverride ?? session?.user?.profilePicture ?? "";
-  const photos = useMemo(
-    () => buildReviewPhotos(reviews, currentProfilePicture, lang),
-    [reviews, currentProfilePicture, lang]
+  const [isPageLoading, setIsPageLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [page, setPage] = useState(1);
+  const [totalPhotos, setTotalPhotos] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const requestSequenceRef = useRef(0);
+  const photosSectionRef = useRef(null);
+
+  const loadMyPhotos = useCallback(
+    async (requestedPage, signal) => {
+      const requestSequence = requestSequenceRef.current + 1;
+      requestSequenceRef.current = requestSequence;
+
+      try {
+        const response = await fetch(`/api/my-photos?page=${requestedPage}`, {
+          cache: "no-store",
+          signal,
+        });
+        const result = await response.json();
+
+        if (!response.ok || result.success === false) {
+          throw new Error(result.message || t("myPhotosUnavailable"));
+        }
+
+        if (requestSequence !== requestSequenceRef.current) return;
+
+        const resolvedPage = Math.max(
+          1,
+          Number(result.pagination?.page) || 1
+        );
+        setPhotos(Array.isArray(result.data) ? result.data : []);
+        setProfilePhoto(result.profilePhoto || null);
+        setTotalPhotos(Math.max(0, Number(result.pagination?.total) || 0));
+        setTotalPages(
+          Math.max(1, Number(result.pagination?.totalPages) || 1)
+        );
+        setLoadError("");
+        if (resolvedPage !== requestedPage) {
+          setPage(resolvedPage);
+        }
+      } catch (error) {
+        if (error?.name === "AbortError") return;
+        if (requestSequence !== requestSequenceRef.current) return;
+        setPhotos([]);
+        setProfilePhoto(null);
+        setTotalPhotos(0);
+        setTotalPages(1);
+        setLoadError(t("myPhotosUnavailable"));
+      } finally {
+        if (requestSequence === requestSequenceRef.current) {
+          setIsInitialLoadPending(false);
+          setIsPageLoading(false);
+        }
+      }
+    },
+    [t]
   );
 
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/login?redirect=/photos");
-      return;
+    }
+  }, [status, router]);
+
+  useEffect(() => {
+    if (status !== "authenticated") return;
+
+    const controller = new AbortController();
+
+    async function loadPage() {
+      await loadMyPhotos(page, controller.signal);
     }
 
-    if (status === "authenticated" && !hasRequestedReviewsRef.current) {
-      hasRequestedReviewsRef.current = true;
-      loadReviews(true).finally(() => setIsInitialLoadPending(false));
-    }
-  }, [status, router, loadReviews]);
+    loadPage();
+    return () => controller.abort();
+  }, [status, page, loadMyPhotos]);
 
   useEffect(() => {
     const refreshIfNeeded = () => {
@@ -66,7 +120,7 @@ export default function MyPhotosPage() {
       }
 
       if (needsRefresh) {
-        refreshReviews();
+        Promise.all([refreshReviews(), loadMyPhotos(page)]);
       }
     };
 
@@ -83,7 +137,18 @@ export default function MyPhotosPage() {
       window.removeEventListener("focus", refreshIfNeeded);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [refreshReviews]);
+  }, [refreshReviews, loadMyPhotos, page]);
+
+  const changePage = (nextPage) => {
+    if (nextPage === page) return;
+    setLightboxPhoto(null);
+    setPage(nextPage);
+    setIsPageLoading(true);
+    photosSectionRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  };
 
   // Store translation key (and optional API raw message) so language switch updates toast text
   const showToast = (messageKey, type = "success", rawMessage = null) => {
@@ -115,7 +180,13 @@ export default function MyPhotosPage() {
       const data = await response.json();
 
       if (data.success) {
-        setProfilePictureOverride(photo.url);
+        setProfilePhoto({ ...photo, isProfilePicture: true });
+        setPhotos((currentPhotos) =>
+          currentPhotos.map((currentPhoto) => ({
+            ...currentPhoto,
+            isProfilePicture: currentPhoto.url === photo.url,
+          }))
+        );
         localStorage.setItem("profileUpdated", "true");
         showToast("profileUpdated", "success");
 
@@ -172,7 +243,7 @@ export default function MyPhotosPage() {
         });
 
         await resetResponse.json();
-        setProfilePictureOverride("");
+        setProfilePhoto(null);
         localStorage.setItem("profileUpdated", "true");
       }
 
@@ -180,7 +251,7 @@ export default function MyPhotosPage() {
       localStorage.setItem("photoDeleted", "true");
       showToast("profileUpdated", "success");
 
-      await refreshReviews();
+      await Promise.all([refreshReviews(), loadMyPhotos(page)]);
 
       setTimeout(() => {
         router.refresh();
@@ -193,7 +264,7 @@ export default function MyPhotosPage() {
     }
   };
 
-  if (status === "loading" || isInitialLoadPending || reviewsLoading) {
+  if (status === "loading" || isInitialLoadPending) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <p className="text-[#65748A]">{t("loading")}</p>
@@ -205,7 +276,7 @@ export default function MyPhotosPage() {
     return null;
   }
 
-  const profilePic = photos.find((p) => p.isProfilePicture);
+  const profilePic = profilePhoto;
 
   return (
     <div className="min-h-screen bg-[#F7F9FB]">
@@ -334,15 +405,23 @@ export default function MyPhotosPage() {
             {t("myPhotosTitle")}
           </h1>
           <p className="mt-2 text-white/80">
-            {photos.length === 0
+            {totalPhotos === 0
               ? t("emptyPhotos")
-              : t("photosShowing", { count: photos.length })}
+              : t("photosShowing", { count: totalPhotos })}
           </p>
         </div>
       </div>
 
-      <div className="mx-auto max-w-[1200px] px-4 py-8">
-        {photos.length === 0 ? (
+      <div
+        ref={photosSectionRef}
+        className="mx-auto max-w-[1200px] scroll-mt-4 px-4 py-8"
+        aria-busy={isPageLoading}
+      >
+        {loadError ? (
+          <div className="rounded-[14px] border border-[#F3B7B3] bg-[#FDECEC] px-5 py-4 text-center text-[#7A1A1A]">
+            {loadError}
+          </div>
+        ) : photos.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <svg
               className="mb-4 h-16 w-16 text-[#98A2B3]"
@@ -392,13 +471,18 @@ export default function MyPhotosPage() {
                     {t("currentProfilePicture")}
                   </p>
                   <p className="text-sm text-[#65748A]">
-                    {profilePic.attractionName} / {profilePic.uploadedAt}
+                    {profilePic.attractionName} /{" "}
+                    {formatLocaleDate(profilePic.uploadedAt, lang, "long") || ""}
                   </p>
                 </div>
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+            <div
+              className={`grid grid-cols-2 gap-3 transition-opacity sm:grid-cols-3 md:grid-cols-4 ${
+                isPageLoading ? "opacity-60" : "opacity-100"
+              }`}
+            >
               {photos.map((photo) => (
                 <div
                   key={photo.id}
@@ -463,6 +547,17 @@ export default function MyPhotosPage() {
                 </div>
               ))}
             </div>
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              onPageChange={changePage}
+              ariaLabel={t("myPhotosPagination")}
+              getPageAriaLabel={(pageNumber) =>
+                t("myPhotosGoToPage", { page: pageNumber })
+              }
+              previousLabel={t("previous")}
+              nextLabel={t("next")}
+            />
           </>
         )}
       </div>
@@ -512,49 +607,13 @@ export default function MyPhotosPage() {
               <p className="font-semibold text-white">
                 {lightboxPhoto.attractionName}
               </p>
-              <p className="text-sm text-white/70">{lightboxPhoto.uploadedAt}</p>
+              <p className="text-sm text-white/70">
+                {formatLocaleDate(lightboxPhoto.uploadedAt, lang, "long") || ""}
+              </p>
             </div>
           </div>
         </div>
       )}
     </div>
   );
-}
-
-function buildReviewPhotos(reviews, currentProfilePicture, lang = "en") {
-  const photoList = [];
-  const seenUrls = new Set();
-
-  reviews.forEach((review) => {
-    if (!Array.isArray(review.photos)) {
-      return;
-    }
-
-    review.photos.forEach((photo, index) => {
-      if (
-        !photo ||
-        typeof photo.url !== "string" ||
-        !photo.url ||
-        typeof photo.publicId !== "string" ||
-        !photo.publicId ||
-        seenUrls.has(photo.url)
-      ) {
-        return;
-      }
-
-      photoList.push({
-        id: `${review._id}-${index}`,
-        reviewId: review._id,
-        url: photo.url,
-        publicId: photo.publicId,
-        attractionName: review.attractionId?.name || "Unknown attraction",
-        attractionId: review.attractionId?._id || review.attractionId,
-        uploadedAt: formatLocaleDate(review.createdAt, lang, "long") || "",
-        isProfilePicture: photo.url === currentProfilePicture,
-      });
-      seenUrls.add(photo.url);
-    });
-  });
-
-  return photoList;
 }
