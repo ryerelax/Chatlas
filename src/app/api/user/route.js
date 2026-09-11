@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "src/infrastructure/database/mongodb.js";
 import User from "src/data/models/User";
+import { containsProfanity } from "@/business/services/contentModerationService";
 
 function toUserPayload(user) {
   return {
@@ -81,6 +82,13 @@ export async function PUT(request) {
           code: "IMAGE_INVALID",
           message: "Profile images must be uploaded as image files.",
         },
+        { status: 400 }
+      );
+    }
+
+    if (containsProfanity(displayName) || containsProfanity(bio) || containsProfanity(location)) {
+      return NextResponse.json(
+        { success: false, message: "Please remove any inappropriate language from your profile and try again." },
         { status: 400 }
       );
     }

@@ -225,7 +225,12 @@ export default function AddAttractionPage() {
       setSessionToken(crypto.randomUUID());
       clearAllPhotos();
     } catch (error) {
-      console.error("Failed to submit attraction:", error);
+      // Expected validation/business-rule rejections (wrong category, place
+      // outside Melaka, duplicate submission, etc.) arrive here as much as
+      // genuine failures do - the message is already shown to the user via
+      // submitError below, so logging every one of them as a console.error
+      // is redundant and, in dev, trips Next.js's error overlay for what is
+      // completely normal form-validation behaviour.
       setSubmitError(error.message);
     } finally {
       setIsSubmitting(false);

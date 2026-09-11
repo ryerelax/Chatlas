@@ -13,7 +13,9 @@ import {
 } from "@/data/repositories/attractionRepository";
 import { isValidAttractionCategory } from "@/business/services/attractionCategories";
 import { classifyLocationArea } from "@/business/services/locationAreas";
+import { isMelakaPlace } from "@/business/services/attractionLocationValidation";
 import { MAX_DESCRIPTION_LENGTH, isValidDescriptionLength } from "@/business/services/descriptionValidation";
+import { containsProfanity } from "@/business/services/contentModerationService";
 import { moderateUploadedImageFiles } from "@/business/services/imageModerationService";
 
 const MIN_SEARCH_INPUT_LENGTH = 2;
@@ -85,6 +87,12 @@ export async function submitAttraction({
     );
   }
 
+  if (containsProfanity(normalizedDescription)) {
+    throw new InvalidSubmissionError(
+      "Please remove any inappropriate language from the description and try again."
+    );
+  }
+
   if (photoFiles.length > MAX_PHOTOS_PER_SUBMISSION) {
     throw new InvalidSubmissionError(`You can upload up to ${MAX_PHOTOS_PER_SUBMISSION} photos.`);
   }
@@ -98,6 +106,16 @@ export async function submitAttraction({
     apiKey,
     sessionToken,
   });
+
+  // Autocomplete's locationBias only biases suggestions toward Melaka, it
+  // doesn't restrict them — so a place selected from search results can
+  // still be outside Melaka. This is the authoritative check, against the
+  // address and coordinates Place Details just returned, not user input.
+  if (!isMelakaPlace(placeDetails)) {
+    throw new InvalidSubmissionError(
+      "This place is outside Melaka. Chatlas only accepts Melaka attractions."
+    );
+  }
 
   const locationArea = classifyLocationArea(placeDetails.address, placeDetails.name);
 

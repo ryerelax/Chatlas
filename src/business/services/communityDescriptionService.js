@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import { updateAttractionDescriptionByUser } from "@/data/repositories/attractionRepository";
 import { isMelakaBasedUser } from "@/business/services/locationGate";
 import { MAX_DESCRIPTION_LENGTH, isValidDescriptionLength } from "@/business/services/descriptionValidation";
+import { containsProfanity } from "@/business/services/contentModerationService";
 
 // Any Melaka-based logged-in user can edit the "About this attraction" text
 // for any existing active attraction — direct edit, published immediately,
@@ -28,6 +29,12 @@ export async function updateCommunityDescription({ attractionId, session, descri
   if (!isValidDescriptionLength(normalizedDescription)) {
     throw new InvalidDescriptionError(
       `Description must be ${MAX_DESCRIPTION_LENGTH} characters or fewer.`
+    );
+  }
+
+  if (containsProfanity(normalizedDescription)) {
+    throw new InvalidDescriptionError(
+      "Please remove any inappropriate language from the description and try again."
     );
   }
 
