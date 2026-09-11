@@ -24,9 +24,10 @@ export async function findAllActiveMelakaMapAttractions() {
 // Sorts findAttractions can apply directly in MongoDB, since the field
 // already lives on the document. "rating" and "mostReviewed" are NOT here -
 // combinedRating and chatlasReviewCount only exist after attractionService
-// joins in Review stats per attraction, so those sorts happen there instead
-// (see getAttractions) and this repository returns every filtered match
-// unpaginated for the service to sort and slice.
+// joins in Review stats per attraction, so those sorts (and any minRating
+// filter, which also needs combinedRating) happen there instead - see
+// getAttractions, which passes paginate: false to get every filtered match
+// back unpaginated to sort/filter/slice itself.
 const DB_SORTS = {
   name: { name: 1 },
   newest: { createdAt: -1 },
@@ -36,16 +37,15 @@ export async function findAttractions({
   search = "",
   category = "",
   locationArea = "",
-  minRating = 0,
   communitySubmitted = false,
   page = 1,
   limit = 15,
   sort = "name",
+  paginate = true,
 }) {
   const query = {
     state: "Melaka",
     isActive: true,
-    rating: { $gte: minRating },
   };
 
   if (search) {
@@ -68,9 +68,12 @@ export async function findAttractions({
     query.submittedBy = { $exists: true };
   }
 
-  const dbSort = DB_SORTS[sort];
+  // Falls back to name order for "rating"/"mostReviewed" (re-sorted in
+  // getAttractions once combinedRating exists) and is also what actually
+  // orders results for "name"/"newest" when paginate is false below.
+  const dbSort = DB_SORTS[sort] || DB_SORTS.name;
 
-  if (dbSort) {
+  if (paginate) {
     const skip = (page - 1) * limit;
 
     const [items, total] = await Promise.all([
@@ -82,7 +85,7 @@ export async function findAttractions({
   }
 
   const [items, total] = await Promise.all([
-    Attraction.find(query).sort(DB_SORTS.name).lean(),
+    Attraction.find(query).sort(dbSort).lean(),
     Attraction.countDocuments(query),
   ]);
 
