@@ -11,6 +11,7 @@ import { isValidAttractionCategory } from "@/business/services/attractionCategor
 import { classifyLocationArea } from "@/business/services/locationAreas";
 import { isValidPhotoType, isValidPhotoSize } from "@/business/services/photoValidation";
 import { MAX_DESCRIPTION_LENGTH, isValidDescriptionLength } from "@/business/services/descriptionValidation";
+import { containsProfanity } from "@/business/services/contentModerationService";
 
 const MIN_SEARCH_INPUT_LENGTH = 2;
 const MAX_PHOTOS_PER_SUBMISSION = 6;
@@ -77,6 +78,12 @@ export async function submitAttraction({
   if (!isValidDescriptionLength(normalizedDescription)) {
     throw new InvalidSubmissionError(
       `Description must be ${MAX_DESCRIPTION_LENGTH} characters or fewer.`
+    );
+  }
+
+  if (containsProfanity(normalizedDescription)) {
+    throw new InvalidSubmissionError(
+      "Please remove any inappropriate language from the description and try again."
     );
   }
 

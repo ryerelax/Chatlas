@@ -27,6 +27,7 @@ import {
   isValidPhotoSize,
   isValidPhotoType,
 } from "@/business/services/photoValidation";
+import { containsProfanity } from "@/business/services/contentModerationService";
 
 const MAX_REVIEW_PHOTOS = 3;
 const DEFAULT_REVIEW_PAGE = 1;
@@ -372,6 +373,13 @@ function normalizeReviewText(reviewText) {
   if (normalizedReviewText.length > 1000) {
     throw new ReviewServiceError(
       "Review text must be 1,000 characters or fewer.",
+      400
+    );
+  }
+
+  if (containsProfanity(normalizedReviewText)) {
+    throw new ReviewServiceError(
+      "Please remove any inappropriate language from your review and try again.",
       400
     );
   }
