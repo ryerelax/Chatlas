@@ -59,16 +59,22 @@ export async function getAttractions({
   const normalizedPage = Math.max(1, Number(page) || 1);
   const normalizedSort = VALID_SORTS.has(sort) ? sort : "name";
   const postJoinComparator = POST_JOIN_SORT_COMPARATORS[normalizedSort];
+  const needsMinRatingFilter = normalizedMinRating > 0;
+  // combinedRating only exists once the review-stats join below has run, so
+  // filtering by it (like sorting by it) can't be pushed down to MongoDB -
+  // fetch every otherwise-matching attraction unpaginated and filter/sort/
+  // slice here instead.
+  const needsPostJoinProcessing = Boolean(postJoinComparator) || needsMinRatingFilter;
 
-  const { items, total } = await findAttractions({
+  const { items, total: unfilteredTotal } = await findAttractions({
     search: normalizedSearch,
     category: normalizedCategory,
     locationArea: normalizedLocationArea,
-    minRating: normalizedMinRating,
     communitySubmitted: normalizedCommunitySubmitted,
     page: normalizedPage,
     limit: PAGE_SIZE,
     sort: normalizedSort,
+    paginate: !needsPostJoinProcessing,
   });
 
   const statsByAttractionId = await getReviewStatsForAttractions(
@@ -79,11 +85,20 @@ export async function getAttractions({
     withRatingBreakdown(item, statsByAttractionId.get(item._id.toString()))
   );
 
-  if (postJoinComparator) {
-    // findAttractions returned every filtered match (unpaginated) for these
-    // sorts, since combinedRating/review totals only exist after the join
-    // above - sort and slice the page here instead.
-    itemsWithRating = itemsWithRating.sort(postJoinComparator);
+  if (needsMinRatingFilter) {
+    itemsWithRating = itemsWithRating.filter(
+      (item) => item.combinedRating >= normalizedMinRating
+    );
+  }
+
+  let total = unfilteredTotal;
+
+  if (needsPostJoinProcessing) {
+    if (postJoinComparator) {
+      itemsWithRating = itemsWithRating.sort(postJoinComparator);
+    }
+
+    total = itemsWithRating.length;
     const start = (normalizedPage - 1) * PAGE_SIZE;
     itemsWithRating = itemsWithRating.slice(start, start + PAGE_SIZE);
   }
