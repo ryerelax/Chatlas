@@ -8,6 +8,7 @@ import {
 } from "@/data/repositories/reviewCommentRepository";
 import { findReviewById } from "@/data/repositories/reviewRepository";
 import { findUserByEmail } from "@/data/repositories/userRepository";
+import { containsProfanity } from "@/business/services/contentModerationService";
 
 const COMMENT_LIMIT = 3;
 const MAX_COMMENT_LENGTH = 500;
@@ -77,6 +78,13 @@ export function createReviewCommentService({
     if (normalizedText.length > MAX_COMMENT_LENGTH) {
       throw new ReviewCommentServiceError(
         `Comment text must be ${MAX_COMMENT_LENGTH} characters or fewer.`,
+        400
+      );
+    }
+
+    if (containsProfanity(normalizedText)) {
+      throw new ReviewCommentServiceError(
+        "Please remove any inappropriate language from your comment and try again.",
         400
       );
     }
