@@ -27,6 +27,7 @@ function latitudeOffset(metres) {
 function createHarness(overrides = {}) {
   const calls = {
     uploads: [],
+    moderations: [],
     deletes: [],
     appends: [],
     photoCounts: [],
@@ -77,6 +78,10 @@ function createHarness(overrides = {}) {
     uploadVerifiedVisitImage: async (dataUri, options) => {
       calls.uploads.push({ dataUri, options });
       return uploaded;
+    },
+    moderateImageDataUri: async (dataUri) => {
+      calls.moderations.push(dataUri);
+      return { buffer: Buffer.from([0xff, 0xd8, 0xff]), mimeType: "image/jpeg" };
     },
     deleteCloudinaryImage: async (publicId) => {
       calls.deletes.push(publicId);
@@ -271,7 +276,7 @@ test("verify rejects malformed and unsupported image data URIs before upload", a
         () => service.verifyVisitPhoto(validVerifyInput({ photoDataUri })),
         {
           statusCode: 400,
-          message: "A JPEG, PNG, or WebP image up to 5 MiB is required.",
+          message: "A JPEG or PNG image up to 5 MiB is required.",
         }
       );
       assert.equal(calls.uploads.length, 0);
@@ -292,7 +297,7 @@ test("verify accepts exactly 5 MiB decoded image data and rejects one byte more"
     () => rejected.service.verifyVisitPhoto(validVerifyInput({ photoDataUri: overLimit })),
     {
       statusCode: 400,
-      message: "A JPEG, PNG, or WebP image up to 5 MiB is required.",
+      message: "A JPEG or PNG image up to 5 MiB is required.",
     }
   );
   assert.equal(rejected.calls.uploads.length, 0);
@@ -500,7 +505,7 @@ test("single-photo verify compatibility wrapper preserves the original exact res
   assert.equal(Object.hasOwn(result, "photos"), false);
 });
 
-test("verify requires exactly one valid image before lookup or upload", async (t) => {
+test("verify authorizes the user before rejecting an invalid image batch", async (t) => {
   const invalidBatches = [
     [],
     [JPEG_DATA_URI, JPEG_DATA_URI],
@@ -522,11 +527,11 @@ test("verify requires exactly one valid image before lookup or upload", async (t
         {
           statusCode: 400,
           message: photoDataUris.length === 1
-            ? "A JPEG, PNG, or WebP image up to 5 MiB is required."
+            ? "A JPEG or PNG image up to 5 MiB is required."
             : BATCH_SIZE_MESSAGE,
         }
       );
-      assert.equal(userLookups, 0);
+      assert.equal(userLookups, 1);
       assert.equal(calls.uploads.length, 0);
     });
   }
@@ -1307,7 +1312,7 @@ test("verify cleans a malformed upload result containing only a private asset ID
   assert.equal(calls.appends.length, 0);
 });
 
-test("verify rejects a grossly oversized encoded payload before lookup or upload", async () => {
+test("verify authorizes the user before rejecting a grossly oversized payload", async () => {
   const maximumEncodedLength = 4 * Math.ceil((5 * 1024 * 1024) / 3);
   const photoDataUri = `data:image/webp;base64,${"A".repeat(maximumEncodedLength + 4)}`;
   let userLookups = 0;
@@ -1322,10 +1327,10 @@ test("verify rejects a grossly oversized encoded payload before lookup or upload
     () => service.verifyVisitPhoto(validVerifyInput({ photoDataUri })),
     {
       statusCode: 400,
-      message: "A JPEG, PNG, or WebP image up to 5 MiB is required.",
+      message: "A JPEG or PNG image up to 5 MiB is required.",
     }
   );
-  assert.equal(userLookups, 0);
+  assert.equal(userLookups, 1);
   assert.equal(calls.uploads.length, 0);
 });
 

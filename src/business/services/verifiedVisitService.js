@@ -24,20 +24,26 @@ import {
   deleteCloudinaryImage,
   uploadVerifiedVisitImage,
 } from "@/infrastructure/external/cloudinary";
+import {
+  IMAGE_MODERATION_CODES,
+  ImageModerationError,
+  moderateImageDataUri,
+} from "@/business/services/imageModerationService";
 
 export class VerifiedVisitServiceError extends Error {
-  constructor(message, statusCode) {
+  constructor(message, statusCode, code = "") {
     super(message);
     this.name = "VerifiedVisitServiceError";
     this.statusCode = statusCode;
+    this.code = code;
   }
 }
 
-const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png"]);
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_ENCODED_IMAGE_CHARS = 4 * Math.ceil(MAX_IMAGE_BYTES / 3);
 const AUTH_REQUIRED_MESSAGE = "A signed-in user account is required.";
-const INVALID_IMAGE_MESSAGE = "A JPEG, PNG, or WebP image up to 5 MiB is required.";
+const INVALID_IMAGE_MESSAGE = "A JPEG or PNG image up to 5 MiB is required.";
 const SAVE_ERROR_MESSAGE = "Unable to save the verified visit photo.";
 const DELETE_ERROR_MESSAGE = "Unable to delete the verified visit photo.";
 const INVALID_BATCH_MESSAGE = "Add exactly one verified visit photo.";
@@ -62,17 +68,44 @@ function requireObjectId(value, label, isValidObjectId) {
 
 function validateImageDataUri(photoDataUri) {
   if (typeof photoDataUri !== "string") {
-    throw new VerifiedVisitServiceError(INVALID_IMAGE_MESSAGE, 400);
+    throw new VerifiedVisitServiceError(
+      INVALID_IMAGE_MESSAGE,
+      400,
+      IMAGE_MODERATION_CODES.invalid
+    );
   }
 
   const match = /^data:([^;,]+);base64,([A-Za-z0-9+/]+={0,2})$/.exec(photoDataUri);
-  if (!match || !ALLOWED_IMAGE_TYPES.has(match[1])) {
-    throw new VerifiedVisitServiceError(INVALID_IMAGE_MESSAGE, 400);
+  if (!match) {
+    throw new VerifiedVisitServiceError(
+      INVALID_IMAGE_MESSAGE,
+      400,
+      IMAGE_MODERATION_CODES.invalid
+    );
+  }
+
+  if (!ALLOWED_IMAGE_TYPES.has(match[1])) {
+    throw new VerifiedVisitServiceError(
+      INVALID_IMAGE_MESSAGE,
+      400,
+      IMAGE_MODERATION_CODES.unsupported
+    );
   }
 
   const encoded = match[2];
-  if (encoded.length > MAX_ENCODED_IMAGE_CHARS || encoded.length % 4 !== 0) {
-    throw new VerifiedVisitServiceError(INVALID_IMAGE_MESSAGE, 400);
+  if (encoded.length > MAX_ENCODED_IMAGE_CHARS) {
+    throw new VerifiedVisitServiceError(
+      INVALID_IMAGE_MESSAGE,
+      400,
+      IMAGE_MODERATION_CODES.tooLarge
+    );
+  }
+  if (encoded.length % 4 !== 0) {
+    throw new VerifiedVisitServiceError(
+      INVALID_IMAGE_MESSAGE,
+      400,
+      IMAGE_MODERATION_CODES.invalid
+    );
   }
 
   const decoded = Buffer.from(encoded, "base64");
@@ -80,10 +113,20 @@ function validateImageDataUri(photoDataUri) {
   const canonicalDecoded = decoded.toString("base64").replace(/=+$/, "");
   if (
     decoded.length === 0
-    || decoded.length > MAX_IMAGE_BYTES
     || canonicalDecoded !== canonicalInput
   ) {
-    throw new VerifiedVisitServiceError(INVALID_IMAGE_MESSAGE, 400);
+    throw new VerifiedVisitServiceError(
+      INVALID_IMAGE_MESSAGE,
+      400,
+      IMAGE_MODERATION_CODES.invalid
+    );
+  }
+  if (decoded.length > MAX_IMAGE_BYTES) {
+    throw new VerifiedVisitServiceError(
+      INVALID_IMAGE_MESSAGE,
+      400,
+      IMAGE_MODERATION_CODES.tooLarge
+    );
   }
 
   return photoDataUri;
@@ -287,6 +330,7 @@ export function createVerifiedVisitService(dependencies) {
     findUserByGoogleId: findUser,
     findAttractionByIdForVerifiedVisit: findAttraction,
     uploadVerifiedVisitImage: uploadImage,
+    moderateImageDataUri: moderateDataUri,
     deleteCloudinaryImage: deleteImage,
     appendPhotosToDatedVisit: appendPhotos,
     findDatedVisitBySubmissionKey: findBySubmissionKey,
@@ -352,7 +396,6 @@ export function createVerifiedVisitService(dependencies) {
   async function verifyVisitPhotos(input = {}) {
     const googleId = requireProviderSubject(input.googleId);
     const attractionId = requireObjectId(input.attractionId, "attraction", isValidObjectId);
-    const photoDataUris = validateImageBatch(input.photoDataUris);
     const evidence = validateEvidence(input);
     let submissionKey;
     try {
@@ -367,6 +410,7 @@ export function createVerifiedVisitService(dependencies) {
     }
 
     const attraction = await findSupportedAttraction(attractionId, SAVE_ERROR_MESSAGE);
+    const photoDataUris = validateImageBatch(input.photoDataUris);
     const capturedAt = now();
     const visitDateKey = createMalaysiaVisitDateKey(capturedAt);
     const datedVisitInput = {
@@ -413,6 +457,22 @@ export function createVerifiedVisitService(dependencies) {
     );
     if (existingPhotoCount + photoDataUris.length > MAX_PHOTOS_PER_ATTRACTION_DAY) {
       throw new VerifiedVisitServiceError(CAPACITY_MESSAGE, 409);
+    }
+
+    try {
+      // Every item passes the shared policy before any public upload occurs.
+      for (const photoDataUri of photoDataUris) {
+        await moderateDataUri(photoDataUri);
+      }
+    } catch (error) {
+      if (error instanceof ImageModerationError) {
+        throw new VerifiedVisitServiceError(
+          error.message,
+          error.statusCode,
+          error.code
+        );
+      }
+      throw error;
     }
 
     const uploadedAssets = [];
@@ -714,6 +774,7 @@ const verifiedVisitService = createVerifiedVisitService({
   findUserByGoogleId,
   findAttractionByIdForVerifiedVisit,
   uploadVerifiedVisitImage,
+  moderateImageDataUri,
   deleteCloudinaryImage,
   appendPhotosToDatedVisit,
   findDatedVisitBySubmissionKey,

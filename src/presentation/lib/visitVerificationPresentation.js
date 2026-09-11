@@ -5,6 +5,7 @@ import {
   validateGeolocationEvidence,
 } from "@/business/services/visitVerificationRules";
 import { VISITED_DATA_STATUS } from "@/business/services/explorationMapService";
+import { getImageUploadErrorKey } from "@/presentation/lib/imageUploadPresentation";
 
 const MAX_PUBLIC_API_MESSAGE_LENGTH = 200;
 const VERIFIED_VISIT_DAILY_LIMIT = 1;
@@ -151,9 +152,10 @@ export function getVisitVerificationResponseDecision(
   const fallbackMessage = authenticationRequired
     ? fallbackMessages.authentication
     : fallbackMessages.verification;
+  const imageErrorKey = getImageUploadErrorKey(result?.code);
   const message = response?.status === 409
     ? "verifiedVisitLimitReached"
-    : selectSafeApiMessage(result, fallbackMessage);
+    : imageErrorKey || selectSafeApiMessage(result, fallbackMessage);
 
   return {
     type: authenticationRequired

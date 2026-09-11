@@ -9,6 +9,7 @@ import {
   InvalidPhotoError,
   AttractionNotFoundError,
 } from "@/business/services/communityPhotoService";
+import { ImageModerationError } from "@/business/services/imageModerationService";
 
 // POST - community "Add a photo" contribution. Any logged-in, Melaka-based
 // user can add a photo to any existing active attraction, not just ones
@@ -29,20 +30,12 @@ export async function POST(request, { params }) {
     const formData = await request.formData();
     const photo = formData.get("photo");
 
-    let photoBuffer;
-    let photoMimeType;
-    if (photo && typeof photo === "object" && photo.size > 0) {
-      photoBuffer = Buffer.from(await photo.arrayBuffer());
-      photoMimeType = photo.type;
-    }
-
     await connectToDatabase();
 
     const attraction = await addCommunityPhoto({
       attractionId: id,
       session,
-      photoBuffer,
-      photoMimeType,
+      photoFile: photo,
     });
 
     return NextResponse.json(
@@ -50,6 +43,13 @@ export async function POST(request, { params }) {
       { status: 201 }
     );
   } catch (error) {
+    if (error instanceof ImageModerationError) {
+      return NextResponse.json(
+        { success: false, code: error.code, message: error.message },
+        { status: error.statusCode }
+      );
+    }
+
     if (error instanceof LocationNotAllowedError) {
       return NextResponse.json(
         { success: false, message: error.message },

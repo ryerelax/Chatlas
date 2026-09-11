@@ -23,10 +23,7 @@ function toUserPayload(user) {
 export async function GET(request) {
   try {
     const session = await auth();
-    console.log("GET /api/user - Session:", session);
-
     if (!session?.user?.id) {
-      console.log("No user.id found in session");
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
         { status: 401 }
@@ -67,10 +64,7 @@ export async function GET(request) {
 export async function PUT(request) {
   try {
     const session = await auth();
-    console.log("PUT /api/user - Session:", session);
-
     if (!session?.user?.id) {
-      console.log("No user.id found in session");
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
         { status: 401 }
@@ -78,14 +72,18 @@ export async function PUT(request) {
     }
 
     const body = await request.json();
-    const { displayName, bio, location, profilePicture } = body;
+    const { displayName, bio, location } = body;
 
-    console.log("PUT /api/user received:", {
-      displayName,
-      bio,
-      location,
-      profilePicture,
-    });
+    if (Object.hasOwn(body, "profilePicture")) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: "IMAGE_INVALID",
+          message: "Profile images must be uploaded as image files.",
+        },
+        { status: 400 }
+      );
+    }
 
     await connectToDatabase();
 
@@ -94,10 +92,6 @@ export async function PUT(request) {
       bio: bio || "",
       location: location || "",
     };
-
-    if (profilePicture !== undefined && profilePicture !== null) {
-      updateFields.profilePicture = profilePicture;
-    }
 
     const updateResult = await User.updateOne(
       {
@@ -124,8 +118,6 @@ export async function PUT(request) {
         { _id: session.user.id },
       ],
     });
-
-    console.log("Updated user:", updatedUser);
 
     return NextResponse.json({
       success: true,

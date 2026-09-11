@@ -19,7 +19,7 @@ import {
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const AUTH_REQUIRED_MESSAGE = "A signed-in user account is required.";
-const INVALID_IMAGE_MESSAGE = "A JPEG, PNG, or WebP image up to 5 MiB is required.";
+const INVALID_IMAGE_MESSAGE = "A JPEG or PNG image up to 5 MiB is required.";
 const INVALID_BATCH_MESSAGE = "Add exactly one verified visit photo.";
 const SUBMISSION_KEY = "11111111-1111-4111-8111-111111111111";
 
@@ -328,7 +328,11 @@ for (const [label, photo] of [
     await assertJsonResponse(
       await POST(createFormRequest({ photo })),
       400,
-      { success: false, message: INVALID_IMAGE_MESSAGE }
+      {
+        success: false,
+        code: "IMAGE_INVALID",
+        message: INVALID_IMAGE_MESSAGE,
+      }
     );
   });
 }
@@ -342,7 +346,11 @@ test("POST returns safe JSON when reading the photo bytes fails", async () => {
   await assertJsonResponse(
     await POST(createFormRequest({ photo })),
     400,
-    { success: false, message: INVALID_IMAGE_MESSAGE }
+    {
+      success: false,
+      code: "IMAGE_INVALID",
+      message: INVALID_IMAGE_MESSAGE,
+    }
   );
 });
 
@@ -359,7 +367,11 @@ test("POST rejects an obviously oversized file before reading its bytes", async 
   await assertJsonResponse(
     await POST(createFormRequest({ photo })),
     400,
-    { success: false, message: INVALID_IMAGE_MESSAGE }
+    {
+      success: false,
+      code: "IMAGE_TOO_LARGE",
+      message: INVALID_IMAGE_MESSAGE,
+    }
   );
   assert.equal(arrayBufferCalled, false);
 });
@@ -523,7 +535,13 @@ for (const [label, entries, expectedMessage] of [
     await assertJsonResponse(
       await POST(createFormRequest(entries)),
       400,
-      { success: false, message: expectedMessage }
+      {
+        success: false,
+        ...(expectedMessage === INVALID_IMAGE_MESSAGE
+          ? { code: "IMAGE_INVALID" }
+          : {}),
+        message: expectedMessage,
+      }
     );
     assert.equal(serviceCalls, 0);
   });

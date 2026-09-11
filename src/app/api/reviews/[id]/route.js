@@ -124,7 +124,11 @@ async function parseReviewUpdateRequest(request) {
 function handleReviewError(error, fallbackMessage) {
   if (error instanceof ReviewServiceError) {
     return NextResponse.json(
-      { success: false, message: error.message },
+      {
+        success: false,
+        ...(error.code ? { code: error.code } : {}),
+        message: error.message,
+      },
       { status: error.statusCode }
     );
   }

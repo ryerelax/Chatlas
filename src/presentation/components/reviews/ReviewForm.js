@@ -5,9 +5,13 @@ import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useReviews } from "@/presentation/contexts/ReviewsContext";
 import { useLanguage } from "@/presentation/contexts/LanguageContext";
+import {
+  CLIENT_IMAGE_TYPES,
+  getImageUploadErrorKey,
+} from "@/presentation/lib/imageUploadPresentation";
 
 const STAR_OPTIONS = [1, 2, 3, 4, 5];
-const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const ALLOWED_PHOTO_TYPES = CLIENT_IMAGE_TYPES;
 const MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024;
 const MAX_REVIEW_PHOTOS = 3;
 
@@ -330,9 +334,12 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
         const isAuthError =
           response.status === 401 ||
           /sign in|signed in|log in|unauthorized/i.test(apiMsg);
+        const imageErrorKey = getImageUploadErrorKey(result?.code);
 
         throw new Error(
-          isAuthError ? "mustSignInToReview" : apiMsg || "errorGeneric"
+          isAuthError
+            ? "mustSignInToReview"
+            : imageErrorKey || apiMsg || "errorGeneric"
         );
       }
 
@@ -360,7 +367,11 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
       if (
         msg === "mustSignInToReview" ||
         msg === "errorGeneric" ||
-        msg === "uploadHint"
+        msg === "uploadHint" ||
+        msg === "imageSafetyRejected" ||
+        msg === "imageSafetyUnavailable" ||
+        msg === "imageInvalid" ||
+        msg === "imageTooLarge"
       ) {
         setStatusMessageKey(msg);
         setStatusRawMessage("");
@@ -544,7 +555,7 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
             ref={photoInputRef}
             id="review-photos"
             type="file"
-            accept="image/jpeg,image/png,image/webp"
+            accept="image/jpeg,image/png"
             multiple
             onChange={handlePhotoSelection}
             disabled={
@@ -606,7 +617,11 @@ export default function ReviewForm({ attractionId, onReviewSubmitted }) {
         disabled={isSubmitting}
         className="mt-6 flex h-[46px] w-full items-center justify-center rounded-[10px] bg-attraction-primary px-5 text-[15px] font-semibold text-white transition-colors duration-200 hover:bg-attraction-primary-hover disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
       >
-        {isSubmitting ? t("saving") : t("submit")}
+        {isSubmitting && selectedPhotos.length > 0
+          ? t("imageSafetyChecking")
+          : isSubmitting
+            ? t("saving")
+            : t("submit")}
       </button>
     </form>
   );

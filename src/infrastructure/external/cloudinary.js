@@ -191,3 +191,29 @@ export async function uploadProfileImageData(dataUri, userId) {
     publicId: result.public_id,
   };
 }
+
+export async function uploadProfileImageFromBuffer(
+  buffer,
+  mimeType,
+  { publicId } = {}
+) {
+  const client = getConfiguredClient();
+  const dataUri = `data:${mimeType};base64,${buffer.toString("base64")}`;
+
+  const result = await client.uploader.upload(dataUri, {
+    folder: "chatlas/profiles",
+    public_id: publicId,
+    overwrite: false,
+    resource_type: "image",
+    transformation: [
+      { width: 400, height: 400, crop: "fill", gravity: "face" },
+      { quality: "auto", fetch_format: "auto" },
+    ],
+  });
+
+  if (!result?.secure_url || !result?.public_id) {
+    throw new Error("Cloudinary did not return valid profile image metadata.");
+  }
+
+  return { url: result.secure_url, publicId: result.public_id };
+}

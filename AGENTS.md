@@ -44,6 +44,7 @@ Planned external services include:
 - Google Identity Services
 - Google Maps Platform
 - Cloudinary
+- Amazon Rekognition
 - PWA-related packages and configuration
 
 Install additional dependencies only when the related feature is being implemented.
@@ -480,6 +481,11 @@ GOOGLE_PLACES_API_KEY=
 CLOUDINARY_CLOUD_NAME=
 CLOUDINARY_API_KEY=
 CLOUDINARY_API_SECRET=
+AWS_REGION=
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+IMAGE_MODERATION_MIN_CONFIDENCE=50
+IMAGE_MODERATION_REJECT_CONFIDENCE=70
 ```
 
 Rules:
@@ -859,6 +865,12 @@ The Social Profile module supports:
 - Registered-user access controls for exploration maps and comparisons
 - Registered-user exploration maps derived from distinct Verified Visit attractions, exposing only display-safe attraction details while keeping verification evidence private
 - Registered-user comparison of Verified Visit attraction coverage, common explored places, and places explored by only one traveller; comparison maps expose only display-safe attraction details and never verification evidence
+
+All user-controlled JPEG and PNG uploads use the shared server-side sensitive-content
+image moderation service before Cloudinary upload and MongoDB persistence.
+This covers Review photos, Verified Visit evidence, profile avatars, community
+attraction photos, and photos attached to user-submitted attractions. Display-only
+Personal Collection and Social Profile views do not re-moderate approved images.
 
 Maintenance/data-quality scripts (`scripts/`, run via `npm run <script>`, not part of the live app) exist for one-time or re-runnable backfill and repair jobs: photo sync, description sync, location-area classification, and address repair. See `package.json` for the exact commands.
 

@@ -5,6 +5,10 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useLanguage } from "@/presentation/contexts/LanguageContext";
+import {
+  CLIENT_IMAGE_TYPES,
+  getImageUploadErrorKey,
+} from "@/presentation/lib/imageUploadPresentation";
 
 /** Malaysia states + federal territories (stored values stay English) */
 const MALAYSIA_LOCATIONS = [
@@ -90,7 +94,7 @@ export default function EditProfilePage() {
         setMessage({ type: "error", text: t("fileTooLarge") });
         return;
       }
-      if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      if (!CLIENT_IMAGE_TYPES.includes(file.type)) {
         setMessage({ type: "error", text: t("unsupportedFormat") });
         return;
       }
@@ -109,34 +113,11 @@ export default function EditProfilePage() {
         throw new Error(t("selectStateTerritory"));
       }
 
-      let profilePictureUrl = null;
-
-      if (imageFile) {
-        const uploadFormData = new FormData();
-        uploadFormData.append("file", imageFile);
-
-        const uploadRes = await fetch("/api/upload", {
-          method: "POST",
-          body: uploadFormData,
-        });
-
-        const uploadResult = await uploadRes.json();
-
-        if (!uploadResult.success) {
-          throw new Error(uploadResult.message);
-        }
-        profilePictureUrl = uploadResult.data.url;
-      }
-
       const updateData = {
         displayName,
         bio,
         location,
       };
-
-      if (profilePictureUrl) {
-        updateData.profilePicture = profilePictureUrl;
-      }
 
       const response = await fetch("/api/user", {
         method: "PUT",
@@ -147,6 +128,27 @@ export default function EditProfilePage() {
       const result = await response.json();
 
       if (!result.success) throw new Error(result.message);
+
+      let profilePictureUrl = result.data.profilePicture || profilePicture;
+
+      if (imageFile) {
+        const uploadFormData = new FormData();
+        uploadFormData.append("file", imageFile);
+
+        const uploadRes = await fetch("/api/upload", {
+          method: "POST",
+          body: uploadFormData,
+        });
+        const uploadResult = await uploadRes.json();
+
+        if (!uploadRes.ok || !uploadResult.success) {
+          const imageErrorKey = getImageUploadErrorKey(uploadResult.code);
+          throw new Error(
+            imageErrorKey ? t(imageErrorKey) : uploadResult.message
+          );
+        }
+        profilePictureUrl = uploadResult.data.url;
+      }
 
       const newImageUrl =
         profilePictureUrl ||
@@ -247,7 +249,7 @@ export default function EditProfilePage() {
                 </svg>
                 <input
                   type="file"
-                  accept="image/jpeg,image/png,image/webp"
+                  accept="image/jpeg,image/png"
                   onChange={handleImageChange}
                   className="hidden"
                 />
@@ -336,7 +338,11 @@ export default function EditProfilePage() {
               disabled={isLoading}
               className="flex-1 rounded bg-[#006C56] px-6 py-2 text-white transition hover:bg-[#005E4B] disabled:opacity-50"
             >
-              {isLoading ? t("saving") : t("saveChanges")}
+              {isLoading && imageFile
+                ? t("imageSafetyChecking")
+                : isLoading
+                  ? t("saving")
+                  : t("saveChanges")}
             </button>
             <Link
               href="/profile"

@@ -56,7 +56,11 @@ export async function GET(request) {
   } catch (error) {
     if (error instanceof ReviewServiceError) {
       return NextResponse.json(
-        { success: false, message: error.message },
+        {
+          success: false,
+          ...(error.code ? { code: error.code } : {}),
+          message: error.message,
+        },
         { status: error.statusCode }
       );
     }
@@ -130,7 +134,11 @@ export async function POST(request) {
   } catch (error) {
     if (error instanceof ReviewServiceError) {
       return NextResponse.json(
-        { success: false, message: error.message },
+        {
+          success: false,
+          ...(error.code ? { code: error.code } : {}),
+          message: error.message,
+        },
         { status: error.statusCode }
       );
     }

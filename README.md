@@ -26,6 +26,7 @@ The current application includes working attraction discovery, Google authentica
 - Google Maps JavaScript API
 - Google Places API (New)
 - Cloudinary
+- Amazon Rekognition
 
 Google Maps is used for attraction and exploration-map displays. Google Places and Cloudinary support attraction data-maintenance workflows, while a service worker provides offline caching for supported routes and previously viewed content.
 
@@ -122,6 +123,7 @@ src/
 - Google sign-in with persisted user records
 - Signed-in user profile view and editing
 - Create, edit, and delete ratings and reviews, including review photos
+- Apply one fail-closed sensitive-content moderation policy to every user image upload
 - Display a personal exploration map and progress derived from distinct Verified Visits
 - Verify nearby visits with one live-camera photo and server-side distance checks
 - Display public Verified Visit photos on attraction detail pages
@@ -165,11 +167,34 @@ GOOGLE_PLACES_API_KEY=
 CLOUDINARY_CLOUD_NAME=
 CLOUDINARY_API_KEY=
 CLOUDINARY_API_SECRET=
+AWS_REGION=
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+IMAGE_MODERATION_MIN_CONFIDENCE=50
+IMAGE_MODERATION_REJECT_CONFIDENCE=70
 ```
 
 Only fill values required by the currently implemented features.
 
 Never commit `.env.local` or expose passwords, secrets, private API keys, or database connection strings.
+
+### Amazon Rekognition Setup
+
+All user-uploaded JPEG and PNG images are checked by Amazon Rekognition before
+Cloudinary upload or MongoDB persistence. To enable uploads:
+
+1. Create or choose an AWS IAM identity for the Chatlas server.
+2. Grant only `rekognition:DetectModerationLabels` for the required AWS Region.
+3. Set `AWS_REGION`, `AWS_ACCESS_KEY_ID`, and `AWS_SECRET_ACCESS_KEY` in the
+   deployment environment and local `.env.local` file.
+4. Keep the default request and rejection thresholds at `50` and `70`, or
+   adjust them while ensuring the request threshold does not exceed the
+   rejection threshold.
+5. Restart or redeploy Chatlas after setting the variables.
+
+These values are server-only. Never add a `NEXT_PUBLIC_` prefix or expose the
+credentials to browser code. Automated tests mock Rekognition and Cloudinary
+and do not call either paid service.
 
 ## Getting Started
 

@@ -36,6 +36,13 @@ const translations = {
     remove: "Remove",
     errorGeneric: "Something went wrong. Please try again.",
     unauthorized: "Please sign in to continue.",
+    imageSafetyChecking: "Checking photo safety...",
+    imageSafetyRejected:
+      "This photo may contain sensitive content. Please choose another photo.",
+    imageSafetyUnavailable:
+      "Photo safety checking is temporarily unavailable. Please try again later.",
+    imageInvalid: "Please choose a valid JPEG or PNG image.",
+    imageTooLarge: "This image is too large. Maximum size is 5 MB.",
     notFound: "Page not found",
 
     // ——— Login ———
@@ -223,8 +230,8 @@ const translations = {
     bioPlaceholder: "A short introduction shown on your public profile",
     fileTooLarge: "File is too large. Maximum size is 5MB.",
     unsupportedFormat:
-      "Unsupported file format. Please upload JPG, PNG, or WEBP.",
-    uploadHint: "JPG, PNG or WEBP, max 5MB",
+      "Unsupported file format. Please upload JPEG or PNG.",
+    uploadHint: "JPEG or PNG, max 5MB",
     about: "About this traveller",
     travelActivity: "Travel activity",
     travelActivityComingSoon:
@@ -603,6 +610,11 @@ const translations = {
     remove: "移除",
     errorGeneric: "出错了，请重试。",
     unauthorized: "请先登录。",
+    imageSafetyChecking: "正在检查照片安全性……",
+    imageSafetyRejected: "此照片可能包含敏感内容，请选择其他照片。",
+    imageSafetyUnavailable: "照片安全检查暂时不可用，请稍后重试。",
+    imageInvalid: "请选择有效的 JPEG 或 PNG 图片。",
+    imageTooLarge: "图片过大，最大 5 MB。",
     notFound: "页面不存在",
 
     loginSubtitle: "登录以收藏地点、撰写评价并管理个人资料",
@@ -775,8 +787,8 @@ const translations = {
     locationPlaceholder: "你常探索的城市或地区",
     bioPlaceholder: "展示在公开资料上的简短介绍",
     fileTooLarge: "文件过大，最大 5MB。",
-    unsupportedFormat: "不支持的格式，请上传 JPG、PNG 或 WEBP。",
-    uploadHint: "JPG、PNG 或 WEBP，最大 5MB",
+    unsupportedFormat: "不支持的格式，请上传 JPEG 或 PNG。",
+    uploadHint: "JPEG 或 PNG，最大 5MB",
     about: "关于这位旅人",
     travelActivity: "旅行动态",
     travelActivityComingSoon: "更多旅行动态将在后续更新中显示。",
@@ -1133,6 +1145,13 @@ const translations = {
     remove: "Buang",
     errorGeneric: "Berlaku ralat. Sila cuba lagi.",
     unauthorized: "Sila log masuk untuk teruskan.",
+    imageSafetyChecking: "Sedang menyemak keselamatan foto...",
+    imageSafetyRejected:
+      "Foto ini mungkin mengandungi kandungan sensitif. Sila pilih foto lain.",
+    imageSafetyUnavailable:
+      "Semakan keselamatan foto tidak tersedia buat sementara waktu. Sila cuba lagi kemudian.",
+    imageInvalid: "Sila pilih imej JPEG atau PNG yang sah.",
+    imageTooLarge: "Imej ini terlalu besar. Saiz maksimum ialah 5 MB.",
     notFound: "Halaman tidak dijumpai",
 
     loginSubtitle:
@@ -1315,8 +1334,8 @@ const translations = {
     bioPlaceholder: "Pengenalan ringkas pada profil awam anda",
     fileTooLarge: "Fail terlalu besar. Maksimum 5MB.",
     unsupportedFormat:
-      "Format tidak disokong. Sila muat naik JPG, PNG, atau WEBP.",
-    uploadHint: "JPG, PNG atau WEBP, maks 5MB",
+      "Format tidak disokong. Sila muat naik JPEG atau PNG.",
+    uploadHint: "JPEG atau PNG, maks 5MB",
     about: "Mengenai pengembara ini",
     travelActivity: "Aktiviti perjalanan",
     travelActivityComingSoon:

@@ -8,9 +8,13 @@ import { useLanguage } from "@/presentation/contexts/LanguageContext";
 import Image from "next/image";
 import Pagination from "@/presentation/components/Pagination";
 import { formatLocaleDate } from "@/presentation/lib/formatLocaleDate";
+import {
+  CLIENT_IMAGE_TYPES,
+  getImageUploadErrorKey,
+} from "@/presentation/lib/imageUploadPresentation";
 
 const STAR_OPTIONS = [1, 2, 3, 4, 5];
-const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const ALLOWED_PHOTO_TYPES = CLIENT_IMAGE_TYPES;
 const MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024;
 const MAX_REVIEW_PHOTOS = 3;
 const EDIT_WINDOW_DAYS = 3;
@@ -434,7 +438,11 @@ export default function MyReviewsPage() {
         showToast(t("profileUpdated"), "success");
         closeEditModal();
       } else {
-        showToast(data.message || t("errorGeneric"), "error");
+        const imageErrorKey = getImageUploadErrorKey(data.code);
+        showToast(
+          imageErrorKey ? t(imageErrorKey) : data.message || t("errorGeneric"),
+          "error"
+        );
       }
     } catch (err) {
       console.error("Error updating review:", err);
@@ -739,7 +747,7 @@ export default function MyReviewsPage() {
                   <input
                     ref={photoInputRef}
                     type="file"
-                    accept="image/jpeg,image/png,image/webp"
+                    accept="image/jpeg,image/png"
                     multiple
                     onChange={handlePhotoSelection}
                     className="hidden"
@@ -771,7 +779,11 @@ export default function MyReviewsPage() {
                 disabled={isSubmittingEdit}
                 className="flex-1 rounded-lg bg-[#006C56] px-5 py-2.5 font-semibold text-white transition-colors hover:bg-[#005544] disabled:opacity-50"
               >
-                {isSubmittingEdit ? t("saving") : t("saveChanges")}
+                {isSubmittingEdit && newPhotoFiles.length > 0
+                  ? t("imageSafetyChecking")
+                  : isSubmittingEdit
+                    ? t("saving")
+                    : t("saveChanges")}
               </button>
             </div>
           </div>

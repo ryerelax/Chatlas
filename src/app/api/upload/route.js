@@ -3,9 +3,11 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import {
-  ProfileImageValidationError,
+  ProfileImageServiceError,
   uploadProfileImage,
 } from "@/business/services/profileImageService";
+import { ImageModerationError } from "@/business/services/imageModerationService";
+import { connectToDatabase } from "@/infrastructure/database/mongodb";
 
 export async function POST(request) {
   try {
@@ -20,7 +22,11 @@ export async function POST(request) {
     const formData = await request.formData();
     const file = formData.get("file");
 
-    const result = await uploadProfileImage(file, session.user.id);
+    await connectToDatabase();
+    const result = await uploadProfileImage(file, {
+      googleId: session.user.googleId || session.user.id,
+      email: session.user.email,
+    });
 
     // Support both string URL and { url, publicId }
     const url = typeof result === "string" ? result : result?.url;
@@ -39,14 +45,21 @@ export async function POST(request) {
       data: { url, publicId },
     });
   } catch (error) {
-    if (error instanceof ProfileImageValidationError) {
+    if (error instanceof ImageModerationError) {
       return NextResponse.json(
-        { success: false, message: error.message },
-        { status: 400 }
+        { success: false, code: error.code, message: error.message },
+        { status: error.statusCode }
       );
     }
 
-    console.error("Error uploading profile image:", error);
+    if (error instanceof ProfileImageServiceError) {
+      return NextResponse.json(
+        { success: false, message: error.message },
+        { status: error.statusCode }
+      );
+    }
+
+    console.error("Failed to upload the profile image.");
     return NextResponse.json(
       { success: false, message: "Failed to upload the profile image." },
       { status: 500 }

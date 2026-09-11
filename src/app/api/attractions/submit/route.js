@@ -8,6 +8,7 @@ import {
   InvalidSubmissionError,
   DuplicateAttractionError,
 } from "@/business/services/attractionSubmissionService";
+import { ImageModerationError } from "@/business/services/imageModerationService";
 
 // POST - Decision 4: Registered-User self-service "Add Attraction" submission.
 // Publishes immediately on success — no admin review queue.
@@ -31,13 +32,6 @@ export async function POST(request) {
       .getAll("photos")
       .filter((entry) => typeof entry === "object" && entry.size > 0);
 
-    const photos = await Promise.all(
-      photoEntries.map(async (photo) => ({
-        buffer: Buffer.from(await photo.arrayBuffer()),
-        mimeType: photo.type,
-      }))
-    );
-
     await connectToDatabase();
 
     const attraction = await submitAttraction({
@@ -47,7 +41,7 @@ export async function POST(request) {
       sessionToken,
       session,
       apiKey: process.env.GOOGLE_PLACES_API_KEY,
-      photos,
+      photos: photoEntries,
     });
 
     return NextResponse.json(
@@ -55,6 +49,13 @@ export async function POST(request) {
       { status: 201 }
     );
   } catch (error) {
+    if (error instanceof ImageModerationError) {
+      return NextResponse.json(
+        { success: false, code: error.code, message: error.message },
+        { status: error.statusCode }
+      );
+    }
+
     if (error instanceof InvalidSubmissionError) {
       return NextResponse.json(
         { success: false, message: error.message },

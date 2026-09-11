@@ -19,6 +19,7 @@
     "test": "node --import ./scripts/register-aliases.mjs --test tests/**/*.test.js"
   },
   "dependencies": {
+    "@aws-sdk/client-rekognition": "^3.1130.0",
     "axios": "^1.19.0",
     "cloudinary": "^2.10.0",
     "mongoose": "^9.9.0",

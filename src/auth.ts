@@ -34,7 +34,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           await User.create({
             name: user.name || "",
             email: user.email,
-            profilePicture: user.image || "",
+            // Google profile imagery is not copied into Chatlas because it has
+            // not passed the application's sensitive-content moderation pipeline.
+            profilePicture: "",
             googleId,
             displayName: user.name || "",
             bio: "",
@@ -67,9 +69,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       }
 
       if (trigger === "update" && session?.user) {
-        if (session.user.image !== undefined) {
-          token.picture = session.user.image;
-        }
         if (session.user.displayName !== undefined) {
           token.name = session.user.displayName;
         }
@@ -83,6 +82,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           token.location = session.user.location;
         }
       }
+
+      // Profile images are trusted only when loaded from Chatlas persistence.
+      // This also fails closed if the database is temporarily unavailable.
+      token.picture = "";
 
       try {
         await connectToDatabase();
@@ -99,7 +102,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           token.googleId = dbUser.googleId;
           token.userId = dbUser._id.toString();
           token.name = dbUser.displayName || dbUser.name || token.name;
-          token.picture = dbUser.profilePicture || token.picture || "";
+          token.picture = dbUser.profilePicture || "";
           token.bio = dbUser.bio || "";
           token.location = dbUser.location || "";
           token.email = dbUser.email || token.email;
@@ -117,7 +120,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.googleId = token.googleId || token.sub || "";
         session.user.name = token.name || session.user.name;
         session.user.displayName = token.name || session.user.name || "";
-        session.user.image = token.picture || session.user.image || "";
+        session.user.image = token.picture || "";
         session.user.bio = token.bio || "";
         session.user.location = token.location || "";
         session.user.email = token.email || session.user.email;

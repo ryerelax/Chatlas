@@ -1,7 +1,13 @@
 import mongoose from "mongoose";
-import { uploadImageFromBuffer } from "@/infrastructure/external/cloudinary";
-import { addAttractionPhoto } from "@/data/repositories/attractionRepository";
-import { isValidPhotoType, isValidPhotoSize } from "@/business/services/photoValidation";
+import {
+  deleteImageByPublicId,
+  uploadImageWithMetadataFromBuffer,
+} from "@/infrastructure/external/cloudinary";
+import {
+  addAttractionPhoto,
+  findAttractionById,
+} from "@/data/repositories/attractionRepository";
+import { moderateUploadedImageFile } from "@/business/services/imageModerationService";
 import { isMelakaBasedUser } from "@/business/services/locationGate";
 
 // Any Melaka-based logged-in user can add one photo to any existing active
@@ -16,8 +22,7 @@ export class AttractionNotFoundError extends Error {}
 export async function addCommunityPhoto({
   attractionId,
   session,
-  photoBuffer,
-  photoMimeType,
+  photoFile,
 }) {
   if (!isMelakaBasedUser(session)) {
     throw new LocationNotAllowedError("Available to Melaka-based users.");
@@ -27,32 +32,40 @@ export async function addCommunityPhoto({
     throw new AttractionNotFoundError("Attraction not found.");
   }
 
-  if (!photoBuffer || photoBuffer.length === 0) {
-    throw new InvalidPhotoError("Please choose a photo to upload.");
-  }
-
-  if (!isValidPhotoType(photoMimeType)) {
-    throw new InvalidPhotoError("Photo must be a JPG, PNG, or WEBP image.");
-  }
-
-  if (!isValidPhotoSize(photoBuffer.length)) {
-    throw new InvalidPhotoError("Photo is too large. Maximum size is 5MB.");
-  }
-
-  // uploadImageFromBuffer's Cloudinary call uses overwrite: true, so publicId
-  // must be unique per upload — otherwise a second community photo would
-  // silently replace the first instead of adding to the array.
-  const uniqueSuffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const photoUrl = await uploadImageFromBuffer(photoBuffer, photoMimeType, {
-    folder: `chatlas/attractions/${attractionId}`,
-    publicId: `community-${uniqueSuffix}`,
-  });
-
-  const updatedAttraction = await addAttractionPhoto(attractionId, photoUrl);
-
-  if (!updatedAttraction) {
+  const attraction = await findAttractionById(attractionId);
+  if (!attraction) {
     throw new AttractionNotFoundError("Attraction not found.");
   }
 
-  return updatedAttraction;
+  const approvedPhoto = await moderateUploadedImageFile(photoFile);
+
+  // Keep every public ID unique so a contribution can never replace another
+  // community photo and failed persistence can clean up only this upload.
+  const uniqueSuffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const uploadedPhoto = await uploadImageWithMetadataFromBuffer(
+    approvedPhoto.buffer,
+    approvedPhoto.mimeType,
+    {
+      folder: `chatlas/attractions/${attractionId}`,
+      publicId: `community-${uniqueSuffix}`,
+    }
+  );
+
+  try {
+    const updatedAttraction = await addAttractionPhoto(
+      attractionId,
+      uploadedPhoto.url
+    );
+
+    if (!updatedAttraction) {
+      throw new AttractionNotFoundError("Attraction not found.");
+    }
+
+    return updatedAttraction;
+  } catch (error) {
+    await Promise.allSettled([
+      deleteImageByPublicId(uploadedPhoto.publicId),
+    ]);
+    throw error;
+  }
 }

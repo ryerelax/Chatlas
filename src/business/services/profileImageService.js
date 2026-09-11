@@ -1,42 +1,174 @@
-import { uploadProfileImageData } from "@/infrastructure/external/cloudinary";
+import { randomUUID } from "node:crypto";
+import { moderateUploadedImageFile } from "@/business/services/imageModerationService";
+import {
+  findUserForProfileImage,
+  updateUserProfileImage,
+} from "@/data/repositories/userRepository";
+import { findOwnedReviewPhotoByPublicId } from "@/data/repositories/myPhotosRepository";
+import {
+  deleteImageByPublicId,
+  uploadProfileImageFromBuffer,
+} from "@/infrastructure/external/cloudinary";
 
-const VALID_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const MAX_PROFILE_IMAGE_BYTES = 5 * 1024 * 1024;
-
-export class ProfileImageValidationError extends Error {
-  constructor(message) {
+export class ProfileImageServiceError extends Error {
+  constructor(message, statusCode) {
     super(message);
+    this.name = "ProfileImageServiceError";
+    this.statusCode = statusCode;
+  }
+}
+
+// Retained for compatibility with callers that imported the previous type.
+export class ProfileImageValidationError extends ProfileImageServiceError {
+  constructor(message) {
+    super(message, 400);
     this.name = "ProfileImageValidationError";
   }
 }
 
-export async function uploadProfileImage(file, userId) {
-  if (!file || typeof file.arrayBuffer !== "function") {
-    throw new ProfileImageValidationError("No image file was provided.");
+export function createProfileImageService({
+  findUser,
+  findOwnedReviewPhoto,
+  updateProfileImage,
+  moderateFile,
+  uploadImage,
+  deleteImage,
+  createUuid,
+}) {
+  async function replaceProfileImage(file, identity) {
+    const user = await findUser(identity);
+    if (!user?._id) {
+      throw new ProfileImageServiceError("User not found.", 404);
+    }
+
+    const approvedImage = await moderateFile(file);
+    let uploaded;
+
+    try {
+      uploaded = await uploadImage(
+        approvedImage.buffer,
+        approvedImage.mimeType,
+        { publicId: `user-${user._id}-${createUuid()}` }
+      );
+    } catch {
+      throw new ProfileImageServiceError(
+        "Unable to save the profile image.",
+        500
+      );
+    }
+
+    try {
+      const updatedUser = await updateProfileImage(user._id, uploaded);
+      if (!updatedUser) {
+        throw new ProfileImageServiceError("User not found.", 404);
+      }
+    } catch (error) {
+      await Promise.allSettled([deleteImage(uploaded.publicId)]);
+      if (error instanceof ProfileImageServiceError) throw error;
+      throw new ProfileImageServiceError(
+        "Unable to save the profile image.",
+        500
+      );
+    }
+
+    if (
+      user.profilePicturePublicId &&
+      user.profilePicturePublicId !== uploaded.publicId
+    ) {
+      await Promise.allSettled([deleteImage(user.profilePicturePublicId)]);
+    }
+
+    return uploaded;
   }
 
-  if (!VALID_IMAGE_TYPES.includes(file.type)) {
-    throw new ProfileImageValidationError(
-      "Unsupported file format. Please upload JPG, PNG, or WEBP."
-    );
+  async function clearProfileImage(identity) {
+    const user = await findUser(identity);
+    if (!user?._id) {
+      throw new ProfileImageServiceError("User not found.", 404);
+    }
+
+    const updatedUser = await updateProfileImage(user._id, {
+      url: "",
+      publicId: "",
+    });
+    if (!updatedUser) {
+      throw new ProfileImageServiceError("User not found.", 404);
+    }
+
+    if (user.profilePicturePublicId) {
+      await Promise.allSettled([deleteImage(user.profilePicturePublicId)]);
+    }
+
+    return { url: "", publicId: "" };
   }
 
-  if (file.size > MAX_PROFILE_IMAGE_BYTES) {
-    throw new ProfileImageValidationError(
-      "File is too large. Maximum size is 5MB."
-    );
+  async function useOwnedReviewPhotoAsProfileImage(publicId, identity) {
+    const normalizedPublicId =
+      typeof publicId === "string" ? publicId.trim() : "";
+    if (!normalizedPublicId) {
+      throw new ProfileImageServiceError("A valid photo is required.", 400);
+    }
+
+    const user = await findUser(identity);
+    if (!user?._id) {
+      throw new ProfileImageServiceError("User not found.", 404);
+    }
+
+    const photo = await findOwnedReviewPhoto({
+      userId: user._id,
+      publicId: normalizedPublicId,
+    });
+    if (!photo?.url || photo.publicId !== normalizedPublicId) {
+      throw new ProfileImageServiceError("Photo not found.", 404);
+    }
+
+    const updatedUser = await updateProfileImage(user._id, {
+      url: photo.url,
+      // A Review owns this asset. The avatar workflow must never delete it.
+      publicId: "",
+    });
+    if (!updatedUser) {
+      throw new ProfileImageServiceError("User not found.", 404);
+    }
+
+    if (
+      user.profilePicturePublicId &&
+      user.profilePicturePublicId !== photo.publicId
+    ) {
+      await Promise.allSettled([deleteImage(user.profilePicturePublicId)]);
+    }
+
+    return photo;
   }
 
-  const bytes = await file.arrayBuffer();
-  const imageData = `data:${file.type};base64,${Buffer.from(bytes).toString(
-    "base64"
-  )}`;
-
-  const result = await uploadProfileImageData(imageData, userId);
-
-  // Always return a consistent shape for API routes
   return {
-    url: result.url,
-    publicId: result.publicId,
+    replaceProfileImage,
+    clearProfileImage,
+    useOwnedReviewPhotoAsProfileImage,
   };
+}
+
+const profileImageService = createProfileImageService({
+  findUser: findUserForProfileImage,
+  findOwnedReviewPhoto: findOwnedReviewPhotoByPublicId,
+  updateProfileImage: updateUserProfileImage,
+  moderateFile: moderateUploadedImageFile,
+  uploadImage: uploadProfileImageFromBuffer,
+  deleteImage: deleteImageByPublicId,
+  createUuid: randomUUID,
+});
+
+export async function uploadProfileImage(file, identity) {
+  return profileImageService.replaceProfileImage(file, identity);
+}
+
+export async function clearProfileImage(identity) {
+  return profileImageService.clearProfileImage(identity);
+}
+
+export async function setOwnedReviewPhotoAsProfileImage(publicId, identity) {
+  return profileImageService.useOwnedReviewPhotoAsProfileImage(
+    publicId,
+    identity
+  );
 }

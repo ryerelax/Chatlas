@@ -1,6 +1,6 @@
-// Shared photo upload constraints, used by both Decision 4's Add Attraction
-// submission and the community "Add a photo" contribution.
-export const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
+// Lightweight declared-metadata checks for Review form inputs. The shared
+// image moderation service performs the canonical byte/signature validation.
+export const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png"];
 export const MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024;
 
 export function isValidPhotoType(mimeType) {

@@ -2,13 +2,18 @@ import { normaliseVerifiedVisitSubmissionKey } from "@/business/services/visitVe
 
 const AUTH_REQUIRED_MESSAGE = "A signed-in user account is required.";
 const INVALID_REQUEST_MESSAGE = "Invalid verified visit request.";
-const INVALID_IMAGE_MESSAGE = "A JPEG, PNG, or WebP image up to 5 MiB is required.";
+const INVALID_IMAGE_MESSAGE = "A JPEG or PNG image up to 5 MiB is required.";
 const INVALID_BATCH_MESSAGE = "Add exactly one verified visit photo.";
 const SAVE_ERROR_MESSAGE = "Unable to save the verified visit photo.";
 const LOAD_ERROR_MESSAGE = "Unable to load verified visits.";
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_PHOTOS = 1;
-const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png"]);
+const IMAGE_CODES = Object.freeze({
+  invalid: "IMAGE_INVALID",
+  tooLarge: "IMAGE_TOO_LARGE",
+  unsupported: "IMAGE_FORMAT_UNSUPPORTED",
+});
 
 function getProviderSubject(session) {
   const providerSubject = session?.user?.googleId || session?.user?.id;
@@ -19,30 +24,54 @@ function getProviderSubject(session) {
   return providerSubject.trim();
 }
 
-function errorResponse(message, status) {
-  return Response.json({ success: false, message }, { status });
+function errorResponse(message, status, code = "") {
+  return Response.json(
+    {
+      success: false,
+      ...(code ? { code } : {}),
+      message,
+    },
+    { status }
+  );
 }
 
 function serviceErrorResponse(error, ServiceError, fallbackMessage) {
   if (error instanceof ServiceError) {
-    return errorResponse(error.message, error.statusCode);
+    return Response.json(
+      {
+        success: false,
+        ...(error.code ? { code: error.code } : {}),
+        message: error.message,
+      },
+      { status: error.statusCode }
+    );
   }
 
   return errorResponse(fallbackMessage, 500);
 }
 
-function isPhotoFile(photo, maxImageBytes) {
-  return Boolean(
-    photo
-    && typeof photo !== "string"
-    && typeof photo.type === "string"
-    && ALLOWED_IMAGE_TYPES.has(photo.type)
-    && typeof photo.size === "number"
-    && Number.isFinite(photo.size)
-    && photo.size > 0
-    && photo.size <= maxImageBytes
-    && typeof photo.arrayBuffer === "function"
-  );
+function getPhotoFileError(photo, maxImageBytes) {
+  if (
+    !photo ||
+    typeof photo === "string" ||
+    typeof photo.type !== "string" ||
+    typeof photo.size !== "number" ||
+    !Number.isFinite(photo.size) ||
+    photo.size <= 0 ||
+    typeof photo.arrayBuffer !== "function"
+  ) {
+    return IMAGE_CODES.invalid;
+  }
+
+  if (!ALLOWED_IMAGE_TYPES.has(photo.type)) {
+    return IMAGE_CODES.unsupported;
+  }
+
+  if (photo.size > maxImageBytes) {
+    return IMAGE_CODES.tooLarge;
+  }
+
+  return "";
 }
 
 export function createVerifiedVisitsHandlers({
@@ -128,8 +157,9 @@ export function createVerifiedVisitsHandlers({
       if (photos.length < 1 || photos.length > MAX_PHOTOS) {
         return errorResponse(INVALID_BATCH_MESSAGE, 400);
       }
-      if (!photos.every((photo) => isPhotoFile(photo, maxImageBytes))) {
-        return errorResponse(INVALID_IMAGE_MESSAGE, 400);
+      const photoErrorCode = getPhotoFileError(photos[0], maxImageBytes);
+      if (photoErrorCode) {
+        return errorResponse(INVALID_IMAGE_MESSAGE, 400, photoErrorCode);
       }
 
       let photoDataUri;
@@ -138,7 +168,7 @@ export function createVerifiedVisitsHandlers({
         const bytes = Buffer.from(await photo.arrayBuffer());
         photoDataUri = `data:${photo.type};base64,${bytes.toString("base64")}`;
       } catch {
-        return errorResponse(INVALID_IMAGE_MESSAGE, 400);
+        return errorResponse(INVALID_IMAGE_MESSAGE, 400, IMAGE_CODES.invalid);
       }
 
       await connectToDatabase();

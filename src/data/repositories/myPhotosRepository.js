@@ -94,3 +94,21 @@ export async function findReviewPhotoByUrl({ userId, url }) {
     photoIndex,
   };
 }
+
+export async function findOwnedReviewPhotoByPublicId({ userId, publicId }) {
+  if (!publicId) return null;
+
+  const review = await Review.findOne({
+    userId,
+    "photos.publicId": publicId,
+  })
+    .select("photos")
+    .lean();
+
+  const photo = review?.photos?.find(
+    (candidate) => candidate?.publicId === publicId
+  );
+
+  if (!photo?.url || !photo?.publicId) return null;
+  return { url: photo.url, publicId: photo.publicId };
+}

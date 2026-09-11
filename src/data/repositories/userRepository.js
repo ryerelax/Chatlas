@@ -81,3 +81,29 @@ export async function findUserByEmail(email) {
     .select("_id name displayName profilePicture")
     .lean();
 }
+
+export async function findUserForProfileImage({ googleId = "", email = "" }) {
+  const identities = [];
+  if (googleId) identities.push({ googleId });
+  if (email) identities.push({ email });
+  if (identities.length === 0) return null;
+
+  return User.findOne({ $or: identities })
+    .select("_id profilePicture profilePicturePublicId")
+    .lean();
+}
+
+export async function updateUserProfileImage(userId, { url, publicId }) {
+  return User.findByIdAndUpdate(
+    userId,
+    {
+      $set: {
+        profilePicture: url,
+        profilePicturePublicId: publicId,
+      },
+    },
+    { returnDocument: "after" }
+  )
+    .select("_id profilePicture profilePicturePublicId")
+    .lean();
+}

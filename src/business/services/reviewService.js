@@ -27,6 +27,11 @@ import {
   isValidPhotoSize,
   isValidPhotoType,
 } from "@/business/services/photoValidation";
+import {
+  IMAGE_MODERATION_CODES,
+  ImageModerationError,
+  moderateUploadedImageFiles,
+} from "@/business/services/imageModerationService";
 
 const MAX_REVIEW_PHOTOS = 3;
 const DEFAULT_REVIEW_PAGE = 1;
@@ -54,76 +59,180 @@ const COMMUNITY_REVIEW_FILTER_OPTIONS = new Set([
 ]);
 
 export class ReviewServiceError extends Error {
-  constructor(message, statusCode) {
+  constructor(message, statusCode, code = "") {
     super(message);
     this.name = "ReviewServiceError";
     this.statusCode = statusCode;
+    this.code = code;
   }
 }
 
-export async function submitReview({
-  attractionId,
-  email,
-  rating,
-  reviewText,
-  photoFiles = [],
+function asReviewImageError(error) {
+  if (error instanceof ImageModerationError) {
+    return new ReviewServiceError(
+      error.message,
+      error.statusCode,
+      error.code
+    );
+  }
+  return error;
+}
+
+export function createReviewSubmissionService({
+  findAttraction,
+  findUser,
+  moderateFiles,
+  uploadImage,
+  createReviewRecord,
+  deleteImage,
+  createUuid,
 }) {
-  const normalizedAttractionId = normalizeAttractionId(attractionId);
-  const normalizedRating = normalizeRating(rating);
-  const normalizedReviewText = normalizeReviewText(reviewText);
-  const normalizedEmail = typeof email === "string" ? email.trim() : "";
-  const normalizedPhotoFiles = validateReviewPhotos(photoFiles);
+  return async function submitReviewWithDependencies({
+    attractionId,
+    email,
+    rating,
+    reviewText,
+    photoFiles = [],
+  }) {
+    const normalizedAttractionId = normalizeAttractionId(attractionId);
+    const normalizedRating = normalizeRating(rating);
+    const normalizedReviewText = normalizeReviewText(reviewText);
+    const normalizedEmail = typeof email === "string" ? email.trim() : "";
 
-  if (!normalizedEmail) {
-    throw new ReviewServiceError("User account not found.", 404);
-  }
-
-  const [attraction, user] = await Promise.all([
-    findAttractionById(normalizedAttractionId),
-    findUserByEmail(normalizedEmail),
-  ]);
-
-  if (!attraction) {
-    throw new ReviewServiceError("Attraction not found.", 404);
-  }
-
-  if (!user) {
-    throw new ReviewServiceError("User account not found.", 404);
-  }
-
-  const uploadedPhotos = [];
-
-  try {
-    for (const photoFile of normalizedPhotoFiles) {
-      const photoBuffer = Buffer.from(await photoFile.arrayBuffer());
-      const uploadedPhoto = await uploadImageWithMetadataFromBuffer(
-        photoBuffer,
-        photoFile.type,
-        {
-          folder: `chatlas/reviews/${normalizedAttractionId}`,
-          publicId: `review-${randomUUID()}`,
-        }
-      );
-
-      uploadedPhotos.push(uploadedPhoto);
+    if (!normalizedEmail) {
+      throw new ReviewServiceError("User account not found.", 404);
     }
 
-    const review = await createReview({
-      attractionId: normalizedAttractionId,
-      userId: user._id,
-      userName: user.displayName || user.name,
-      userAvatar: user.profilePicture || "",
-      rating: normalizedRating,
-      reviewText: normalizedReviewText,
-      photos: uploadedPhotos,
-    });
+    const [attraction, user] = await Promise.all([
+      findAttraction(normalizedAttractionId),
+      findUser(normalizedEmail),
+    ]);
 
+    if (!attraction) {
+      throw new ReviewServiceError("Attraction not found.", 404);
+    }
+    if (!user) {
+      throw new ReviewServiceError("User account not found.", 404);
+    }
+
+    const normalizedPhotoFiles = validateReviewPhotos(photoFiles);
+    let approvedPhotos;
+    try {
+      // The complete batch is moderated before the first public upload.
+      approvedPhotos = await moderateFiles(normalizedPhotoFiles);
+    } catch (error) {
+      throw asReviewImageError(error);
+    }
+
+    const uploadedPhotos = [];
+    let review;
+
+    try {
+      for (const photo of approvedPhotos) {
+        const uploadedPhoto = await uploadImage(
+          photo.buffer,
+          photo.mimeType,
+          {
+            folder: `chatlas/reviews/${normalizedAttractionId}`,
+            publicId: `review-${createUuid()}`,
+          }
+        );
+        uploadedPhotos.push(uploadedPhoto);
+      }
+
+      review = await createReviewRecord({
+        attractionId: normalizedAttractionId,
+        userId: user._id,
+        userName: user.displayName || user.name,
+        userAvatar: user.profilePicture || "",
+        rating: normalizedRating,
+        reviewText: normalizedReviewText,
+        photos: uploadedPhotos,
+      });
+    } catch (error) {
+      await Promise.allSettled(
+        uploadedPhotos.map((photo) => deleteImage(photo.publicId))
+      );
+      throw error;
+    }
+
+    // Persistence succeeded, so later presentation work must never remove
+    // assets now referenced by the Review document.
     return serializeReviewForViewer(review, user._id, 0);
-  } catch (error) {
-    await rollbackUploadedPhotos(uploadedPhotos);
-    throw error;
-  }
+  };
 }
+
+const submitReviewWithDependencies = createReviewSubmissionService({
+  findAttraction: findAttractionById,
+  findUser: findUserByEmail,
+  moderateFiles: moderateUploadedImageFiles,
+  uploadImage: uploadImageWithMetadataFromBuffer,
+  createReviewRecord: createReview,
+  deleteImage: deleteImageByPublicId,
+  createUuid: randomUUID,
+});
+
+export async function submitReview(input) {
+  return submitReviewWithDependencies(input);
+}
+
+export function createReviewPhotoUpdatePersistence({
+  uploadImage,
+  updateReviewRecord,
+  deleteImage,
+  createUuid,
+}) {
+  return async function persistReviewPhotoUpdate({
+    reviewId,
+    attractionId,
+    retainedPhotos,
+    approvedPhotos,
+    rating,
+    reviewText,
+    lastEditedAt,
+  }) {
+    const uploadedPhotos = [];
+
+    try {
+      for (const photo of approvedPhotos) {
+        const uploadedPhoto = await uploadImage(
+          photo.buffer,
+          photo.mimeType,
+          {
+            folder: `chatlas/reviews/${attractionId}`,
+            publicId: `review-${createUuid()}`,
+          }
+        );
+        uploadedPhotos.push(uploadedPhoto);
+      }
+
+      const updatedReview = await updateReviewRecord(reviewId, {
+        rating,
+        reviewText,
+        photos: [...retainedPhotos, ...uploadedPhotos],
+        lastEditedAt,
+      });
+
+      if (!updatedReview) {
+        throw new ReviewServiceError("Review not found.", 404);
+      }
+
+      return updatedReview;
+    } catch (error) {
+      await Promise.allSettled(
+        uploadedPhotos.map((photo) => deleteImage(photo.publicId))
+      );
+      throw error;
+    }
+  };
+}
+
+const persistReviewPhotoUpdate = createReviewPhotoUpdatePersistence({
+  uploadImage: uploadImageWithMetadataFromBuffer,
+  updateReviewRecord: updateReviewById,
+  deleteImage: deleteImageByPublicId,
+  createUuid: randomUUID,
+});
 
 export async function getReviewsByAttraction({
   attractionId,
@@ -399,31 +508,31 @@ function validateReviewPhotos(photoFiles) {
       !Number.isFinite(photoFile.size) ||
       photoFile.size <= 0
     ) {
-      throw new ReviewServiceError("Each photo must contain an image.", 400);
+      throw new ReviewServiceError(
+        "Each photo must contain an image.",
+        400,
+        IMAGE_MODERATION_CODES.invalid
+      );
     }
 
     if (!isValidPhotoType(photoFile.type)) {
       throw new ReviewServiceError(
-        "Photos must be JPG, PNG, or WebP images.",
-        400
+        "Photos must be JPEG or PNG images.",
+        400,
+        IMAGE_MODERATION_CODES.unsupported
       );
     }
 
     if (!isValidPhotoSize(photoFile.size)) {
       throw new ReviewServiceError(
         "Each photo must be 5 MB or smaller.",
-        400
+        400,
+        IMAGE_MODERATION_CODES.tooLarge
       );
     }
   }
 
   return photoFiles;
-}
-
-async function rollbackUploadedPhotos(uploadedPhotos) {
-  await Promise.allSettled(
-    uploadedPhotos.map((photo) => deleteImageByPublicId(photo.publicId))
-  );
 }
 
 export async function getReviewById(reviewId, email = "") {
@@ -470,7 +579,6 @@ export async function updateReview({
   const normalizedReviewId = normalizeReviewId(reviewId);
   const normalizedRating = normalizeRating(rating);
   const normalizedReviewText = normalizeReviewText(reviewText);
-  const normalizedPhotoFiles = validateReviewPhotos(photoFiles);
   const normalizedDeletePhotoPublicIds = normalizePhotoPublicIds(
     deletePhotoPublicIds
   );
@@ -484,6 +592,8 @@ export async function updateReview({
   }
 
   assertReviewOwnership(review, user, "edit");
+
+  const normalizedPhotoFiles = validateReviewPhotos(photoFiles);
 
   const existingPhotos = getReviewPhotos(review.photos);
   const existingPublicIds = new Set(
@@ -513,45 +623,41 @@ export async function updateReview({
     );
   }
 
-  const uploadedPhotos = [];
+  let approvedPhotos;
 
   try {
-    for (const photoFile of normalizedPhotoFiles) {
-      const photoBuffer = Buffer.from(await photoFile.arrayBuffer());
-      const uploadedPhoto = await uploadImageWithMetadataFromBuffer(
-        photoBuffer,
-        photoFile.type,
-        {
-          folder: `chatlas/reviews/${review.attractionId}`,
-          publicId: `review-${randomUUID()}`,
-        }
-      );
-      uploadedPhotos.push(uploadedPhoto);
-    }
-
-    // ✅ Set lastEditedAt to current time
-    const updatedReview = await updateReviewById(normalizedReviewId, {
-      rating: normalizedRating,
-      reviewText: normalizedReviewText,
-      photos: [...retainedPhotos, ...uploadedPhotos],
-      lastEditedAt: new Date(),
-    });
-
-    if (!updatedReview) {
-      throw new ReviewServiceError("Review not found.", 404);
-    }
-
-    await deleteCloudinaryPhotos(normalizedDeletePhotoPublicIds);
-    const commentCounts = await getCommentCounts([updatedReview]);
-    return serializeReviewForViewer(
-      updatedReview,
-      user._id,
-      commentCounts.get(updatedReview._id.toString()) || 0
-    );
+    approvedPhotos = await moderateUploadedImageFiles(normalizedPhotoFiles);
   } catch (error) {
-    await rollbackUploadedPhotos(uploadedPhotos);
-    throw error;
+    throw asReviewImageError(error);
   }
+
+  const updatedReview = await persistReviewPhotoUpdate({
+    reviewId: normalizedReviewId,
+    attractionId: review.attractionId,
+    retainedPhotos,
+    approvedPhotos,
+    rating: normalizedRating,
+    reviewText: normalizedReviewText,
+    lastEditedAt: new Date(),
+  });
+
+  // The Review now owns the new asset set. Old-asset cleanup is best effort
+  // and must not roll back assets that the database already references.
+  await deleteCloudinaryPhotos(normalizedDeletePhotoPublicIds);
+  let commentCount = 0;
+  try {
+    const commentCounts = await getCommentCounts([updatedReview]);
+    commentCount = commentCounts.get(updatedReview._id.toString()) || 0;
+  } catch {
+    // The Review update is already committed. A transient count lookup must
+    // not turn a successful image update into an ambiguous failed response.
+  }
+
+  return serializeReviewForViewer(
+    updatedReview,
+    user._id,
+    commentCount
+  );
 }
 
 export async function deleteReview({ reviewId, email }) {

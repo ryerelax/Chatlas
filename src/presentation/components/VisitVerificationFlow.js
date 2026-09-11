@@ -221,7 +221,7 @@ export default function VisitVerificationFlow({
         }
       );
       if (responseDecision.type !== "success") {
-        failFlow(operationId, responseDecision.message, {
+        failFlow(operationId, t(responseDecision.message), {
           requireSignIn: responseDecision.authenticationRequired,
         });
         return;
@@ -253,7 +253,7 @@ export default function VisitVerificationFlow({
 
       void openCamera(operationId, attractionId);
     },
-    [failFlow, openCamera, operationController, transitionToFlowState]
+    [failFlow, openCamera, operationController, t, transitionToFlowState]
   );
 
   const handleLocatedPosition = useCallback(
@@ -570,14 +570,14 @@ export default function VisitVerificationFlow({
 
     if (responseDecision.type !== "success") {
       if (responseDecision.authenticationRequired) {
-      failFlow(operationId, responseDecision.message, {
+      failFlow(operationId, t(responseDecision.message), {
         requireSignIn: true,
       });
       } else if (responseDecision.retryable) {
         setErrorMessage(t(responseDecision.message));
         transitionToFlowState(FLOW_STATE.UPLOAD_ERROR);
       } else {
-        failFlow(operationId, responseDecision.message);
+        failFlow(operationId, t(responseDecision.message));
       }
       return;
     }
@@ -613,6 +613,7 @@ export default function VisitVerificationFlow({
     position,
     selectedAttractionId,
     submissionKeyStore,
+    t,
     transitionToFlowState,
   ]);
 
@@ -1045,7 +1046,9 @@ export default function VisitVerificationFlow({
           role="status"
           aria-live="polite"
         >
-          <p className="font-bold text-[#10213B]">{t("uploadingPhoto")}</p>
+          <p className="font-bold text-[#10213B]">
+            {t("imageSafetyChecking")}
+          </p>
           <p className="mt-1 text-sm leading-6 text-[#65748A]">
             {t("uploadingPhotoHint")}
           </p>

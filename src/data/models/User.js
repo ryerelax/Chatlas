@@ -7,6 +7,7 @@ const UserSchema = new mongoose.Schema(
     email: { type: String, required: true, unique: true },
     googleId: { type: String, required: true, unique: true },
     profilePicture: { type: String, default: "" },
+    profilePicturePublicId: { type: String, default: "" },
 
     // Chatlas 用户自定义字段
     displayName: { type: String, default: "" },

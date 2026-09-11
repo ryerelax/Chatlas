@@ -4,8 +4,12 @@ import { useSession } from "next-auth/react";
 import { useEffect, useRef, useState } from "react";
 import { isMelakaBasedUser } from "@/business/services/locationGate";
 import { useLanguage } from "@/presentation/contexts/LanguageContext";
+import {
+  CLIENT_IMAGE_TYPES,
+  getImageUploadErrorKey,
+} from "@/presentation/lib/imageUploadPresentation";
 
-const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const ALLOWED_PHOTO_TYPES = CLIENT_IMAGE_TYPES;
 const MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024;
 
 // After unmount, wait this long before dropping draft.
@@ -193,7 +197,10 @@ export default function CommunityPhotoUpload({ attractionId, onPhotoAdded }) {
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-        throw new Error(result.message || t("errorGeneric"));
+        const imageErrorKey = getImageUploadErrorKey(result.code);
+        throw new Error(
+          imageErrorKey ? t(imageErrorKey) : result.message || t("errorGeneric")
+        );
       }
 
       onPhotoAdded?.(result.data);
@@ -255,7 +262,7 @@ export default function CommunityPhotoUpload({ attractionId, onPhotoAdded }) {
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/jpeg,image/png,image/webp"
+            accept="image/jpeg,image/png"
             onChange={handleFileChange}
             className="hidden"
           />
@@ -313,7 +320,7 @@ export default function CommunityPhotoUpload({ attractionId, onPhotoAdded }) {
               disabled={isUploading || !photoFile}
               className="rounded-[10px] bg-attraction-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-attraction-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isUploading ? t("saving") : t("addPhoto")}
+              {isUploading ? t("imageSafetyChecking") : t("addPhoto")}
             </button>
             <button
               type="button"

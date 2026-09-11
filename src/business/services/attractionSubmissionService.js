@@ -1,16 +1,20 @@
+import { randomUUID } from "node:crypto";
 import {
   searchPlacesAutocomplete,
   fetchPlaceDetailsForSubmission,
 } from "@/infrastructure/external/googlePlaces";
-import { uploadImageFromBuffer } from "@/infrastructure/external/cloudinary";
+import {
+  deleteImageByPublicId,
+  uploadImageWithMetadataFromBuffer,
+} from "@/infrastructure/external/cloudinary";
 import {
   findActiveAttractionByGooglePlaceId,
   createAttraction,
 } from "@/data/repositories/attractionRepository";
 import { isValidAttractionCategory } from "@/business/services/attractionCategories";
 import { classifyLocationArea } from "@/business/services/locationAreas";
-import { isValidPhotoType, isValidPhotoSize } from "@/business/services/photoValidation";
 import { MAX_DESCRIPTION_LENGTH, isValidDescriptionLength } from "@/business/services/descriptionValidation";
+import { moderateUploadedImageFiles } from "@/business/services/imageModerationService";
 
 const MIN_SEARCH_INPUT_LENGTH = 2;
 const MAX_PHOTOS_PER_SUBMISSION = 6;
@@ -35,8 +39,9 @@ export async function searchPlaces(input, { sessionToken, apiKey } = {}) {
 // Decision 4: Registered-User self-service submission. Publishes immediately
 // on success — no admin review queue. Validation order: required fields,
 // category enum, optional description (length), optional photos
-// (count/type/size), duplicate googlePlaceId, then fetch authoritative
-// place details, upload any photos, and create the record.
+// (count/type/signature/size and sensitive-content policy), duplicate
+// googlePlaceId, then fetch authoritative place details, upload approved
+// photos, and create the record.
 //
 // Photos are entirely optional — submission must succeed with zero photos,
 // same as before this existed. When provided, they're uploaded directly (not
@@ -84,15 +89,6 @@ export async function submitAttraction({
     throw new InvalidSubmissionError(`You can upload up to ${MAX_PHOTOS_PER_SUBMISSION} photos.`);
   }
 
-  for (const photo of photoFiles) {
-    if (!isValidPhotoType(photo.mimeType)) {
-      throw new InvalidSubmissionError("Photos must be JPG, PNG, or WEBP images.");
-    }
-    if (!isValidPhotoSize(photo.buffer.length)) {
-      throw new InvalidSubmissionError("Each photo must be 5MB or smaller.");
-    }
-  }
-
   const existing = await findActiveAttractionByGooglePlaceId(normalizedGooglePlaceId);
   if (existing) {
     throw new DuplicateAttractionError("This place has already been added to Chatlas.");
@@ -105,17 +101,27 @@ export async function submitAttraction({
 
   const locationArea = classifyLocationArea(placeDetails.address, placeDetails.name);
 
+  // Moderate the complete batch before the first public Cloudinary upload.
+  const approvedPhotos = await moderateUploadedImageFiles(photoFiles);
+
   const photos = [];
-  for (const [index, photo] of photoFiles.entries()) {
-    const photoUrl = await uploadImageFromBuffer(photo.buffer, photo.mimeType, {
-      folder: `chatlas/attractions/${normalizedGooglePlaceId}`,
-      publicId: `photo-${index + 1}`,
-    });
-    photos.push(photoUrl);
-  }
+  const uploadedPhotos = [];
 
   try {
-    return await createAttraction({
+    for (const photo of approvedPhotos) {
+      const uploaded = await uploadImageWithMetadataFromBuffer(
+        photo.buffer,
+        photo.mimeType,
+        {
+          folder: `chatlas/attractions/${normalizedGooglePlaceId}`,
+          publicId: `submission-${randomUUID()}`,
+        }
+      );
+      uploadedPhotos.push(uploaded);
+      photos.push(uploaded.url);
+    }
+
+    const attraction = await createAttraction({
       ...placeDetails,
       category,
       description: normalizedDescription,
@@ -127,7 +133,13 @@ export async function submitAttraction({
         name: session.user.name,
       },
     });
+
+    return attraction;
   } catch (error) {
+    await Promise.allSettled(
+      uploadedPhotos.map((photo) => deleteImageByPublicId(photo.publicId))
+    );
+
     // googlePlaceId is unique at the DB level regardless of isActive, so a
     // place that was soft-deleted (e.g. old test data) still occupies the
     // index. findActiveAttractionByGooglePlaceId above only checks

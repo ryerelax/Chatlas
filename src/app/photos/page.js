@@ -172,7 +172,6 @@ export default function MyPhotosPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          photoUrl: photo.url,
           publicId: photo.publicId,
         }),
       });

@@ -1,7 +1,25 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { connectToDatabase } from "@/infrastructure/database/mongodb";
-import User from "@/data/models/User";
+import {
+  clearProfileImage,
+  ProfileImageServiceError,
+  setOwnedReviewPhotoAsProfileImage,
+} from "@/business/services/profileImageService";
+import {
+  IMAGE_MODERATION_CODES,
+  ImageModerationError,
+} from "@/business/services/imageModerationService";
+import { getCurrentUserProfile } from "@/business/services/userService";
+
+export const runtime = "nodejs";
+
+function getIdentity(session) {
+  return {
+    googleId: session.user.googleId || session.user.id,
+    email: session.user.email,
+  };
+}
 
 // PUT - Update user profile picture
 export async function PUT(request) {
@@ -14,47 +32,49 @@ export async function PUT(request) {
       );
     }
 
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      throw new ImageModerationError(IMAGE_MODERATION_CODES.invalid);
+    }
+
     await connectToDatabase();
 
-    const { photoUrl, publicId } = await request.json();
+    let result;
 
-    // Allow empty string to reset profile picture
-    if (photoUrl === undefined || photoUrl === null) {
-      return NextResponse.json(
-        { success: false, message: "Photo URL is required" },
-        { status: 400 }
+    if (body.photoUrl === "") {
+      result = await clearProfileImage(getIdentity(session));
+    } else if (Object.hasOwn(body, "photoUrl")) {
+      throw new ImageModerationError(IMAGE_MODERATION_CODES.invalid);
+    } else {
+      result = await setOwnedReviewPhotoAsProfileImage(
+        body.publicId,
+        getIdentity(session)
       );
     }
-
-    // Use the same query as the main user route
-    const user = await User.findOne({ 
-      $or: [
-        { googleId: session.user.id },
-        { email: session.user.email }
-      ]
-    });
-    
-    if (!user) {
-      return NextResponse.json(
-        { success: false, message: "User not found" },
-        { status: 404 }
-      );
-    }
-
-    // Update profile picture (allow empty string to reset)
-    user.profilePicture = photoUrl;
-    await user.save();
 
     return NextResponse.json({
       success: true,
-      message: "Profile picture updated successfully!",
+      message: "Profile picture updated successfully.",
       data: {
-        profilePicture: photoUrl,
-        publicId: publicId || "",
+        profilePicture: result.url,
+        publicId: result.publicId,
       },
     });
   } catch (error) {
-    console.error("Failed to update profile picture:", error);
+    if (error instanceof ImageModerationError) {
+      return NextResponse.json(
+        { success: false, code: error.code, message: error.message },
+        { status: error.statusCode }
+      );
+    }
+    if (error instanceof ProfileImageServiceError) {
+      return NextResponse.json(
+        { success: false, message: error.message },
+        { status: error.statusCode }
+      );
+    }
+
+    console.error("Failed to reset the profile picture.");
     return NextResponse.json(
       { success: false, message: "Failed to update profile picture" },
       { status: 500 }
@@ -63,7 +83,7 @@ export async function PUT(request) {
 }
 
 // GET - Get user profile picture
-export async function GET(request) {
+export async function GET() {
   try {
     const session = await auth();
     if (!session || !session.user) {
@@ -75,13 +95,7 @@ export async function GET(request) {
 
     await connectToDatabase();
 
-    // Use the same query as the main user route
-    const user = await User.findOne({ 
-      $or: [
-        { googleId: session.user.id },
-        { email: session.user.email }
-      ]
-    });
+    const user = await getCurrentUserProfile(getIdentity(session));
     
     if (!user) {
       return NextResponse.json(
@@ -97,7 +111,7 @@ export async function GET(request) {
       },
     });
   } catch (error) {
-    console.error("Failed to get profile picture:", error);
+    console.error("Failed to get the profile picture.");
     return NextResponse.json(
       { success: false, message: "Failed to get profile picture" },
       { status: 500 }

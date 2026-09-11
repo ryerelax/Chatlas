@@ -9,10 +9,14 @@ import {
 } from "@/presentation/components/AttractionIcons";
 import { ATTRACTION_CATEGORIES } from "@/business/services/attractionCategories";
 import { useLanguage } from "@/presentation/contexts/LanguageContext";
+import {
+  CLIENT_IMAGE_TYPES,
+  getImageUploadErrorKey,
+} from "@/presentation/lib/imageUploadPresentation";
 
 const SEARCH_DEBOUNCE_MS = 400;
 const MIN_QUERY_LENGTH = 2;
-const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const ALLOWED_PHOTO_TYPES = CLIENT_IMAGE_TYPES;
 const MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024;
 const MAX_PHOTOS = 6;
 const MAX_DESCRIPTION_LENGTH = 2000;
@@ -207,7 +211,10 @@ export default function AddAttractionPage() {
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-        throw new Error(result.message || t("submitFailed"));
+        const imageErrorKey = getImageUploadErrorKey(result.code);
+        throw new Error(
+          imageErrorKey ? t(imageErrorKey) : result.message || t("submitFailed")
+        );
       }
 
       setSubmittedAttraction(result.data);
@@ -455,7 +462,7 @@ export default function AddAttractionPage() {
                     id="photos"
                     type="file"
                     multiple
-                    accept="image/jpeg,image/png,image/webp"
+                    accept="image/jpeg,image/png"
                     onChange={handlePhotoChange}
                     className="sr-only"
                   />
@@ -496,7 +503,11 @@ export default function AddAttractionPage() {
               disabled={isSubmitting}
               className="mt-6 w-full rounded-[10px] bg-attraction-primary px-5 py-3 font-semibold text-white transition hover:bg-attraction-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isSubmitting ? t("saving") : t("submitAttraction")}
+              {isSubmitting && photoItems.length > 0
+                ? t("imageSafetyChecking")
+                : isSubmitting
+                  ? t("saving")
+                  : t("submitAttraction")}
             </button>
           </form>
         )}
